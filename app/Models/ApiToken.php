@@ -19,6 +19,7 @@ class ApiToken extends Model
         'revoked',
         'user_agent',
         'ip_address',
+        'scope',
     ];
 
     protected $casts = [

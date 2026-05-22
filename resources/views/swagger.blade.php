@@ -18,7 +18,7 @@
         }
 
         SwaggerUIBundle({
-            url: '{{ url('/openapi.json') }}',
+            url: '{{ $specUrl ?? url('/openapi.json') }}',
             dom_id: '#swagger-ui',
             presets: [
                 SwaggerUIBundle.presets.apis,

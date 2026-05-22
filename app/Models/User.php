@@ -32,6 +32,7 @@ class User extends Authenticatable
         'password',
         'is_active',
         'is_banned',
+        'is_admin',
     ];
 
     /**

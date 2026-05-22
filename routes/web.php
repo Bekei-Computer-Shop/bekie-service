@@ -7,5 +7,13 @@ Route::get('/', function () {
 });
 
 Route::get('/api/docs', function () {
-    return view('swagger');
+    return view('swagger', [
+        'specUrl' => url('/openapi.json'),
+    ]);
+});
+
+Route::get('/api/admin/docs', function () {
+    return view('swagger', [
+        'specUrl' => url('/openapi-admin.json'),
+    ]);
 });

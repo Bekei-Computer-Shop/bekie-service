@@ -1,14 +1,15 @@
 <?php
 
-use App\Http\Controllers\Api\V1\AuthController;
-use App\Http\Controllers\Api\V1\BrandController;
-use App\Http\Controllers\Api\V1\CartController;
-use App\Http\Controllers\Api\V1\CategoryController;
-use App\Http\Controllers\Api\V1\CouponController;
-use App\Http\Controllers\Api\V1\OrderController;
-use App\Http\Controllers\Api\V1\ProductController;
-use App\Http\Controllers\Api\V1\ShippingMethodController;
-use App\Http\Controllers\Api\V1\WishlistController;
+use App\Http\Controllers\Api\Client\V1\AuthController;
+use App\Http\Controllers\Api\Client\V1\BrandController;
+use App\Http\Controllers\Api\Client\V1\CartController;
+use App\Http\Controllers\Api\Client\V1\CategoryController;
+use App\Http\Controllers\Api\Client\V1\CouponController;
+use App\Http\Controllers\Api\Client\V1\MasterDataController;
+use App\Http\Controllers\Api\Client\V1\OrderController;
+use App\Http\Controllers\Api\Client\V1\ProductController;
+use App\Http\Controllers\Api\Client\V1\ShippingMethodController;
+use App\Http\Controllers\Api\Client\V1\WishlistController;
 use App\Http\Middleware\AuthenticateApiToken;
 use Illuminate\Support\Facades\Route;
 
@@ -17,6 +18,12 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/refresh', [AuthController::class, 'refresh']);
     Route::post('auth/logout', [AuthController::class, 'logout'])
         ->middleware(AuthenticateApiToken::class);
+
+    Route::prefix('master')->group(function () {
+        Route::get('categories', [MasterDataController::class, 'categories']);
+        Route::get('brands', [MasterDataController::class, 'brands']);
+        Route::get('shipping-methods', [MasterDataController::class, 'shippingMethods']);
+    });
 
     Route::get('categories', [CategoryController::class, 'index']);
     Route::get('categories/{category}', [CategoryController::class, 'show']);
@@ -59,3 +66,5 @@ Route::prefix('v1')->group(function () {
         });
     });
 });
+
+require __DIR__ . '/api_admin.php';
