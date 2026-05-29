@@ -1,0 +1,16 @@
+.git
+vendor
+node_modules
+.github
+.env
+storage/logs
+storage/framework/cache/data
+storage/framework/sessions
+storage/framework/views
+tests
+docker-compose.yml
+Dockerfile.dev
+/.vscode
+npm-debug.log
+yarn-error.log
+public/hot
