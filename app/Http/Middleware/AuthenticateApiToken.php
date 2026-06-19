@@ -6,34 +6,37 @@ use App\Models\ApiToken;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateApiToken
 {
-    public function handle(Request $request, Closure $next)
+    public function handle(Request $request, Closure $next): Response
     {
-        $bearerToken = $request->bearerToken();
+        $bearer = $request->bearerToken();
 
-        if (! $bearerToken) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Authorization bearer token is required.',
-            ], 401);
+        if (!$bearer) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        $apiToken = ApiToken::where('token', hash('sha256', $bearerToken))
+        $token = ApiToken::where('token', hash('sha256', $bearer))
             ->where('revoked', false)
+            ->where('expires_at', '>', now())
+            ->with('user')
             ->first();
 
-        if (! $apiToken || $apiToken->isExpired()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Invalid or expired access token.',
-            ], 401);
+        if (!$token || !$token->user) {
+            return response()->json(['message' => 'Invalid or expired token.'], 401);
         }
 
-        Auth::setUser($apiToken->user);
-        $request->setUserResolver(fn () => $apiToken->user);
-        $request->attributes->set('api_token', $apiToken);
+        if (!$token->user->is_active || $token->user->is_banned) {
+            return response()->json(['message' => 'User account is restricted.'], 403);
+        }
+
+        // Manually log the user into the guard for the duration of the request
+        Auth::setUser($token->user);
+
+        // Share the token model instance if needed for logout
+        $request->attributes->set('current_api_token', $token);
 
         return $next($request);
     }
