@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Builder;
 
 class Banner extends Model
 {
@@ -57,10 +57,10 @@ class Banner extends Model
     {
         return $query->where(function ($q) {
             $q->whereNull('starts_at')
-              ->orWhere('starts_at', '<=', now());
+                ->orWhere('starts_at', '<=', now());
         })->where(function ($q) {
             $q->whereNull('ends_at')
-              ->orWhere('ends_at', '>=', now());
+                ->orWhere('ends_at', '>=', now());
         });
     }
 
@@ -77,7 +77,7 @@ class Banner extends Model
 
     public function isVisible(): bool
     {
-        if (!$this->is_active) {
+        if (! $this->is_active) {
             return false;
         }
 
@@ -94,7 +94,7 @@ class Banner extends Model
 
     public function hasAction(): bool
     {
-        return !empty($this->button_url);
+        return ! empty($this->button_url);
     }
 
     public function getImageUrl(string $device = 'desktop'): ?string

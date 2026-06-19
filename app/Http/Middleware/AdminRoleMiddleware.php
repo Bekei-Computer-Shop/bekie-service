@@ -10,10 +10,9 @@ class AdminRoleMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $apiToken = $request->attributes->get('api_token');
-        $user = $request->attributes->get('authenticated_user');
+        $user = $request->user() ?? $request->attributes->get('authenticated_user');
 
-        if (! $user || ! $user->hasRole('admin')) {
+        if (! $user || ! $user->is_active || $user->is_banned || ! $user->is_admin || ! $user->hasRole('admin')) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Unauthorized: Admin access required.',
