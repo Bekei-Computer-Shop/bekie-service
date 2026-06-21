@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: bekie-service
+    env: docker
+    plan: free
+    region: oregon
+    # Environment variables can be added here or set in the Render dashboard
+    # Example:
+    # envVars:
+    #   - key: DB_CONNECTION
+    #     value: pgsql
+    #   - key: DB_HOST
+    #     fromSecret: db-host
+    #   - key: DB_PORT
+    #     value: "5432"
+    #   - key: DB_DATABASE
+    #     fromSecret: db-name
+    #   - key: DB_USERNAME
+    #     fromSecret: db-user
+    #   - key: DB_PASSWORD
+    #     fromSecret: db-pass
+    #   - key: REDIS_HOST
+    #     fromSecret: redis-host
+    #   - key: REDIS_PORT
+    #     value: "6379"
+    #   - key: REDIS_PASSWORD
+    #     fromSecret: redis-pass
+    #   - key: REDIS_SCHEME
+    #     value: tls
