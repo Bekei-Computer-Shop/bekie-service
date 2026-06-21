@@ -1,47 +1,61 @@
-# Production-ready multi-stage Dockerfile for Laravel (PHP 8.2)
-# Builds frontend assets with Node, installs PHP dependencies with Composer,
-# and produces a small runtime image.
-
-### Node builder: builds Vite assets
-FROM node:18 AS node_builder
+### Stage 1: Node — build Vite assets
+FROM node:18-alpine AS node_builder
 WORKDIR /app
-COPY package*.json ./
+
+COPY package*.json vite.config.* ./
 RUN npm ci --silent
-COPY . .
+
+COPY resources/ ./resources/
+COPY public/ ./public/
+
+# Pass VITE_ vars as build args if needed
+ARG VITE_APP_URL=http://localhost
+ENV VITE_APP_URL=${VITE_APP_URL}
+
 RUN npm run build
 
-### Composer builder: installs PHP deps
+### Stage 2: Composer — install PHP dependencies only
 FROM composer:2 AS composer_builder
 WORKDIR /app
-COPY composer.json composer.lock ./
-RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress
-COPY . .
-RUN composer dump-autoload --optimize
 
-### Final image: PHP-FPM runtime
+COPY composer.json composer.lock ./
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --optimize-autoloader \
+    --prefer-dist
+
+### Stage 3: Final PHP-FPM runtime
 FROM php:8.2-fpm
-ARG WWWUSER=www-data
-ARG WWWGROUP=www-data
+
 WORKDIR /var/www/html
 
-# System deps and PHP extensions
+# System deps + PHP extensions
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        git unzip libzip-dev libpng-dev libonig-dev libxml2-dev libpq-dev libicu-dev zlib1g-dev ca-certificates \
-    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd zip intl opcache \
-    && pecl install redis \
+        libzip-dev libpng-dev libonig-dev libxml2-dev \
+        libpq-dev libicu-dev zlib1g-dev ca-certificates \
+    && docker-php-ext-install \
+        pdo pdo_pgsql mbstring exif pcntl bcmath gd zip intl opcache \
+    && pecl install redis-6.0.2 \
     && docker-php-ext-enable redis \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get purge -y --auto-remove \
+    && rm -rf /var/lib/apt/lists/* /tmp/pear
 
-# Copy application files
-COPY --from=composer_builder /app/vendor ./vendor
-COPY --from=node_builder /app/public/build ./public/build
+# Copy app source first
 COPY . .
 
-# Permissions
-RUN chown -R ${WWWUSER}:${WWWGROUP} /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/public \
-    && chmod -R 755 /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/public
+# Overlay build artifacts from earlier stages
+COPY --from=composer_builder /app/vendor ./vendor
+COPY --from=node_builder /app/public/build ./public/build
+
+# Fix permissions
+RUN chown -R www-data:www-data \
+        storage \
+        bootstrap/cache \
+        public \
+    && chmod -R 755 storage bootstrap/cache public
 
 EXPOSE 9000
 CMD ["php-fpm"]
