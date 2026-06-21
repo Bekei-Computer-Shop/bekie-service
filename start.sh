@@ -39,31 +39,27 @@ http {
     gzip on;
     gzip_disable "msie6";
 
-    # Include virtual host configs
-    include /etc/nginx/conf.d/*.conf;
-    include /etc/nginx/sites-enabled/*;
-}
+    # Default server configuration
+    server {
+        listen ${PORT:-8080};
+        index index.php index.html;
+        error_log  /var/log/nginx/error.log;
+        access_log /var/log/nginx.access.log;
+        root /var/www/html/public;
 
-# Default server configuration
-server {
-    listen ${PORT:-8080};
-    index index.php index.html;
-    error_log  /var/log/nginx/error.log;
-    access_log /var/log/nginx.access.log;
-    root /var/www/html/public;
+        location ~ \.php$ {
+            try_files $uri =404;
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+            include fastcgi_params;
+        }
 
-    location ~ \.php$ {
-        try_files $uri =404;
-        fastcgi_split_path_info ^(.+\.php)(/.+)$;
-        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-        include fastcgi_params;
-    }
-
-    location / {
-        try_files $uri $uri/ /index.php?\$query_string;
-        gzip_static on;
+        location / {
+            try_files $uri $uri/ /index.php?\$query_string;
+            gzip_static on;
+        }
     }
 }
 EOF
