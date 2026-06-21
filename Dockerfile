@@ -28,6 +28,9 @@ RUN apt-get update \
     && apt-get purge -y --auto-remove \
     && rm -rf /var/lib/apt/lists/* /tmp/pear
 
+# Copy composer
+COPY --from=composer/composer:2 /usr/bin/composer /usr/bin/composer
+
 # Copy application code
 COPY . .
 
@@ -37,8 +40,9 @@ COPY --from=composer_builder /app/vendor ./vendor
 # Copy built assets from node_builder
 COPY --from=node_builder /app/public/build ./public/build
 
-# Optimize autoloader
-RUN composer dump-autoload --optimize
+# Optimize autoloader (disable scripts to avoid package:discover errors during build)
+RUN composer dump-autoload --optimize --no-scripts \
+    && rm /usr/bin/composer
 
 # Set permissions
 RUN chown -R www-data:www-data storage bootstrap/cache public \
