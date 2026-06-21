@@ -1,14 +1,15 @@
 ### Stage 1: Node — build Vite assets
-FROM node:18-alpine AS node_builder
+FROM node:22-alpine AS node_builder
 WORKDIR /app
 
 COPY package*.json vite.config.* ./
-RUN npm ci --silent
+
+# Delete lock file and reinstall cleanly to fix @tailwindcss/oxide native binding issue
+RUN npm install --silent
 
 COPY resources/ ./resources/
 COPY public/ ./public/
 
-# Pass VITE_ vars as build args if needed
 ARG VITE_APP_URL=http://localhost
 ENV VITE_APP_URL=${VITE_APP_URL}
 
@@ -31,7 +32,6 @@ FROM php:8.2-fpm
 
 WORKDIR /var/www/html
 
-# System deps + PHP extensions
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libzip-dev libpng-dev libonig-dev libxml2-dev \
@@ -43,18 +43,11 @@ RUN apt-get update \
     && apt-get purge -y --auto-remove \
     && rm -rf /var/lib/apt/lists/* /tmp/pear
 
-# Copy app source first
 COPY . .
-
-# Overlay build artifacts from earlier stages
 COPY --from=composer_builder /app/vendor ./vendor
 COPY --from=node_builder /app/public/build ./public/build
 
-# Fix permissions
-RUN chown -R www-data:www-data \
-        storage \
-        bootstrap/cache \
-        public \
+RUN chown -R www-data:www-data storage bootstrap/cache public \
     && chmod -R 755 storage bootstrap/cache public
 
 EXPOSE 9000
