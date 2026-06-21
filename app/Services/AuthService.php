@@ -12,12 +12,20 @@ class AuthService
 {
     public function createToken(User $user, Request $request): array
     {
-        $accessToken = Str::random(80);
+        $jti = Str::random(64);
         $refreshToken = Str::random(80);
+
+        $jwt = (new JwtService)->encode([
+            'iss' => config('app.url'),
+            'aud' => $request->getHost(),
+            'sub' => (string) $user->id,
+            'jti' => $jti,
+            'scope' => 'client',
+        ], 60 * 60);
 
         $token = ApiToken::create([
             'user_id' => $user->id,
-            'token' => hash('sha256', $accessToken),
+            'token' => hash('sha256', $jti),
             'refresh_token' => hash('sha256', $refreshToken),
             'expires_at' => Carbon::now()->addMinutes(60),
             'refresh_expires_at' => Carbon::now()->addDays(7),
@@ -28,7 +36,7 @@ class AuthService
 
         return [
             'model' => $token,
-            'access_token' => $accessToken,
+            'access_token' => $jwt,
             'refresh_token' => $refreshToken,
             'expires_at' => $token->expires_at,
         ];
@@ -44,11 +52,19 @@ class AuthService
             return null;
         }
 
-        $accessToken = Str::random(80);
+        $jti = Str::random(64);
         $newRefreshToken = Str::random(80);
 
+        $jwt = (new JwtService)->encode([
+            'iss' => config('app.url'),
+            'aud' => $request->getHost(),
+            'sub' => (string) $token->user_id,
+            'jti' => $jti,
+            'scope' => $token->scope ?? 'client',
+        ], 60 * 60);
+
         $token->update([
-            'token' => hash('sha256', $accessToken),
+            'token' => hash('sha256', $jti),
             'refresh_token' => hash('sha256', $newRefreshToken),
             'expires_at' => Carbon::now()->addMinutes(60),
             'refresh_expires_at' => Carbon::now()->addDays(7),
@@ -58,7 +74,7 @@ class AuthService
 
         return [
             'model' => $token->fresh(),
-            'access_token' => $accessToken,
+            'access_token' => $jwt,
             'refresh_token' => $newRefreshToken,
             'expires_at' => $token->expires_at,
         ];
@@ -66,7 +82,13 @@ class AuthService
 
     public function findActiveToken(string $token): ?ApiToken
     {
-        return ApiToken::where('token', hash('sha256', $token))
+        $payload = (new JwtService)->decode($token);
+
+        if (! $payload || ! isset($payload['jti'])) {
+            return null;
+        }
+
+        return ApiToken::where('token', hash('sha256', $payload['jti']))
             ->where('revoked', false)
             ->first();
     }

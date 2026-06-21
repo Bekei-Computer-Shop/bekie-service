@@ -65,6 +65,6 @@ Route::prefix('v1')->group(function () {
             Route::get('{order}', [OrderController::class, 'show']);
         });
     });
-});
 
-require __DIR__ . '/api_admin.php';
+    require __DIR__ . '/api_admin.php';
+});
