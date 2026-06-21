@@ -1,7 +1,22 @@
-### Stage 3: Final PHP-FPM runtime
+# Stage 1: Composer builder
+FROM composer:2 as composer_builder
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --optimize-autoloader --ignore-platform-reqs
+
+# Stage 2: Node builder
+FROM node:lts as node_builder
+WORKDIR /app
+COPY package.json package-lock.json vite.config.js ./
+COPY resources ./resources
+RUN npm install
+RUN npm run build
+
+# Stage 3: Final PHP-FPM runtime
 FROM php:8.2-fpm
 WORKDIR /var/www/html
 
+# Install system dependencies
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libzip-dev libpng-dev libonig-dev libxml2-dev \
@@ -13,16 +28,19 @@ RUN apt-get update \
     && apt-get purge -y --auto-remove \
     && rm -rf /var/lib/apt/lists/* /tmp/pear
 
-# Copy full app first so artisan exists
+# Copy application code
 COPY . .
+
+# Copy vendor from composer_builder
 COPY --from=composer_builder /app/vendor ./vendor
+
+# Copy built assets from node_builder
 COPY --from=node_builder /app/public/build ./public/build
 
-# Now it's safe to run artisan-dependent scripts
-COPY --from=composer/composer:2 /usr/bin/composer /usr/bin/composer
-RUN composer dump-autoload --optimize --no-dev \
-    && rm /usr/bin/composer
+# Optimize autoloader
+RUN composer dump-autoload --optimize
 
+# Set permissions
 RUN chown -R www-data:www-data storage bootstrap/cache public \
     && chmod -R 755 storage bootstrap/cache public
 
