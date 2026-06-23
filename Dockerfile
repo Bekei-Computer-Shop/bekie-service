@@ -23,20 +23,6 @@ RUN npm run build
 FROM php:8.3-fpm
 WORKDIR /var/www/html
 
-# Install system dependencies and nginx
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        libzip-dev libpng-dev libonig-dev libxml2-dev \
-        libpq-dev libicu-dev zlib1g-dev ca-certificates \
-        nginx \
-        curl \
-    && docker-php-ext-install \
-        pdo pdo_pgsql mbstring exif pcntl bcmath gd zip intl opcache \
-    && pecl install redis \
-    && docker-php-ext-enable redis \
-    && apt-get purge -y --auto-remove \
-    && rm -rf /var/lib/apt/lists/* /tmp/pear
-
 # Copy composer
 COPY --from=composer/composer:2 /usr/bin/composer /usr/bin/composer
 
