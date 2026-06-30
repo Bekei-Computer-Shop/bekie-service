@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\ApiToken;
+use App\Services\JwtService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,31 +13,53 @@ class AuthenticateApiToken
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $bearer = $request->bearerToken();
+        $bearerToken = $request->bearerToken();
 
-        if (!$bearer) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
+        if (! $bearerToken) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Authorization bearer token is required.',
+            ], 401);
         }
 
-        $token = ApiToken::where('token', hash('sha256', $bearer))
+        $payload = (new JwtService)->decode($bearerToken);
+
+        if (! $payload || ! isset($payload['jti'])) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid or expired access token.',
+            ], 401);
+        }
+
+        $apiToken = ApiToken::where('token', hash('sha256', $payload['jti']))
             ->where('revoked', false)
-            ->where('expires_at', '>', now())
-            ->with('user')
+            ->where('scope', 'client')
             ->first();
 
-        if (!$token || !$token->user) {
-            return response()->json(['message' => 'Invalid or expired token.'], 401);
+        if (! $apiToken || $apiToken->isExpired()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid or expired access token.',
+            ], 401);
         }
 
-        if (!$token->user->is_active || $token->user->is_banned) {
-            return response()->json(['message' => 'User account is restricted.'], 403);
+        $user = $apiToken->user;
+
+        if (! $user || ! $user->is_active || $user->is_banned) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'User account is restricted.',
+            ], 403);
         }
 
         // Manually log the user into the guard for the duration of the request
-        Auth::setUser($token->user);
+        Auth::setUser($user);
+        $request->setUserResolver(fn () => $user);
 
-        // Share the token model instance if needed for logout
-        $request->attributes->set('current_api_token', $token);
+        // Share the token model instance for downstream handlers (e.g. logout).
+        // Use the canonical 'api_token' key so AuthController::logout can find it.
+        $request->attributes->set('api_token', $apiToken);
+        $request->attributes->set('authenticated_user', $user);
 
         return $next($request);
     }

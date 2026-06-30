@@ -16,7 +16,11 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Order matters: permissions must exist before any role-grant logic
+        // and before the admin user is created (the seeder below uses Spatie's
+        // role cache, which reads from the permissions table).
         $this->call([
+            AdminPermissionsSeeder::class,
             AdminUserSeeder::class,
         ]);
 

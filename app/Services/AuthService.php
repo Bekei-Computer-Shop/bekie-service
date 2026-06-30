@@ -32,6 +32,7 @@ class AuthService
             'revoked' => false,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent() ?: 'api',
+            'scope' => 'client',
         ]);
 
         return [

@@ -1,47 +1,58 @@
-# Production-ready multi-stage Dockerfile for Laravel (PHP 8.2)
-# Builds frontend assets with Node, installs PHP dependencies with Composer,
-# and produces a small runtime image.
-
-### Node builder: builds Vite assets
-FROM node:18 AS node_builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --silent
-COPY . .
-RUN npm run build
-
-### Composer builder: installs PHP deps
-FROM composer:2 AS composer_builder
+# Stage 1: Composer builder
+FROM composer:2 as composer_builder
 WORKDIR /app
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress
-COPY . .
-RUN composer dump-autoload --optimize
+# Set environment variables to avoid external service connections during build
+ENV DB_CONNECTION=sqlite \
+    CACHE_STORE=array \
+    SESSION_DRIVER=array \
+    QUEUE_CONNECTION=sync \
+    REDIS_HOST=127.0.0.1 \
+    REDIS_PORT=6379
+RUN composer install --no-dev --optimize-autoloader --ignore-platform-reqs --no-scripts
 
-### Final image: PHP-FPM runtime
-FROM php:8.2-fpm
-ARG WWWUSER=www-data
-ARG WWWGROUP=www-data
+# Stage 2: Node builder
+FROM node:lts as node_builder
+WORKDIR /app
+COPY package.json package-lock.json vite.config.js ./
+COPY resources ./resources
+RUN npm install
+RUN npm run build
+
+# Stage 3: Final PHP-FPM runtime
+FROM php:8.3-fpm
 WORKDIR /var/www/html
 
-# System deps and PHP extensions
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        git unzip libzip-dev libpng-dev libonig-dev libxml2-dev libpq-dev libicu-dev zlib1g-dev ca-certificates \
-    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd zip intl opcache \
-    && pecl install redis \
-    && docker-php-ext-enable redis \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Copy composer
+COPY --from=composer/composer:2 /usr/bin/composer /usr/bin/composer
 
-# Copy application files
-COPY --from=composer_builder /app/vendor ./vendor
-COPY --from=node_builder /app/public/build ./public/build
+# Copy application code
 COPY . .
 
-# Permissions
-RUN chown -R ${WWWUSER}:${WWWGROUP} /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/public \
-    && chmod -R 755 /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/public
+# Copy vendor from composer_builder
+COPY --from=composer_builder /app/vendor ./vendor
 
-EXPOSE 9000
-CMD ["php-fpm"]
+# Copy built assets from node_builder
+COPY --from=node_builder /app/public/build ./public/build
+
+# Copy start.sh
+COPY start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
+
+# Set permissions: change ownership to www-data
+RUN chown -R www-data:www-data /var/www/html
+
+# Optimize autoloader (disable scripts to avoid package:discover errors during build)
+RUN composer dump-autoload --optimize --no-scripts \
+    && rm /usr/bin/composer
+
+# Set permissions on storage and bootstrap/cache (already owned by www-data due to above chown)
+# But ensure they are writable
+RUN chmod -R 775 storage bootstrap/cache
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:${PORT:-8080}/ || exit 1
+
+ENTRYPOINT ["/usr/local/bin/start.sh"]
+EXPOSE 8080
+# Note: Render will use the PORT environment variable, which we use in the nginx configuration.
