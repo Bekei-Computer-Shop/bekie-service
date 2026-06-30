@@ -4,12 +4,12 @@ use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContentController;
+use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\LogController;
 use App\Http\Controllers\Admin\OrderController;
-use App\Http\Controllers\Admin\PromotionController;
 use App\Http\Controllers\Admin\ProductController;
-use App\Http\Controllers\Admin\CustomerController;
+use App\Http\Controllers\Admin\PromotionController;
 use App\Http\Controllers\Admin\ReportExportController;
 use App\Http\Middleware\EnsureAdminWebAccess;
 use Illuminate\Support\Facades\Route;
@@ -18,17 +18,13 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/api/docs', function () {
-    return view('swagger', [
-        'specUrl' => url('/openapi.json'),
-    ]);
-});
-
-Route::get('/api/admin/docs', function () {
-    return view('swagger', [
-        'specUrl' => url('/openapi-admin.json'),
-    ]);
-});
+// Documentation is served by Scramble at /docs/client and /docs/admin.
+// The legacy /api/docs* paths are preserved as 301 redirects so existing
+// bookmarks continue to work after the migration.
+Route::redirect('/api/docs', '/docs/client', 301);
+Route::redirect('/api/admin/docs', '/docs/admin', 301);
+Route::redirect('/api/docs/redoc', '/docs/client', 301);
+Route::redirect('/api/admin/docs/redoc', '/docs/admin', 301);
 
 Route::middleware(['guest:web'])->group(function () {
     Route::get('/admin/login', [AuthController::class, 'showLoginForm'])->name('admin.login');

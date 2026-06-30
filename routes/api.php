@@ -14,6 +14,7 @@ use App\Http\Middleware\AuthenticateApiToken;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
+    Route::post('auth/register', [AuthController::class, 'register']);
     Route::post('auth/login', [AuthController::class, 'login']);
     Route::post('auth/refresh', [AuthController::class, 'refresh']);
     Route::post('auth/logout', [AuthController::class, 'logout'])
@@ -66,5 +67,5 @@ Route::prefix('v1')->group(function () {
         });
     });
 
-    require __DIR__ . '/api_admin.php';
+    require __DIR__.'/api_admin.php';
 });
