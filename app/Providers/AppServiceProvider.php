@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\ContentItem;
 use App\Models\Order;
@@ -50,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
         $policies = [
             User::class => AdminResourcePolicy::class,
             Order::class => AdminResourcePolicy::class,
+            Brand::class => AdminResourcePolicy::class,
             Category::class => AdminResourcePolicy::class,
             Promotion::class => AdminResourcePolicy::class,
             ContentItem::class => AdminResourcePolicy::class,

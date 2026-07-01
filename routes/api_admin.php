@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\V1\AuthController;
+use App\Http\Controllers\Api\Admin\V1\BrandController;
+use App\Http\Controllers\Api\Admin\V1\CategoryController;
 use App\Http\Controllers\Api\Admin\V1\PermissionController;
 use App\Http\Controllers\Api\Admin\V1\ProductController;
 use App\Http\Controllers\Api\Admin\V1\RoleController;
@@ -18,6 +20,10 @@ Route::prefix('admin')->group(function () {
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::post('auth/change-password', [AuthController::class, 'changePassword']);
+
+        // Catalog Management
+        Route::apiResource('brands', BrandController::class);
+        Route::apiResource('categories', CategoryController::class);
 
         // Product Management
         Route::apiResource('products', ProductController::class);

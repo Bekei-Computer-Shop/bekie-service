@@ -43,6 +43,24 @@ class AdminPermissionsSeeder extends Seeder
         'permissions.create',
         'permissions.update',
         'permissions.delete',
+
+        // Categories
+        'categories.view',
+        'categories.create',
+        'categories.update',
+        'categories.delete',
+
+        // Brands
+        'brands.view',
+        'brands.create',
+        'brands.update',
+        'brands.delete',
+
+        // Products
+        'products.view',
+        'products.create',
+        'products.update',
+        'products.delete',
     ];
 
     /**
@@ -53,14 +71,23 @@ class AdminPermissionsSeeder extends Seeder
             'users.view', 'users.create', 'users.update', 'users.delete', 'users.assign-role',
             'roles.view', 'roles.create', 'roles.update', 'roles.delete', 'roles.assign-permission',
             'permissions.view', 'permissions.create', 'permissions.update', 'permissions.delete',
+            'categories.view', 'categories.create', 'categories.update', 'categories.delete',
+            'brands.view', 'brands.create', 'brands.update', 'brands.delete',
+            'products.view', 'products.create', 'products.update', 'products.delete',
         ],
         'manager' => [
             'users.view', 'users.create', 'users.update',
             'roles.view',
             'permissions.view',
+            'categories.view', 'categories.create', 'categories.update',
+            'brands.view', 'brands.create', 'brands.update',
+            'products.view', 'products.create', 'products.update',
         ],
         'staff' => [
             'users.view',
+            'categories.view',
+            'brands.view',
+            'products.view',
         ],
     ];
 
