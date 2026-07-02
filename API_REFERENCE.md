@@ -210,6 +210,12 @@ All admin endpoints require an admin-scoped Bearer token. Admin tokens are issue
 | `POST` | `/admin/auth/logout` | admin | Revoke the current token |
 | `POST` | `/admin/auth/change-password` | admin | Change own password |
 
+### Media Management (`/api/v1/admin/media`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/admin/media` | admin | Upload a file (multipart/form-data). Accepts `file` and optional `folder`. Returns a URL. |
+
 ### Dashboard (`/api/v1/admin/dashboard`)
 
 | Method | Path | Auth | Description |
