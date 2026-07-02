@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Builder;
 
 class Wishlist extends Model
 {
@@ -81,12 +81,12 @@ class Wishlist extends Model
 
     public function isOwnedByUser(): bool
     {
-        return !is_null($this->user_id);
+        return ! is_null($this->user_id);
     }
 
     public function isGuestWishlist(): bool
     {
-        return is_null($this->user_id) && !is_null($this->session_id);
+        return is_null($this->user_id) && ! is_null($this->session_id);
     }
 
     public function attachUser(int $userId): void

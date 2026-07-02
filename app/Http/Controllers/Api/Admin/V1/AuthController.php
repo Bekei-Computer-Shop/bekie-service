@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
-use App\Http\Controllers\Controller;
+use App\Models\ApiToken;
 use App\Services\AdminAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 
 class AuthController extends BaseAdminController
 {
@@ -36,7 +35,7 @@ class AuthController extends BaseAdminController
             return $this->error('Unauthorized.', 401);
         }
 
-        $apiToken->delete();
+        $apiToken->revoke();
 
         return $this->success(message: 'Admin logged out successfully.');
     }
@@ -49,17 +48,18 @@ class AuthController extends BaseAdminController
 
         $hashedRefreshToken = hash('sha256', $validated['refresh_token']);
 
-        $apiToken = \App\Models\ApiToken::where('refresh_token', $hashedRefreshToken)
+        $apiToken = ApiToken::where('refresh_token', $hashedRefreshToken)
             ->where('scope', 'admin')
+            ->where('revoked', false)
             ->first();
 
-        if (! $apiToken || $apiToken->refresh_expires_at < now()) {
+        if (! $apiToken || $apiToken->isRefreshExpired()) {
             return $this->error('Refresh token is invalid or expired.', 401);
         }
 
         $newTokenPair = $this->adminAuthService->createAdminToken($apiToken->user);
 
-        $apiToken->delete();
+        $apiToken->revoke();
 
         return $this->success([
             'access_token' => $newTokenPair['access_token'],
