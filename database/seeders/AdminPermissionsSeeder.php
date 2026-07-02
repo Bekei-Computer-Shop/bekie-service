@@ -61,6 +61,42 @@ class AdminPermissionsSeeder extends Seeder
         'products.create',
         'products.update',
         'products.delete',
+
+        // Promotions
+        'promotions.view',
+        'promotions.create',
+        'promotions.update',
+        'promotions.delete',
+
+        // Content
+        'content.view',
+        'content.create',
+        'content.update',
+        'content.delete',
+
+        // Customers
+        'customers.view',
+
+        // Orders
+        'orders.view',
+        'orders.create',
+        'orders.update',
+        'orders.delete',
+
+        // Administrators
+        'administrators.view',
+        'administrators.create',
+        'administrators.update',
+        'administrators.delete',
+
+        // Banners / slides
+        'banners.view',
+        'banners.create',
+        'banners.update',
+        'banners.delete',
+
+        // Activity logs
+        'logs.view',
     ];
 
     /**
@@ -74,6 +110,13 @@ class AdminPermissionsSeeder extends Seeder
             'categories.view', 'categories.create', 'categories.update', 'categories.delete',
             'brands.view', 'brands.create', 'brands.update', 'brands.delete',
             'products.view', 'products.create', 'products.update', 'products.delete',
+            'promotions.view', 'promotions.create', 'promotions.update', 'promotions.delete',
+            'content.view', 'content.create', 'content.update', 'content.delete',
+            'customers.view',
+            'orders.view', 'orders.create', 'orders.update', 'orders.delete',
+            'administrators.view', 'administrators.create', 'administrators.update', 'administrators.delete',
+            'banners.view', 'banners.create', 'banners.update', 'banners.delete',
+            'logs.view',
         ],
         'manager' => [
             'users.view', 'users.create', 'users.update',
@@ -82,12 +125,24 @@ class AdminPermissionsSeeder extends Seeder
             'categories.view', 'categories.create', 'categories.update',
             'brands.view', 'brands.create', 'brands.update',
             'products.view', 'products.create', 'products.update',
+            'promotions.view', 'promotions.create', 'promotions.update',
+            'content.view', 'content.create', 'content.update',
+            'customers.view',
+            'orders.view', 'orders.create', 'orders.update',
+            'banners.view', 'banners.create', 'banners.update',
+            'logs.view',
         ],
         'staff' => [
             'users.view',
             'categories.view',
             'brands.view',
             'products.view',
+            'promotions.view',
+            'content.view',
+            'customers.view',
+            'orders.view',
+            'banners.view',
+            'logs.view',
         ],
     ];
 

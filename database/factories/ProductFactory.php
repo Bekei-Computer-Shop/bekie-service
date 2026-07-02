@@ -33,7 +33,7 @@ class ProductFactory extends Factory
             'description' => fake()->paragraph(),
             'price' => fake()->randomFloat(2, 5, 500),
             'sale_price' => null,
-            'cost_price' => null,
+            'cost_price' => fake()->randomFloat(2, 0, 500),
             'stock_quantity' => fake()->numberBetween(0, 100),
             'min_stock_alert' => 5,
             'track_inventory' => true,
