@@ -1,29 +1,122 @@
+envVarGroups:
+  - name: bekie-laravel-env
+    envVars:
+      # This group will be shared between the web service and the worker
+      # to ensure they have the same environment.
+
+previews:
+  - fromPullRequest:
+      enabled: true
+      # Optional: Set to false if you don't want to create a new database for each PR
+      managedDatabase:
+        enabled: true
+        postgres:
+          plan: free
+
 services:
+  # PostgreSQL Database
+  - type: psql
+    name: bekie-db
+    databaseName: bekie
+    user: bekie_user
+    plan: starter # Free plans are not suitable for production
+    region: oregon # Co-locate services for low latency
+
+  # Redis Instance
+  - type: redis
+    name: bekie-redis
+    plan: starter # Free plans are not suitable for production
+    region: oregon
+
+  # The Web Service (Nginx + PHP-FPM)
   - type: web
     name: bekie-service
-    env: docker
-    plan: free
+    runtime: docker
     region: oregon
-    # Environment variables can be added here or set in the Render dashboard
-    # Example:
-    # envVars:
-    #   - key: DB_CONNECTION
-    #     value: pgsql
-    #   - key: DB_HOST
-    #     fromSecret: db-host
-    #   - key: DB_PORT
-    #     value: "5432"
-    #   - key: DB_DATABASE
-    #     fromSecret: db-name
-    #   - key: DB_USERNAME
-    #     fromSecret: db-user
-    #   - key: DB_PASSWORD
-    #     fromSecret: db-pass
-    #   - key: REDIS_HOST
-    #     fromSecret: redis-host
-    #   - key: REDIS_PORT
-    #     value: "6379"
-    #   - key: REDIS_PASSWORD
-    #     fromSecret: redis-pass
-    #   - key: REDIS_SCHEME
-    #     value: tls
+    plan: starter # Or your desired plan
+    healthCheckPath: /api/health # You should create this simple route in Laravel
+    dockerfilePath: ./Dockerfile.php
+    # Pre-deploy command runs after a build, before the new version is live.
+    # We'll run tests and migrations here. If tests fail, deployment stops.
+    preDeployCommand: "php artisan test && php artisan migrate --force"
+    envVars:
+      - fromGroup: bekie-laravel-env # Inherit shared environment variables
+      # General Laravel Settings
+      - key: APP_URL
+        value: ${RENDER_EXTERNAL_URL}
+      - key: APP_NAME
+        value: "Bekie Service"
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_KEY
+        sync: false # Generate with `php artisan key:generate --show` and set in Render UI
+      - key: LOG_CHANNEL
+        value: stderr
+
+      # Database Connection
+      - key: DB_CONNECTION
+        value: pgsql
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_HOST
+          propertyName: host
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_PORT
+          propertyName: port
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_DATABASE
+          propertyName: database
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_USERNAME
+          propertyName: user
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_PASSWORD
+          propertyName: password
+
+      # Redis Connection
+      - fromService:
+          type: redis
+          name: bekie-redis
+          envVarKey: REDIS_URL
+          property: connectionString
+
+      # Caching
+      - key: CACHE_DRIVER
+        value: redis
+      - key: SESSION_DRIVER
+        value: redis
+
+    # Mount a persistent disk for the storage directory
+    disk:
+      name: bekie-storage
+      mountPath: /var/www/html/storage
+      sizeGB: 1 # Adjust size as needed
+      - key: QUEUE_CONNECTION
+        value: redis
+
+  # Queue Worker
+  - type: worker
+    name: bekie-worker
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: ./Dockerfile.php
+    startCommand: php artisan queue:work redis --verbose --tries=3 --timeout=90
+    envVars:
+      - fromGroup: bekie-laravel-env # Inherit shared environment variables
+    # Mount the same persistent disk
+    disk:
+      name: bekie-storage
+      mountPath: /var/www/html/storage
+      sizeGB: 1
