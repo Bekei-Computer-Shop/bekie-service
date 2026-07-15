@@ -1,0 +1,26 @@
+name: Deploy to Render
+
+on:
+  # Triggers the workflow on push events but only for the "main" branch
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Trigger Render Deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send deployment request to Render
+        # This step sends a POST request to your Render Deploy Hook URL.
+        # The -s flag silences curl's progress output.
+        # The -f flag makes curl fail with a non-zero exit code on server errors.
+        run: curl -sf -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+      - name: Deployment triggered successfully
+        if: success()
+        run: echo "Render deployment has been successfully triggered."
+
+      - name: Deployment trigger failed
+        if: failure()
+        run: echo "Failed to trigger Render deployment. Check the hook URL and GitHub secret."
