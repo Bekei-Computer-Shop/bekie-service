@@ -1,10 +1,25 @@
 # Stage 1: Composer builder
-FROM composer:2.8 AS composer_builder
+FROM php:8.2-cli-alpine AS composer_builder
 WORKDIR /app
+
+RUN apk add --no-cache \
+    curl \
+    freetype-dev \
+    jpeg-dev \
+    libpng-dev \
+    libxml2-dev \
+    oniguruma-dev \
+    postgresql-dev \
+    libzip-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install gd pdo_pgsql pgsql zip \
+    && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
+    && rm -rf /var/cache/apk/*
 
 COPY composer.json composer.lock ./
 RUN composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
 
+# Stage 2: Node builder
 FROM node:22-alpine AS node_builder
 WORKDIR /app
 COPY package.json package-lock.json vite.config.js ./
@@ -12,6 +27,7 @@ COPY resources ./resources
 RUN npm ci
 RUN npm run build
 
+# Stage 3: Final runtime image
 FROM php:8.2-fpm-alpine
 WORKDIR /var/www/html
 
