@@ -18,15 +18,27 @@ WORKDIR /var/www/html
 RUN apk add --no-cache \
     bash \
     curl \
+    freetype-dev \
+    jpeg-dev \
     nginx \
     libpng-dev \
     libxml2-dev \
     oniguruma-dev \
+    postgresql-dev \
     zip \
     unzip \
     libzip-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-configure zip \
-    && docker-php-ext-install pdo_mysql pdo_pgsql pgsql bcmath gd exif pcntl zip \
+    && docker-php-ext-install \
+        bcmath \
+        exif \
+        gd \
+        pcntl \
+        pdo_mysql \
+        pdo_pgsql \
+        pgsql \
+        zip \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && rm -rf /var/cache/apk/*
