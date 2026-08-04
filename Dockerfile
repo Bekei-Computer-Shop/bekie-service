@@ -1,8 +1,8 @@
-# Stage 1: Composer builder
-FROM php:8.2-fpm-alpine AS composer_builder
+# Stage 1: PHP & Composer Builder
+FROM php:8.2-fpm-alpine AS builder
 WORKDIR /app
 
-# Install OS-level dependencies for PHP extensions
+# Install OS-level dependencies, PHP extensions, and Composer
 RUN apk add --no-cache --virtual .build-deps \
     $PHPIZE_DEPS \
     freetype-dev \
@@ -11,15 +11,11 @@ RUN apk add --no-cache --virtual .build-deps \
     libxml2-dev \
     oniguruma-dev \
     postgresql-dev \
-    libzip-dev
-
-# Install PHP extensions required by the project
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg && \
+    libzip-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg && \
     docker-php-ext-install -j$(nproc) bcmath exif gd pcntl pdo_mysql pdo_pgsql pgsql zip && \
     pecl install redis && docker-php-ext-enable redis && \
     apk del .build-deps
-
-# Install Composer
 COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 
 COPY composer.json composer.lock ./
@@ -32,26 +28,6 @@ COPY package.json package-lock.json vite.config.js ./
 COPY resources ./resources
 RUN npm ci
 RUN npm run build
-# Stage 3: PHP Builder with OS dependencies
-FROM php:8.2-fpm-alpine AS php_builder
-WORKDIR /var/www/html
-# Install dev dependencies to build PHP extensions (This is now redundant but kept for structural integrity as per previous changes)
-RUN apk add --no-cache --virtual .build-deps \
-    $PHPIZE_DEPS \
-    freetype-dev \
-    jpeg-dev \
-    libpng-dev \
-    libxml2-dev \
-    oniguruma-dev \
-    postgresql-dev \
-    libzip-dev
-# Install PHP extensions
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
-    bcmath exif gd pcntl pdo_mysql pdo_pgsql pgsql zip
-RUN pecl install redis && docker-php-ext-enable redis
-# Cleanup dev dependencies
-RUN apk del .build-deps
 
 # Stage 4: Final Production Image
 FROM php:8.2-fpm-alpine
@@ -70,9 +46,9 @@ RUN apk add --no-cache \
     libzip
 
 # Copy built extensions and assets from builder stages
-COPY --from=php_builder /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
-COPY --from=php_builder /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
-COPY --from=composer_builder /app/vendor ./vendor
+COPY --from=builder /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
+COPY --from=builder /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
+COPY --from=builder /app/vendor ./vendor
 COPY --from=node_builder /app/public/build ./public/build
 
 # Copy application code and configs
