@@ -1,19 +1,26 @@
 #!/bin/sh
 set -e
 
-# Switch to the html directory
 cd /var/www/html
 
-# Run optimizations. These commands are run here instead of in the Dockerfile
-# so that they use the production environment variables.
-echo "Caching configuration..."
-php artisan config:cache
+if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
+    echo "Running database migrations..."
+    php artisan migrate --force
+fi
 
-echo "Caching routes..."
-php artisan route:cache
+if [ -n "${APP_KEY:-}" ]; then
+    echo "Caching Laravel configuration..."
+    php artisan config:cache
+    php artisan route:cache
+    php artisan view:cache
+fi
 
-echo "Caching views..."
-php artisan view:cache
+if [ "$1" = "php" ] || [ "$1" = "artisan" ] || [ "$1" = "/usr/local/bin/php" ]; then
+    exec "$@"
+fi
 
-# Start supervisord and services
-exec /usr/bin/supervisord -c /etc/supervisord.conf
+PORT_VALUE="${PORT:-8080}"
+sed "s/\${PORT:-8080}/${PORT_VALUE}/g" /var/www/html/nginx.conf > /etc/nginx/conf.d/default.conf
+
+php-fpm -D
+nginx -g 'daemon off;'
