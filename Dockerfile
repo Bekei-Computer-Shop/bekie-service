@@ -12,6 +12,14 @@ RUN apk add --no-cache --virtual .build-deps \
     oniguruma-dev \
     postgresql-dev \
     libzip-dev \
+    # Add runtime libs so they are not removed by `apk del`
+    freetype \
+    libjpeg \
+    libpng \
+    libxml2 \
+    oniguruma \
+    postgresql-libs \
+    libzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg && \
     docker-php-ext-install -j$(nproc) bcmath exif gd pcntl pdo_mysql pdo_pgsql pgsql zip && \
     pecl install redis && docker-php-ext-enable redis && \
