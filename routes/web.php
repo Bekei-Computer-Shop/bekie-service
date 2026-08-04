@@ -11,12 +11,15 @@ use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\PromotionController;
 use App\Http\Controllers\Admin\ReportExportController;
+use App\Http\Controllers\HealthController;
 use App\Http\Middleware\EnsureAdminWebAccess;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/api/health', HealthController::class);
 
 // Documentation is served by Scramble at /docs/client and /docs/admin.
 // The legacy /api/docs* paths are preserved as 301 redirects so existing
