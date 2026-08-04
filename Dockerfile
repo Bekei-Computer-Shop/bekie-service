@@ -20,9 +20,6 @@ RUN apk add --no-cache --virtual .build-deps \
     oniguruma \
     postgresql-libs \
     libzip \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg && \
-    docker-php-ext-install -j$(nproc) bcmath exif gd pcntl pdo_mysql pdo_pgsql pgsql zip && \
-    pecl install redis && docker-php-ext-enable redis && \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) bcmath exif gd pcntl pdo_mysql pdo_pgsql pgsql zip \
     && pecl install redis \
@@ -49,6 +46,7 @@ RUN apk add --no-cache \
     bash \
     curl \
     nginx \
+    fcgi \
     supervisor \
     libjpeg \
     libpng \
@@ -66,6 +64,7 @@ COPY --from=node_builder /app/public/build ./public/build
 # Copy application code and configs
 COPY . .
 
+COPY php-fpm-health.conf /usr/local/etc/php-fpm.d/zz-health.conf
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY nginx.conf /etc/nginx/nginx.conf
 
@@ -77,4 +76,9 @@ RUN mkdir -p /var/www/html/storage/framework/sessions \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 8080
+
+# Healthcheck to ensure php-fpm is responsive
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+  CMD SCRIPT_NAME=/ping SCRIPT_FILENAME=/ping cgi-fcgi -bind -connect 127.0.0.1:9000 || exit 1
+
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
