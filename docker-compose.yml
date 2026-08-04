@@ -10,9 +10,9 @@ services:
       APP_URL: http://localhost
       LOG_CHANNEL: stderr
       LOG_STACK: stderr
-      DB_CONNECTION: mysql
+      DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST:-db}
-      DB_PORT: ${DB_PORT:-3306}
+      DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE:-bekie}
       DB_USERNAME: ${DB_USERNAME:-bekie}
       DB_PASSWORD: ${DB_PASSWORD:-}
@@ -24,8 +24,10 @@ services:
       RUN_MIGRATIONS: "true"
       FILESYSTEM_DISK: local
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     deploy:
       replicas: 2
       restart_policy:
@@ -76,14 +78,13 @@ services:
       retries: 3
 
   db:
-    image: mysql:8.4
+    image: postgres:16-alpine
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-bekie}
-      MYSQL_USER: ${MYSQL_USER:-bekie}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      POSTGRES_DB: ${DB_DATABASE:-bekie}
+      POSTGRES_USER: ${DB_USERNAME:-bekie}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-}
     volumes:
-      - db-data:/var/lib/mysql
+      - db-data:/var/lib/postgresql/data
     deploy:
       replicas: 1
       restart_policy:
@@ -92,6 +93,12 @@ services:
         limits:
           cpus: '0.50'
           memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-bekie} -d ${DB_DATABASE:-bekie}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
