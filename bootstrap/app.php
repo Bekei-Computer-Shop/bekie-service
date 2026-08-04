@@ -12,6 +12,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
+
         $middleware->api(append: [
             \App\Http\Middleware\EnsureJsonResponse::class,
             \App\Http\Middleware\ApiSecurityHeaders::class,

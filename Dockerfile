@@ -2,29 +2,50 @@
 FROM composer:2 as composer_builder
 WORKDIR /app
 COPY composer.json composer.lock ./
-# Set environment variables to avoid external service connections during build
-ENV DB_CONNECTION=sqlite \
-    CACHE_STORE=array \
-    SESSION_DRIVER=array \
-    QUEUE_CONNECTION=sync \
-    REDIS_HOST=127.0.0.1 \
-    REDIS_PORT=6379
-RUN composer install --no-dev --optimize-autoloader --ignore-platform-reqs --no-scripts
+RUN composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader --no-progress
 
 # Stage 2: Node builder
 FROM node:lts as node_builder
 WORKDIR /app
 COPY package.json package-lock.json vite.config.js ./
 COPY resources ./resources
-RUN npm install
+RUN npm ci --no-audit --no-fund
 RUN npm run build
 
 # Stage 3: Final PHP-FPM runtime
 FROM php:8.3-fpm
 WORKDIR /var/www/html
 
-# Copy composer
-COPY --from=composer/composer:2 /usr/bin/composer /usr/bin/composer
+ENV APP_ENV=production \
+    APP_DEBUG=false
+
+RUN apk add --no-cache \
+    bash \
+    curl \
+    freetype-dev \
+    jpeg-dev \
+    nginx \
+    libpng-dev \
+    libxml2-dev \
+    oniguruma-dev \
+    postgresql-dev \
+    zip \
+    unzip \
+    libzip-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-configure zip \
+    && docker-php-ext-install \
+        bcmath \
+        exif \
+        gd \
+        pcntl \
+        pdo_mysql \
+        pdo_pgsql \
+        pgsql \
+        zip \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && rm -rf /var/cache/apk/*
 
 # Copy application code
 COPY . .
@@ -34,13 +55,13 @@ COPY --from=composer_builder /app/vendor ./vendor
 
 # Copy built assets from node_builder
 COPY --from=node_builder /app/public/build ./public/build
-
-# Copy start.sh
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY start.sh /usr/local/bin/start.sh
-RUN chmod +x /usr/local/bin/start.sh
 
-# Set permissions: change ownership to www-data
-RUN chown -R www-data:www-data /var/www/html
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/start.sh \
+    && mkdir -p storage/app/public storage/app/private storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 storage bootstrap/cache
 
 # Optimize autoloader (disable scripts to avoid package:discover errors during build)
 RUN composer dump-autoload --optimize --no-scripts \

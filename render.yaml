@@ -1,29 +1,234 @@
 services:
+  - type: psql
+    name: bekie-db
+    plan: standard
+    region: oregon
+    databaseName: bekie
+    user: bekie_user
+
+  - type: redis
+    name: bekie-redis
+    plan: standard
+    region: oregon
+
   - type: web
     name: bekie-service
     env: docker
     plan: free
     region: oregon
-    # Environment variables can be added here or set in the Render dashboard
-    # Example:
-    # envVars:
-    #   - key: DB_CONNECTION
-    #     value: pgsql
-    #   - key: DB_HOST
-    #     fromSecret: db-host
-    #   - key: DB_PORT
-    #     value: "5432"
-    #   - key: DB_DATABASE
-    #     fromSecret: db-name
-    #   - key: DB_USERNAME
-    #     fromSecret: db-user
-    #   - key: DB_PASSWORD
-    #     fromSecret: db-pass
-    #   - key: REDIS_HOST
-    #     fromSecret: redis-host
-    #   - key: REDIS_PORT
-    #     value: "6379"
-    #   - key: REDIS_PASSWORD
-    #     fromSecret: redis-pass
-    #   - key: REDIS_SCHEME
-    #     value: tls
+    plan: standard
+    healthCheckPath: /api/health
+    dockerfilePath: ./Dockerfile
+    startCommand: ./start.sh
+    preDeployCommand: php artisan migrate --force && php artisan storage:link --force
+    envVars:
+      - key: APP_NAME
+        value: Bekie Service
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_URL
+        value: ${RENDER_EXTERNAL_URL}
+      - key: APP_KEY
+        sync: false
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: LOG_STACK
+        value: stderr
+      - key: LOG_LEVEL
+        value: info
+      - key: DB_CONNECTION
+        value: pgsql
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_HOST
+          propertyName: host
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_PORT
+          propertyName: port
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_DATABASE
+          propertyName: database
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_USERNAME
+          propertyName: user
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_PASSWORD
+          propertyName: password
+      - fromService:
+          type: redis
+          name: bekie-redis
+          envVarKey: REDIS_URL
+          property: connectionString
+      - key: CACHE_STORE
+        value: redis
+      - key: SESSION_DRIVER
+        value: redis
+      - key: SESSION_SECURE_COOKIE
+        value: true
+      - key: QUEUE_CONNECTION
+        value: redis
+      - key: RUN_MIGRATIONS
+        value: true
+      - key: FILESYSTEM_DISK
+        value: local
+      - key: FILESYSTEM_PUBLIC_ROOT
+        value: /var/www/html/storage/app/public
+      - key: FILESYSTEM_ROOT
+        value: /var/www/html/storage/app/private
+      - key: CORS_ALLOWED_ORIGINS
+        value: ${RENDER_EXTERNAL_URL}
+      - key: TRUSTED_PROXIES
+        value: '*'
+    disk:
+      name: bekie-storage
+      mountPath: /var/www/html/storage
+      sizeGB: 1
+
+  - type: worker
+    name: bekie-worker
+    runtime: docker
+    region: oregon
+    plan: standard
+    dockerfilePath: ./Dockerfile
+    startCommand: php artisan queue:work redis --tries=3 --timeout=90 --sleep=3 --backoff=3 --queue=default
+    envVars:
+      - key: APP_NAME
+        value: Bekie Service
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_URL
+        value: ${RENDER_EXTERNAL_URL}
+      - key: APP_KEY
+        sync: false
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: LOG_STACK
+        value: stderr
+      - key: LOG_LEVEL
+        value: info
+      - key: DB_CONNECTION
+        value: pgsql
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_HOST
+          propertyName: host
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_PORT
+          propertyName: port
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_DATABASE
+          propertyName: database
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_USERNAME
+          propertyName: user
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_PASSWORD
+          propertyName: password
+      - fromService:
+          type: redis
+          name: bekie-redis
+          envVarKey: REDIS_URL
+          property: connectionString
+      - key: CACHE_STORE
+        value: redis
+      - key: SESSION_DRIVER
+        value: redis
+      - key: QUEUE_CONNECTION
+        value: redis
+      - key: RUN_MIGRATIONS
+        value: false
+      - key: FILESYSTEM_DISK
+        value: local
+      - key: FILESYSTEM_PUBLIC_ROOT
+        value: /var/www/html/storage/app/public
+      - key: FILESYSTEM_ROOT
+        value: /var/www/html/storage/app/private
+
+  - type: worker
+    name: bekie-scheduler
+    runtime: docker
+    region: oregon
+    plan: standard
+    dockerfilePath: ./Dockerfile
+    startCommand: php artisan schedule:work --verbose --no-interaction
+    envVars:
+      - key: APP_NAME
+        value: Bekie Service
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_URL
+        value: ${RENDER_EXTERNAL_URL}
+      - key: APP_KEY
+        sync: false
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: LOG_STACK
+        value: stderr
+      - key: LOG_LEVEL
+        value: info
+      - key: DB_CONNECTION
+        value: pgsql
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_HOST
+          propertyName: host
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_PORT
+          propertyName: port
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_DATABASE
+          propertyName: database
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_USERNAME
+          propertyName: user
+      - fromService:
+          type: psql
+          name: bekie-db
+          envVarKey: DB_PASSWORD
+          propertyName: password
+      - fromService:
+          type: redis
+          name: bekie-redis
+          envVarKey: REDIS_URL
+          property: connectionString
+      - key: CACHE_STORE
+        value: redis
+      - key: SESSION_DRIVER
+        value: redis
+      - key: QUEUE_CONNECTION
+        value: redis
+      - key: RUN_MIGRATIONS
+        value: false
+      - key: FILESYSTEM_DISK
+        value: local
