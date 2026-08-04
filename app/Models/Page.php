@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
 class Page extends Model
@@ -60,10 +60,10 @@ class Page extends Model
     public function scopePublished(Builder $query): Builder
     {
         return $query->where('is_published', true)
-                     ->where(function ($q) {
-                         $q->whereNull('published_at')
-                           ->orWhere('published_at', '<=', now());
-                     });
+            ->where(function ($q) {
+                $q->whereNull('published_at')
+                    ->orWhere('published_at', '<=', now());
+            });
     }
 
     public function scopeType(Builder $query, string $type): Builder
@@ -80,7 +80,7 @@ class Page extends Model
     public function isPublished(): bool
     {
         return $this->is_published &&
-               (!$this->published_at || $this->published_at <= now());
+               (! $this->published_at || $this->published_at <= now());
     }
 
     public function publish(): void

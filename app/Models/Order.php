@@ -4,12 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Order extends Model
 {
     use SoftDeletes;
 
     protected $fillable = [
+        'uuid',
         'user_id',
         'address_id',
         'order_number',
@@ -46,6 +48,20 @@ class Order extends Model
         'cancelled_at' => 'datetime',
         'refunded_at' => 'datetime',
     ];
+
+    public static function booted(): void
+    {
+        static::creating(function (self $order): void {
+            if (! $order->uuid) {
+                $order->uuid = (string) Str::uuid();
+            }
+        });
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'uuid';
+    }
 
     public function items()
     {

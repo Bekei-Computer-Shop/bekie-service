@@ -1,23 +1,19 @@
 # Stage 1: Composer builder
-FROM composer:2 as composer_builder
+FROM composer:2.8 AS composer_builder
 WORKDIR /app
-COPY composer.json composer.lock ./
-RUN composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader --no-progress
 
-# Stage 2: Node builder
-FROM node:lts as node_builder
+COPY composer.json composer.lock ./
+RUN composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
+
+FROM node:22-alpine AS node_builder
 WORKDIR /app
 COPY package.json package-lock.json vite.config.js ./
 COPY resources ./resources
-RUN npm ci --no-audit --no-fund
+RUN npm ci
 RUN npm run build
 
-# Stage 3: Final PHP-FPM runtime
-FROM php:8.3-fpm
+FROM php:8.2-fpm-alpine
 WORKDIR /var/www/html
-
-ENV APP_ENV=production \
-    APP_DEBUG=false
 
 RUN apk add --no-cache \
     bash \
@@ -47,33 +43,15 @@ RUN apk add --no-cache \
     && docker-php-ext-enable redis \
     && rm -rf /var/cache/apk/*
 
-# Copy application code
-COPY . .
-
-# Copy vendor from composer_builder
 COPY --from=composer_builder /app/vendor ./vendor
-
-# Copy built assets from node_builder
+COPY . .
 COPY --from=node_builder /app/public/build ./public/build
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY start.sh /usr/local/bin/start.sh
 
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/start.sh \
-    && mkdir -p storage/app/public storage/app/private storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
-    && chown -R www-data:www-data /var/www/html \
+RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Optimize autoloader (disable scripts to avoid package:discover errors during build)
-RUN composer dump-autoload --optimize --no-scripts \
-    && rm /usr/bin/composer
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Set permissions on storage and bootstrap/cache (already owned by www-data due to above chown)
-# But ensure they are writable
-RUN chmod -R 775 storage bootstrap/cache
-
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-8080}/ || exit 1
-
-ENTRYPOINT ["/usr/local/bin/start.sh"]
 EXPOSE 8080
-# Note: Render will use the PORT environment variable, which we use in the nginx configuration.
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

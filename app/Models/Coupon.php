@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Models;
 
@@ -60,10 +60,10 @@ class Coupon extends Model
     {
         return $query->where(function ($q) {
             $q->whereNull('starts_at')
-              ->orWhere('starts_at', '<=', now());
+                ->orWhere('starts_at', '<=', now());
         })->where(function ($q) {
             $q->whereNull('expires_at')
-              ->orWhere('expires_at', '>=', now());
+                ->orWhere('expires_at', '>=', now());
         });
     }
 
@@ -75,7 +75,7 @@ class Coupon extends Model
 
     public function isValid(): bool
     {
-        if (!$this->is_active) {
+        if (! $this->is_active) {
             return false;
         }
 
