@@ -13,10 +13,19 @@ class UpdateOrderRequest extends FormRequest
         return true;
     }
 
+    /**
+     * The canonical order statuses. Kept in sync with the admin UI (the status
+     * dropdown in OrderDetailView.vue and the filter tabs in OrdersView.vue).
+     */
+    public const STATUSES = ['pending', 'processing', 'completed', 'cancelled'];
+
     public function rules(): array
     {
         return [
-            'status' => ['sometimes', 'in:pending,approved,rejected'],
+            'status' => ['sometimes', 'in:'.implode(',', self::STATUSES)],
+            // Payment state is recorded here rather than at creation — a new
+            // order cannot already be paid, failed or refunded.
+            'payment_status' => ['sometimes', 'in:'.implode(',', StoreOrderRequest::PAYMENT_STATUSES)],
             'notes' => ['sometimes', 'nullable', 'string'],
         ];
     }

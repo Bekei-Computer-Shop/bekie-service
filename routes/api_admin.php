@@ -27,6 +27,7 @@ Route::prefix('admin')->group(function () {
     // Protected Admin Routes
     Route::middleware([AuthenticateAdminApiToken::class])->group(function () {
         Route::get('auth/me', [AuthController::class, 'me']);
+        Route::match(['put', 'patch'], 'auth/profile', [AuthController::class, 'updateProfile']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::post('auth/change-password', [AuthController::class, 'changePassword']);
 
