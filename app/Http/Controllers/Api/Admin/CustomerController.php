@@ -21,6 +21,9 @@ class CustomerController extends BaseAdminController
             ->first();
 
         $customers = User::query()
+            // Eager-loaded so UserResource can expose the address without an
+            // extra query per row.
+            ->with('defaultAddress')
             ->when($customerRole, fn ($query) => $query->whereHas('roles', fn ($roleQuery) => $roleQuery->where('roles.id', $customerRole->id)))
             ->when(! $customerRole, fn ($query) => $query->where('is_admin', false))
             ->latest()
@@ -31,6 +34,8 @@ class CustomerController extends BaseAdminController
 
     public function show(User $user): JsonResponse
     {
+        $user->load('defaultAddress');
+
         return $this->success(new UserResource($user));
     }
 }
