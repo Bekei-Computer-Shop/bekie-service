@@ -17,6 +17,7 @@ services:
     region: oregon
     plan: starter
     healthCheckPath: /api/health
+    preDeployCommand: "php artisan migrate --force"
     dockerfilePath: ./Dockerfile
     envVars:
       - key: APP_NAME
@@ -27,8 +28,8 @@ services:
         value: false
       - key: APP_URL
         value: ${RENDER_EXTERNAL_URL}
-      - key: APP_KEY
-        sync: false
+      - key: APP_KEY # Generate a key with `php artisan key:generate --show` and paste it here
+        generateValue: true
       - key: LOG_CHANNEL
         value: stderr
       - key: LOG_STACK
@@ -71,8 +72,6 @@ services:
         value: redis
       - key: QUEUE_CONNECTION
         value: redis
-      - key: RUN_MIGRATIONS
-        value: true
       - key: FILESYSTEM_DISK
         value: local
       - key: FILESYSTEM_PUBLIC_ROOT
@@ -90,7 +89,7 @@ services:
     region: oregon
     plan: starter
     dockerfilePath: ./Dockerfile
-    startCommand: php artisan queue:work redis --tries=3 --timeout=90
+    startCommand: "php artisan queue:work redis --tries=3 --timeout=90 --max-time=3600 --memory=128"
     envVars:
       - key: APP_NAME
         value: Bekie Service
@@ -100,8 +99,10 @@ services:
         value: false
       - key: APP_URL
         value: ${RENDER_EXTERNAL_URL}
-      - key: APP_KEY
-        sync: false
+      - fromService:
+          type: web
+          name: bekie-service
+          envVarKey: APP_KEY
       - key: LOG_CHANNEL
         value: stderr
       - key: LOG_STACK
@@ -144,7 +145,5 @@ services:
         value: redis
       - key: QUEUE_CONNECTION
         value: redis
-      - key: RUN_MIGRATIONS
-        value: false
       - key: FILESYSTEM_DISK
         value: local

@@ -1,57 +1,73 @@
 # Stage 1: Composer builder
 FROM composer:2.8 AS composer_builder
 WORKDIR /app
-
 COPY composer.json composer.lock ./
 RUN composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
 
+# Stage 2: Node builder
 FROM node:22-alpine AS node_builder
 WORKDIR /app
 COPY package.json package-lock.json vite.config.js ./
 COPY resources ./resources
 RUN npm ci
 RUN npm run build
-
-FROM php:8.2-fpm-alpine
+# Stage 3: PHP Builder with OS dependencies
+FROM php:8.2-fpm-alpine AS php_builder
 WORKDIR /var/www/html
-
-RUN apk add --no-cache \
-    bash \
-    curl \
+# Install dev dependencies to build PHP extensions
+RUN apk add --no-cache --virtual .build-deps \
+    $PHPIZE_DEPS \
     freetype-dev \
     jpeg-dev \
-    nginx \
     libpng-dev \
     libxml2-dev \
     oniguruma-dev \
     postgresql-dev \
-    zip \
     unzip \
-    libzip-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-configure zip \
-    && docker-php-ext-install \
-        bcmath \
-        exif \
-        gd \
-        pcntl \
-        pdo_mysql \
-        pdo_pgsql \
-        pgsql \
-        zip \
-    && pecl install redis \
-    && docker-php-ext-enable redis \
-    && rm -rf /var/cache/apk/*
+    libzip-dev
+# Install PHP extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-configure zip
+RUN docker-php-ext-install -j$(nproc) \
+    bcmath exif gd pcntl pdo_mysql pdo_pgsql pgsql zip
+RUN pecl install redis && docker-php-ext-enable redis
+# Cleanup dev dependencies
+RUN apk del .build-deps
 
+# Stage 4: Final Production Image
+FROM php:8.2-fpm-alpine
+WORKDIR /var/www/html
+# Install only runtime dependencies
+RUN apk add --no-cache \
+    bash \
+    curl \
+    nginx \
+    supervisor \
+    libjpeg \
+    libpng \
+    libxml2 \
+    oniguruma \
+    postgresql-libs \
+    libzip
+
+# Copy built extensions and assets from builder stages
+COPY --from=php_builder /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
+COPY --from=php_builder /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
 COPY --from=composer_builder /app/vendor ./vendor
-COPY . .
 COPY --from=node_builder /app/public/build ./public/build
 
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 storage bootstrap/cache
+# Copy application code and configs
+COPY . .
 
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY nginx.conf /etc/nginx/nginx.conf
+
+RUN mkdir -p /var/www/html/storage/framework/sessions \
+    && mkdir -p /var/www/html/storage/framework/views \
+    && mkdir -p /var/www/html/storage/framework/cache \
+    && mkdir -p /var/www/html/storage/logs \
+    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
