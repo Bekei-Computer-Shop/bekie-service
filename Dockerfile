@@ -23,6 +23,10 @@ RUN apk add --no-cache --virtual .build-deps \
     && docker-php-ext-configure gd --with-freetype --with-jpeg && \
     docker-php-ext-install -j$(nproc) bcmath exif gd pcntl pdo_mysql pdo_pgsql pgsql zip && \
     pecl install redis && docker-php-ext-enable redis && \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) bcmath exif gd pcntl pdo_mysql pdo_pgsql pgsql zip \
+    && pecl install redis \
+    && docker-php-ext-enable gd redis \
     apk del .build-deps
 COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 
