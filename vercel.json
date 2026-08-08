@@ -1,0 +1,42 @@
+{
+    "version": 2,
+    "framework": "laravel",
+    "builds": [
+        {
+            "src": "public/index.php",
+            "use": "@vercel/php"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/(css|js|images|fonts|favicon.ico)(.*)",
+            "dest": "/public/$1$2"
+        },
+        {
+            "src": "/api/docs",
+            "dest": "/public/index.php"
+        },
+        {
+            "src": "/api/admin/docs",
+            "dest": "/public/index.php"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/public/index.php"
+        }
+    ],
+    "env": {
+        "APP_ENV": "production",
+        "APP_DEBUG": "false",
+        "APP_URL": "https://your-project-name.vercel.app",
+        "APP_CONFIG_CACHE": "/tmp/config.php",
+        "APP_EVENTS_CACHE": "/tmp/events.php",
+        "APP_PACKAGES_CACHE": "/tmp/packages.php",
+        "APP_ROUTES_CACHE": "/tmp/routes.php",
+        "APP_SERVICES_CACHE": "/tmp/services.php",
+        "VIEW_COMPILED_PATH": "/tmp/views",
+        "CACHE_DRIVER": "array",
+        "LOG_CHANNEL": "stderr",
+        "SESSION_DRIVER": "cookie"
+    }
+}
