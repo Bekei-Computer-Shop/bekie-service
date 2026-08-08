@@ -1,42 +1,48 @@
 {
     "version": 2,
-    "framework": "laravel",
     "builds": [
         {
-            "src": "public/index.php",
+            "src": "package.json",
+            "use": "@vercel/static-build",
+            "config": {
+                "distDir": "public/build"
+            }
+        },
+        {
+            "src": "api/index.php",
             "use": "@vercel/php"
         }
     ],
     "routes": [
         {
-            "src": "/(css|js|images|fonts|favicon.ico)(.*)",
-            "dest": "/public/$1$2"
+            "src": "/build/(.*)",
+            "dest": "/public/build/$1"
         },
         {
-            "src": "/api/docs",
-            "dest": "/public/index.php"
+            "src": "/(favicon.ico|robots.txt|openapi.json|openapi-admin.json)",
+            "dest": "/public/$1"
         },
         {
-            "src": "/api/admin/docs",
-            "dest": "/public/index.php"
+            "src": "/storage/(.*)",
+            "dest": "/public/storage/$1"
         },
         {
             "src": "/(.*)",
-            "dest": "/public/index.php"
+            "dest": "/api/index.php"
         }
     ],
     "env": {
         "APP_ENV": "production",
         "APP_DEBUG": "false",
-        "APP_URL": "https://your-project-name.vercel.app",
+        "APP_URL": "https://bekie-service-git-main-oun-bavs-projects.vercel.app/",
         "APP_CONFIG_CACHE": "/tmp/config.php",
         "APP_EVENTS_CACHE": "/tmp/events.php",
         "APP_PACKAGES_CACHE": "/tmp/packages.php",
         "APP_ROUTES_CACHE": "/tmp/routes.php",
         "APP_SERVICES_CACHE": "/tmp/services.php",
         "VIEW_COMPILED_PATH": "/tmp/views",
+        "SESSION_DRIVER": "cookie",
         "CACHE_DRIVER": "array",
-        "LOG_CHANNEL": "stderr",
-        "SESSION_DRIVER": "cookie"
+        "LOG_CHANNEL": "stderr"
     }
 }
