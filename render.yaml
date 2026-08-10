@@ -3,18 +3,15 @@ services:
     name: laravel-app
     runtime: docker
 
-    # Change to your preferred Render region.
-    # Singapore is usually a good choice for Cambodia/SEA users.
+    # Singapore region is a good fit for Cambodia/SEA users.
     region: singapore
 
-    # Use "starter" for production.
-    # Change to "free" if you specifically want the Free plan.
+    # Use "starter" for production. Free plan omits preDeployCommand.
     plan: starter
 
     dockerfilePath: ./Dockerfile
     dockerContext: .
 
-    # Render provides PORT at runtime.
     envVars:
       - key: PORT
         value: "10000"
@@ -31,7 +28,7 @@ services:
       - key: APP_KEY
         sync: false
 
-      # PostgreSQL
+      # PostgreSQL — link to your Render Postgres database in the dashboard.
       - key: DB_CONNECTION
         value: pgsql
 
@@ -50,7 +47,11 @@ services:
       - key: DB_PASSWORD
         sync: false
 
-      # Redis
+      # Render Postgres requires SSL.
+      - key: DB_SSLMODE
+        value: require
+
+      # Redis — link to your Render Key Value Store (Redis) in the dashboard.
       - key: REDIS_CLIENT
         value: phpredis
 
@@ -63,35 +64,92 @@ services:
       - key: REDIS_PASSWORD
         sync: false
 
-      # Laravel cache/session
+      # Laravel cache / session / queue.
       - key: CACHE_STORE
         value: redis
 
       - key: SESSION_DRIVER
         value: redis
 
-      # Queue
       - key: QUEUE_CONNECTION
         value: redis
 
-      # Logging
+      # Logging — stderr feeds Render's log drain.
       - key: LOG_CHANNEL
         value: stderr
 
       - key: LOG_LEVEL
         value: info
 
-    # Laravel health endpoint
+      # JWT signing key. Generate with: openssl rand -hex 32
+      # app/Services/JwtService.php falls back to APP_KEY if unset, but
+      # a dedicated secret is recommended for production.
+      - key: JWT_SECRET
+        sync: false
+
+      # Cloudinary — required by /api/v1/admin/media.
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+
+      - key: CLOUDINARY_API_KEY
+        sync: false
+
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      - key: CLOUDINARY_UPLOAD_PRESET
+        sync: false
+
+      - key: CLOUDINARY_SECURE
+        value: "true"
+
+      - key: CLOUDINARY_FOLDER
+        value: bekie
+
+      # Scramble — gated in production. Flip SCRAMBLE_ENABLED to "true"
+      # in the dashboard when you want to expose /docs/client and
+      # /docs/admin (still gated by RestrictedDocsAccess middleware).
+      - key: SCRAMBLE_ENABLED
+        value: "false"
+
+      - key: API_VERSION
+        value: "1.0.0"
+
+      # Filesystem / session / cookie hardening.
+      - key: FILESYSTEM_DISK
+        value: local
+
+      - key: SESSION_SECURE_COOKIE
+        value: "true"
+
+      - key: SESSION_SAME_SITE
+        value: lax
+
+      # Swap to a transactional provider (Resend/Postmark/SES) when the
+      # first mail-sending feature ships — see DEPLOYMENT.md "Mail".
+      - key: MAIL_MAILER
+        value: log
+
+      - key: MAIL_FROM_ADDRESS
+        sync: false
+
+      - key: MAIL_FROM_NAME
+        sync: false
+
+    # Laravel health endpoint.
     healthCheckPath: /up
 
-    # Allow enough time for graceful shutdown
+    # Allow enough time for graceful shutdown.
     maxShutdownDelaySeconds: 60
 
-    # Automatic deployment when the selected branch changes
+    # Automatic deployment when the selected branch changes.
     autoDeployTrigger: commit
 
-    # IMPORTANT:
-    # Pre-deploy commands are available only on eligible paid
-    # Render services, so leave this commented if using Free.
-    #
-    # preDeployCommand: php artisan migrate --force
+    # Runs migrations before each deploy. Requires Starter plan or above.
+    # On Free, run manually via Render shell: php artisan migrate --force
+    preDeployCommand: php artisan migrate --force
+
+# Provision the database and Redis in the Render dashboard (or via
+# render.yaml infra blocks). The Starter plan is sufficient for both.
+# Note: Render's "Key Value Store" (managed Redis) is in preview — verify
+# current availability before relying on it.

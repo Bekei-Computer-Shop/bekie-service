@@ -131,3 +131,7 @@ Two recent migrations extend auth for the admin split:
 - `2026_05_20_000001_add_scope_to_api_tokens_table.php` — `scope` varchar on `api_tokens`
 
 `User::is_admin`, `User::is_active`, `User::is_banned`, and `ApiToken::scope` are part of the auth contract — don't rename without checking middleware assumptions.
+
+## Deployment
+
+For Render.com deployment (service topology, env vars, build/release, migration safety, mail placeholder, rollout procedure), see [DEPLOYMENT.md](DEPLOYMENT.md). It is the operational source of truth; `render.yaml` and `Dockerfile` are derived from it.
