@@ -79,6 +79,10 @@ RUN a2enmod rewrite
 # ------------------------------------------------------------
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# Set a dummy APP_KEY for build-time operations
+ARG APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+ENV APP_KEY=${APP_KEY}
+
 # ------------------------------------------------------------
 # Copy Laravel application
 # ------------------------------------------------------------
