@@ -8,6 +8,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -135,6 +136,23 @@ class User extends Authenticatable
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(Address::class);
+    }
+
+    /**
+     * The address to use for a new order: the one flagged default, otherwise the
+     * most recently added active one.
+     */
+    public function defaultAddress(): HasOne
+    {
+        return $this->hasOne(Address::class)
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderByDesc('id');
     }
 
     public function contentItems(): HasMany

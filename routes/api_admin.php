@@ -1,20 +1,20 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\ActivityLogController;
-use App\Http\Controllers\Api\Admin\AdministratorController;
-use App\Http\Controllers\Api\Admin\BannerController;
-use App\Http\Controllers\Api\Admin\ContentController;
-use App\Http\Controllers\Api\Admin\CustomerController;
-use App\Http\Controllers\Api\Admin\LogController;
-use App\Http\Controllers\Api\Admin\OrderController;
-use App\Http\Controllers\Api\Admin\PromotionController;
 use App\Http\Controllers\Api\Admin\ReportController;
+use App\Http\Controllers\Api\Admin\V1\AdministratorController;
 use App\Http\Controllers\Api\Admin\V1\AuthController;
+use App\Http\Controllers\Api\Admin\V1\BannerController;
 use App\Http\Controllers\Api\Admin\V1\BrandController;
 use App\Http\Controllers\Api\Admin\V1\CategoryController;
+use App\Http\Controllers\Api\Admin\V1\ContentController;
+use App\Http\Controllers\Api\Admin\V1\CustomerController;
+use App\Http\Controllers\Api\Admin\V1\LogController;
 use App\Http\Controllers\Api\Admin\V1\MediaController;
+use App\Http\Controllers\Api\Admin\V1\OrderController;
 use App\Http\Controllers\Api\Admin\V1\PermissionController;
 use App\Http\Controllers\Api\Admin\V1\ProductController;
+use App\Http\Controllers\Api\Admin\V1\PromotionController;
 use App\Http\Controllers\Api\Admin\V1\RoleController;
 use App\Http\Controllers\Api\Admin\V1\StockController;
 use App\Http\Controllers\Api\Admin\V1\UserController;
@@ -29,6 +29,7 @@ Route::prefix('admin')->group(function () {
     // Protected Admin Routes
     Route::middleware([AuthenticateAdminApiToken::class])->group(function () {
         Route::get('auth/me', [AuthController::class, 'me']);
+        Route::match(['put', 'patch'], 'auth/profile', [AuthController::class, 'updateProfile']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::post('auth/change-password', [AuthController::class, 'changePassword']);
 

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
-use App\Http\Controllers\Api\BaseAdminController;
 use App\Http\Requests\Api\Admin\V1\Permission\StorePermissionRequest;
 use App\Http\Requests\Api\Admin\V1\Permission\UpdatePermissionRequest;
 use App\Http\Resources\Api\Admin\V1\PermissionResource;
