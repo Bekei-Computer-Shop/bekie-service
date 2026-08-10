@@ -32,7 +32,9 @@ class AppServiceProvider extends ServiceProvider
         // Tell Scramble to skip its default single-surface docs route — we
         // register two named surfaces (client + admin) in configureScramble()
         // and don't need the catch-all `/docs/api` endpoint.
-        Scramble::ignoreDefaultRoutes();
+        if (class_exists(\Dedoc\Scramble\Scramble::class)) {
+            \Dedoc\Scramble\Scramble::ignoreDefaultRoutes();
+        }
 
         // Tell Spatie Permission to use our app/Models/{Role,Permission} classes
         // (which add SoftDeletes + guard_name=api defaults) instead of its
@@ -66,7 +68,9 @@ class AppServiceProvider extends ServiceProvider
             Gate::policy($model, $policy);
         }
 
-        $this->configureScramble();
+        if (class_exists(\Dedoc\Scramble\Scramble::class)) {
+            $this->configureScramble();
+        }
     }
 
     /**
