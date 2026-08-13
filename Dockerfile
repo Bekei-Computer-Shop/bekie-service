@@ -1,58 +1,162 @@
-# Stage 1: Composer builder
-FROM composer:2 as composer_builder
+# ============================================================
+# Stage 1: Build frontend assets
+# ============================================================
+FROM node:20-alpine AS frontend
+
 WORKDIR /app
-COPY composer.json composer.lock ./
-# Set environment variables to avoid external service connections during build
-ENV DB_CONNECTION=sqlite \
-    CACHE_STORE=array \
-    SESSION_DRIVER=array \
-    QUEUE_CONNECTION=sync \
-    REDIS_HOST=127.0.0.1 \
-    REDIS_PORT=6379
-RUN composer install --no-dev --optimize-autoloader --ignore-platform-reqs --no-scripts
 
-# Stage 2: Node builder
-FROM node:lts as node_builder
-WORKDIR /app
-COPY package.json package-lock.json vite.config.js ./
-COPY resources ./resources
-RUN npm install
-RUN npm run build
+# Copy dependency files first for Docker layer caching
+COPY package*.json ./
 
-# Stage 3: Final PHP-FPM runtime
-FROM php:8.3-fpm
-WORKDIR /var/www/html
+# Install frontend dependencies
+RUN npm ci
 
-# Copy composer
-COPY --from=composer/composer:2 /usr/bin/composer /usr/bin/composer
-
-# Copy application code
+# Copy application source
 COPY . .
 
-# Copy vendor from composer_builder
-COPY --from=composer_builder /app/vendor ./vendor
+# Build Vite assets
+RUN npm run build
 
-# Copy built assets from node_builder
-COPY --from=node_builder /app/public/build ./public/build
 
-# Copy start.sh
-COPY start.sh /usr/local/bin/start.sh
-RUN chmod +x /usr/local/bin/start.sh
+# ============================================================
+# Stage 2: Laravel production application
+# ============================================================
+FROM php:8.2-apache
 
-# Set permissions: change ownership to www-data
-RUN chown -R www-data:www-data /var/www/html
+WORKDIR /var/www/html
 
-# Optimize autoloader (disable scripts to avoid package:discover errors during build)
-RUN composer dump-autoload --optimize --no-scripts \
-    && rm /usr/bin/composer
+# ------------------------------------------------------------
+# Install system dependencies
+# ------------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    unzip \
+    zip \
+    libpq-dev \
+    libzip-dev \
+    libicu-dev \
+    libonig-dev \
+    libxml2-dev \
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
+    libwebp-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set permissions on storage and bootstrap/cache (already owned by www-data due to above chown)
-# But ensure they are writable
-RUN chmod -R 775 storage bootstrap/cache
+# ------------------------------------------------------------
+# Configure PHP extensions
+# ------------------------------------------------------------
+RUN docker-php-ext-configure gd \
+    --with-freetype \
+    --with-jpeg \
+    --with-webp
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-8080}/ || exit 1
+RUN docker-php-ext-install -j$(nproc) \
+    pdo \
+    pdo_pgsql \
+    mbstring \
+    zip \
+    intl \
+    bcmath \
+    exif \
+    pcntl \
+    gd
 
-ENTRYPOINT ["/usr/local/bin/start.sh"]
-EXPOSE 8080
-# Note: Render will use the PORT environment variable, which we use in the nginx configuration.
+# ------------------------------------------------------------
+# Install Redis PHP extension
+# ------------------------------------------------------------
+RUN pecl install redis \
+    && docker-php-ext-enable redis
+
+# ------------------------------------------------------------
+# Enable Apache rewrite
+# ------------------------------------------------------------
+RUN a2enmod rewrite
+
+# ------------------------------------------------------------
+# Install Composer
+# ------------------------------------------------------------
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Set a dummy APP_KEY for build-time operations
+ARG APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+ENV APP_KEY=${APP_KEY}
+
+# ------------------------------------------------------------
+# Copy Laravel application
+# ------------------------------------------------------------
+COPY . .
+
+# ------------------------------------------------------------
+# Copy Vite production build
+# ------------------------------------------------------------
+COPY --from=frontend /app/public/build ./public/build
+
+# ------------------------------------------------------------
+# Install production PHP dependencies
+# ------------------------------------------------------------
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --optimize-autoloader \
+    --no-scripts
+
+# ------------------------------------------------------------
+# Configure Apache document root
+# ------------------------------------------------------------
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+
+RUN sed -ri \
+    -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
+    /etc/apache2/sites-available/000-default.conf \
+    /etc/apache2/apache2.conf \
+    /etc/apache2/sites-available/default-ssl.conf
+
+# ------------------------------------------------------------
+# Laravel permissions
+# ------------------------------------------------------------
+RUN mkdir -p \
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs \
+    bootstrap/cache
+
+RUN chown -R www-data:www-data \
+    storage \
+    bootstrap/cache
+
+RUN chmod -R 775 \
+    storage \
+    bootstrap/cache
+
+# ------------------------------------------------------------
+# Laravel optimization
+# ------------------------------------------------------------
+RUN php artisan package:discover --ansi
+
+# Don't cache config/routes here because Render environment
+# variables are injected at runtime.
+#
+# Force CACHE_STORE=file so cache:clear does not need a database
+# connection. Without it, the absence of .env at build time makes
+# config/cache.php fall back to the 'database' store, which then
+# requires a SQLite file the image does not — and should not —
+# ship. Runtime env vars (Render / docker-compose) override this
+# to CACHE_STORE=redis; only the build-time clear is affected.
+RUN CACHE_STORE=file php artisan config:clear \
+    && CACHE_STORE=file php artisan route:clear \
+    && CACHE_STORE=file php artisan view:clear \
+    && CACHE_STORE=file php artisan cache:clear
+
+# ------------------------------------------------------------
+# Render / container port
+# ------------------------------------------------------------
+EXPOSE 80
+
+# ------------------------------------------------------------
+# Start Apache
+# ------------------------------------------------------------
+CMD ["apache2-foreground"]

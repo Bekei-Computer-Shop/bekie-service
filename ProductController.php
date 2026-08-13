@@ -2,63 +2,45 @@
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Admin\V1\StoreProductRequest;
-use App\Http\Resources\Admin\V1\ProductResource;
+use App\Http\Requests\Api\Admin\V1\StoreProductRequest;
+use App\Http\Resources\Api\Client\V1\ProductResource;
 use App\Models\Product;
-use App\Services\Admin\ProductService;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
-class ProductController extends Controller
+/**
+ * @group Admin APIs
+ *
+ * @subgroup Product Management
+ * @authenticated
+ */
+class ProductController extends BaseAdminController
 {
-    public function __construct(protected ProductService $productService)
+    /**
+     * Create Product with Variants
+     *
+     * Creates a new product and its associated variants in a single transaction.
+     * The `variants` array is optional. If not provided, a product without variants will be created.
+     *
+     * @responseFile 201 storage/responses/client/product.json
+     */
+    public function store(StoreProductRequest $request): JsonResponse
     {
-        $this->authorizeResource(Product::class, 'product');
-    }
+        $validated = $request->validated();
 
-    public function index(Request $request)
-    {
-        $products = $this->productService->listProducts($request->all());
-        return ProductResource::collection($products);
-    }
+        $product = DB::transaction(function () use ($validated) {
+            $product = Product::create($validated['product']);
 
-    public function store(StoreProductRequest $request)
-    {
-        $product = $this->productService->createProduct($request->validated());
-        return new ProductResource($product);
-    }
+            if (! empty($validated['variants'])) {
+                $product->variants()->createMany($validated['variants']);
+            }
 
-    public function show(Product $product)
-    {
-        return new ProductResource($product->load(['brand', 'categories', 'variants.inventory', 'images']));
-    }
+            return $product;
+        });
 
-    public function update(StoreProductRequest $request, Product $product)
-    {
-        $updated = $this->productService->updateProduct($product, $request->validated());
-        return new ProductResource($updated);
-    }
-
-    public function destroy(Product $product)
-    {
-        $this->productService->deleteProduct($product);
-        return response()->noContent();
-    }
-
-    public function changeStatus(Request $request, Product $product)
-    {
-        $request->validate(['status' => 'required|in:draft,published,out_of_stock']);
-        $this->productService->updateStatus($product, $request->status);
-        return response()->json(['message' => 'Status updated successfully']);
-    }
-
-    public function bulkUpdateStatus(Request $request)
-    {
-        // Implementation for bulk status change
-    }
-
-    public function bulkDestroy(Request $request)
-    {
-        // Implementation for bulk deletion
+        return $this->created(
+            data: ProductResource::make($product->load(['category', 'brand', 'variants'])),
+            message: 'Product created successfully.'
+        );
     }
 }

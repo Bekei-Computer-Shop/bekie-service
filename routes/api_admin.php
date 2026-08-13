@@ -1,18 +1,20 @@
 <?php
 
-use App\Http\Controllers\Api\Admin\AdministratorController;
-use App\Http\Controllers\Api\Admin\BannerController;
-use App\Http\Controllers\Api\Admin\ContentController;
-use App\Http\Controllers\Api\Admin\CustomerController;
-use App\Http\Controllers\Api\Admin\LogController;
-use App\Http\Controllers\Api\Admin\OrderController;
-use App\Http\Controllers\Api\Admin\PromotionController;
+use App\Http\Controllers\Api\Admin\ActivityLogController;
+use App\Http\Controllers\Api\Admin\ReportController;
+use App\Http\Controllers\Api\Admin\V1\AdministratorController;
 use App\Http\Controllers\Api\Admin\V1\AuthController;
+use App\Http\Controllers\Api\Admin\V1\BannerController;
 use App\Http\Controllers\Api\Admin\V1\BrandController;
 use App\Http\Controllers\Api\Admin\V1\CategoryController;
+use App\Http\Controllers\Api\Admin\V1\ContentController;
+use App\Http\Controllers\Api\Admin\V1\CustomerController;
+use App\Http\Controllers\Api\Admin\V1\LogController;
 use App\Http\Controllers\Api\Admin\V1\MediaController;
+use App\Http\Controllers\Api\Admin\V1\OrderController;
 use App\Http\Controllers\Api\Admin\V1\PermissionController;
 use App\Http\Controllers\Api\Admin\V1\ProductController;
+use App\Http\Controllers\Api\Admin\V1\PromotionController;
 use App\Http\Controllers\Api\Admin\V1\RoleController;
 use App\Http\Controllers\Api\Admin\V1\StockController;
 use App\Http\Controllers\Api\Admin\V1\UserController;
@@ -140,6 +142,8 @@ Route::prefix('admin')->group(function () {
         Route::middleware('permission:logs.view')->group(function () {
             Route::get('logs/visitors', [LogController::class, 'visitors']);
             Route::get('logs/team', [LogController::class, 'team']);
+            Route::get('activity-logs', [ActivityLogController::class, 'index']);
+            Route::get('reports/sold-products', [ReportController::class, 'soldProducts']);
         });
 
         // ─── User management (admin/staff CRUD + role assignment) ────
