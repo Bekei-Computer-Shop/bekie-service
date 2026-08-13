@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\Api\Admin\ActivityLogController;
-use App\Http\Controllers\Api\Admin\ReportController;
+use App\Http\Controllers\Api\Admin\V1\ActivityLogController;
+use App\Http\Controllers\Api\Admin\V1\ReportController;
 use App\Http\Controllers\Api\Admin\V1\AdministratorController;
 use App\Http\Controllers\Api\Admin\V1\AuthController;
 use App\Http\Controllers\Api\Admin\V1\BannerController;
