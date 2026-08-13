@@ -139,10 +139,17 @@ RUN php artisan package:discover --ansi
 
 # Don't cache config/routes here because Render environment
 # variables are injected at runtime.
-RUN php artisan config:clear \
-    && php artisan route:clear \
-    && php artisan view:clear \
-    && php artisan cache:clear
+#
+# Force CACHE_STORE=file so cache:clear does not need a database
+# connection. Without it, the absence of .env at build time makes
+# config/cache.php fall back to the 'database' store, which then
+# requires a SQLite file the image does not — and should not —
+# ship. Runtime env vars (Render / docker-compose) override this
+# to CACHE_STORE=redis; only the build-time clear is affected.
+RUN CACHE_STORE=file php artisan config:clear \
+    && CACHE_STORE=file php artisan route:clear \
+    && CACHE_STORE=file php artisan view:clear \
+    && CACHE_STORE=file php artisan cache:clear
 
 # ------------------------------------------------------------
 # Render / container port
