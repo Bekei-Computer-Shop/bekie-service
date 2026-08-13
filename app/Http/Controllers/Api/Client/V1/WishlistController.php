@@ -12,22 +12,21 @@ class WishlistController extends BaseApiController
 {
     public function index(Request $request)
     {
-        $query = Wishlist::with('items.product', 'items.variant');
-
-        if ($request->filled('session_id')) {
-            $query->where('session_id', $request->query('session_id'));
-        }
-
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->query('user_id'));
-        }
+        $query = Wishlist::with('items.product', 'items.variant')
+            ->where('user_id', $request->user()->id);
 
         return $this->success(WishlistResource::collection($query->orderBy('updated_at', 'desc')->paginate(15)));
     }
 
     public function store(StoreWishlistRequest $request)
     {
-        $wishlist = Wishlist::create($request->validated());
+        $attributes = $request->validated();
+        unset($attributes['user_id'], $attributes['session_id']);
+
+        $wishlist = Wishlist::create([
+            ...$attributes,
+            'user_id' => $request->user()->id,
+        ]);
 
         return $this->created(new WishlistResource($wishlist));
     }

@@ -54,6 +54,7 @@ RUN docker-php-ext-configure gd \
 
 RUN docker-php-ext-install -j$(nproc) \
     pdo \
+    pdo_mysql \
     pdo_pgsql \
     mbstring \
     zip \
@@ -78,10 +79,6 @@ RUN a2enmod rewrite
 # Install Composer
 # ------------------------------------------------------------
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-# Set a dummy APP_KEY for build-time operations
-ARG APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-ENV APP_KEY=${APP_KEY}
 
 # ------------------------------------------------------------
 # Copy Laravel application
@@ -139,17 +136,27 @@ RUN php artisan package:discover --ansi
 
 # Don't cache config/routes here because Render environment
 # variables are injected at runtime.
-RUN php artisan config:clear \
-    && php artisan route:clear \
-    && php artisan view:clear \
-    && php artisan cache:clear
+#
+# Force CACHE_STORE=file so cache:clear does not need a database
+# connection. Without it, the absence of .env at build time makes
+# config/cache.php fall back to the 'database' store, which then
+# requires a SQLite file the image does not — and should not —
+# ship. Runtime env vars (Render / docker-compose) override this
+# to CACHE_STORE=redis; only the build-time clear is affected.
+# Railway only injects production variables after the image is built. Do not
+# run cache-clearing commands here: Laravel's default SQLite connection would
+# otherwise be selected before Railway's database is available.
 
 # ------------------------------------------------------------
 # Render / container port
 # ------------------------------------------------------------
-EXPOSE 80
+EXPOSE 8080
 
 # ------------------------------------------------------------
-# Start Apache
+# Start Apache on Railway's runtime PORT.
 # ------------------------------------------------------------
+COPY docker/railway-entrypoint.sh /usr/local/bin/railway-entrypoint
+RUN chmod +x /usr/local/bin/railway-entrypoint
+
+ENTRYPOINT ["railway-entrypoint"]
 CMD ["apache2-foreground"]
