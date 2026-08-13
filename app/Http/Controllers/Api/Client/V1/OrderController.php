@@ -16,11 +16,7 @@ class OrderController extends BaseApiController
 {
     public function index(Request $request)
     {
-        $query = Order::with('items');
-
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->query('user_id'));
-        }
+        $query = Order::with('items')->where('user_id', $request->user()->id);
 
         return $this->success(OrderResource::collection($query->orderBy('created_at', 'desc')->paginate(15)));
     }

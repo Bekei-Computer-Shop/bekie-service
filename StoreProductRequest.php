@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests\Api\Admin\V1;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreProductRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        /** @var User|null $user */
+        $user = $this->user();
+
+        return $user && $user->can('products.create');
     }
 
     public function rules(): array

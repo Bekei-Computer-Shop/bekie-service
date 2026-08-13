@@ -22,15 +22,8 @@ class CartController extends BaseApiController
 {
     public function index(Request $request)
     {
-        $query = Cart::with('items.product', 'items.variant');
-
-        if ($request->filled('session_id')) {
-            $query->where('session_id', $request->query('session_id'));
-        }
-
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->query('user_id'));
-        }
+        $query = Cart::with('items.product', 'items.variant')
+            ->where('user_id', $request->user()->id);
 
         return $this->success(CartResource::collection($query->orderBy('updated_at', 'desc')->paginate(15)));
     }
@@ -38,8 +31,6 @@ class CartController extends BaseApiController
     public function store(Request $request)
     {
         $payload = $request->validate([
-            'session_id' => 'nullable|uuid',
-            'user_id' => 'nullable|exists:users,id',
             'currency' => 'sometimes|string|max:3',
         ]);
 
@@ -47,17 +38,10 @@ class CartController extends BaseApiController
             'currency' => $payload['currency'] ?? 'USD',
         ];
 
-        if (! isset($payload['session_id']) && ! isset($payload['user_id'])) {
-            $cart = Cart::create($attributes);
-        } else {
-            $cart = Cart::updateOrCreate(
-                [
-                    'session_id' => $payload['session_id'] ?? null,
-                    'user_id' => $payload['user_id'] ?? null,
-                ],
-                $attributes
-            );
-        }
+        $cart = Cart::updateOrCreate(
+            ['user_id' => $request->user()->id, 'status' => 'active'],
+            $attributes,
+        );
 
         return $this->created(new CartResource($cart->fresh()));
     }

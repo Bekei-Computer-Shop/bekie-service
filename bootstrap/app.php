@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\ApiSecurityHeaders;
 use App\Http\Middleware\CheckPermission;
+use App\Http\Middleware\EnsureClientResourceOwner;
 use App\Http\Middleware\EnsureJsonResponse;
 use App\Http\Middleware\LogAdminAction;
 use Illuminate\Foundation\Application;
@@ -24,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->alias([
+            'owns-client-resource' => EnsureClientResourceOwner::class,
             'permission' => CheckPermission::class,
         ]);
 
