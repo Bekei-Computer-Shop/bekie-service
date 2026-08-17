@@ -105,3 +105,15 @@ test('invalid role name format is rejected', function (): void {
 
     $response->assertStatus(422)->assertJsonValidationErrors(['name']);
 });
+
+test('permission seeder is idempotent and retains existing role grants', function (): void {
+    $role = Role::where('name', 'staff')->where('guard_name', 'api')->firstOrFail();
+    $permission = Permission::create(['name' => 'custom.integration.access', 'guard_name' => 'api']);
+    $role->givePermissionTo($permission);
+
+    $this->seed(AdminPermissionsSeeder::class);
+
+    expect(Role::where('name', 'staff')->where('guard_name', 'api')->count())->toBe(1)
+        ->and(Permission::where('name', 'users.view')->where('guard_name', 'api')->count())->toBe(1)
+        ->and($role->fresh()->hasPermissionTo('custom.integration.access'))->toBeTrue();
+});

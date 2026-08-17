@@ -18,9 +18,7 @@ class OrderController extends BaseApiController
     {
         $query = Order::with('items');
 
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->query('user_id'));
-        }
+        $query->where('user_id', $request->user()->id);
 
         return $this->success(OrderResource::collection($query->orderBy('created_at', 'desc')->paginate(15)));
     }
@@ -28,6 +26,8 @@ class OrderController extends BaseApiController
     public function store(StoreOrderRequest $request)
     {
         $cart = Cart::with('items.product', 'items.variant')->findOrFail($request->cart_id);
+
+        abort_unless((int) $cart->user_id === (int) $request->user()->id, 403, 'You do not have access to this cart.');
 
         if ($cart->items->isEmpty()) {
             return $this->error('Cart must contain at least one item.', 422);
@@ -101,8 +101,10 @@ class OrderController extends BaseApiController
         return $this->created(new OrderResource($order->load('items')));
     }
 
-    public function show(Order $order)
+    public function show(Request $request, Order $order)
     {
+        abort_unless((int) $order->user_id === (int) $request->user()->id, 403, 'You do not have access to this order.');
+
         return $this->success(new OrderResource($order->load('items')));
     }
 

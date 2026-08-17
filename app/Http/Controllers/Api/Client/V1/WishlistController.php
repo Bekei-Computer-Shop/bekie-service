@@ -14,31 +14,32 @@ class WishlistController extends BaseApiController
     {
         $query = Wishlist::with('items.product', 'items.variant');
 
-        if ($request->filled('session_id')) {
-            $query->where('session_id', $request->query('session_id'));
-        }
-
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->query('user_id'));
-        }
+        $query->where('user_id', $request->user()->id);
 
         return $this->success(WishlistResource::collection($query->orderBy('updated_at', 'desc')->paginate(15)));
     }
 
     public function store(StoreWishlistRequest $request)
     {
-        $wishlist = Wishlist::create($request->validated());
+        $wishlist = Wishlist::create(array_merge($request->validated(), [
+            'user_id' => $request->user()->id,
+            'session_id' => null,
+        ]));
 
         return $this->created(new WishlistResource($wishlist));
     }
 
-    public function show(Wishlist $wishlist)
+    public function show(Request $request, Wishlist $wishlist)
     {
+        $this->ensureWishlistAccess($request, $wishlist);
+
         return $this->success(new WishlistResource($wishlist->load('items.product', 'items.variant')));
     }
 
-    public function destroy(Wishlist $wishlist)
+    public function destroy(Request $request, Wishlist $wishlist)
     {
+        $this->ensureWishlistAccess($request, $wishlist);
+
         $wishlist->delete();
 
         return $this->noContent();
@@ -46,6 +47,8 @@ class WishlistController extends BaseApiController
 
     public function addItem(AddWishlistItemRequest $request, Wishlist $wishlist)
     {
+        $this->ensureWishlistAccess($request, $wishlist);
+
         $item = $wishlist->items()->create([
             'product_id' => $request->product_id,
             'product_variant_id' => $request->product_variant_id,
@@ -56,10 +59,17 @@ class WishlistController extends BaseApiController
         return $this->created($item);
     }
 
-    public function removeItem(Wishlist $wishlist, $item)
+    public function removeItem(Request $request, Wishlist $wishlist, $item)
     {
+        $this->ensureWishlistAccess($request, $wishlist);
+
         $wishlist->items()->whereKey($item)->delete();
 
         return $this->noContent();
+    }
+
+    private function ensureWishlistAccess(Request $request, Wishlist $wishlist): void
+    {
+        abort_unless((int) $wishlist->user_id === (int) $request->user()->id, 403, 'You do not have access to this wishlist.');
     }
 }

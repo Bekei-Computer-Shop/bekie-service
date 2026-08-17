@@ -1,7 +1,6 @@
 <?php
 
-use App\Http\Controllers\Api\Admin\ActivityLogController;
-use App\Http\Controllers\Api\Admin\ReportController;
+use App\Http\Controllers\Api\Admin\V1\ActivityLogController;
 use App\Http\Controllers\Api\Admin\V1\AdministratorController;
 use App\Http\Controllers\Api\Admin\V1\AuthController;
 use App\Http\Controllers\Api\Admin\V1\BannerController;
@@ -15,6 +14,7 @@ use App\Http\Controllers\Api\Admin\V1\OrderController;
 use App\Http\Controllers\Api\Admin\V1\PermissionController;
 use App\Http\Controllers\Api\Admin\V1\ProductController;
 use App\Http\Controllers\Api\Admin\V1\PromotionController;
+use App\Http\Controllers\Api\Admin\V1\ReportController;
 use App\Http\Controllers\Api\Admin\V1\RoleController;
 use App\Http\Controllers\Api\Admin\V1\StockController;
 use App\Http\Controllers\Api\Admin\V1\UserController;
@@ -23,40 +23,52 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->group(function () {
     // Public Admin Auth
-    Route::post('auth/login', [AuthController::class, 'login']);
-    Route::post('auth/refresh', [AuthController::class, 'refresh']);
+    Route::post('auth/login', [AuthController::class, 'login'])
+        ->middleware('throttle:auth-admin');
+    Route::post('auth/refresh', [AuthController::class, 'refresh'])
+        ->middleware('throttle:auth-admin');
 
     // Protected Admin Routes
     Route::middleware([AuthenticateAdminApiToken::class])->group(function () {
-        Route::get('auth/me', [AuthController::class, 'me']);
-        Route::match(['put', 'patch'], 'auth/profile', [AuthController::class, 'updateProfile']);
-        Route::post('auth/logout', [AuthController::class, 'logout']);
-        Route::post('auth/change-password', [AuthController::class, 'changePassword']);
+        Route::get('auth/me', [AuthController::class, 'me'])->middleware('permission:admin.profile.view');
+        Route::match(['put', 'patch'], 'auth/profile', [AuthController::class, 'updateProfile'])->middleware('permission:admin.profile.update');
+        Route::post('auth/logout', [AuthController::class, 'logout'])->middleware('permission:admin.auth.logout');
+        Route::post('auth/change-password', [AuthController::class, 'changePassword'])
+            ->middleware(['permission:admin.profile.update', 'throttle:auth-admin-sensitive']);
 
         // Catalog Management
-        Route::apiResource('brands', BrandController::class);
-        Route::apiResource('categories', CategoryController::class);
+        Route::apiResource('brands', BrandController::class)->only(['index', 'show'])->middleware('permission:brands.view');
+        Route::apiResource('brands', BrandController::class)->only('store')->middleware('permission:brands.create');
+        Route::apiResource('brands', BrandController::class)->only(['update'])->middleware('permission:brands.update');
+        Route::apiResource('brands', BrandController::class)->only('destroy')->middleware('permission:brands.delete');
+        Route::apiResource('categories', CategoryController::class)->only(['index', 'show'])->middleware('permission:categories.view');
+        Route::apiResource('categories', CategoryController::class)->only('store')->middleware('permission:categories.create');
+        Route::apiResource('categories', CategoryController::class)->only(['update'])->middleware('permission:categories.update');
+        Route::apiResource('categories', CategoryController::class)->only('destroy')->middleware('permission:categories.delete');
 
         // Media Management
-        Route::get('media', [MediaController::class, 'index'])->name('admin.media.index');
-        Route::post('media', [MediaController::class, 'store'])->name('admin.media.store');
-        Route::delete('media', [MediaController::class, 'destroy'])->name('admin.media.destroy');
+        Route::get('media', [MediaController::class, 'index'])->middleware('permission:media.view')->name('admin.media.index');
+        Route::post('media', [MediaController::class, 'store'])->middleware('permission:media.create')->name('admin.media.store');
+        Route::delete('media', [MediaController::class, 'destroy'])->middleware('permission:media.delete')->name('admin.media.destroy');
 
         // Product Management
-        Route::apiResource('products', ProductController::class);
-        Route::patch('products/{product}/status', [ProductController::class, 'changeStatus']);
+        Route::apiResource('products', ProductController::class)->only(['index', 'show'])->middleware('permission:products.view');
+        Route::apiResource('products', ProductController::class)->only('store')->middleware('permission:products.create');
+        Route::apiResource('products', ProductController::class)->only(['update'])->middleware('permission:products.update');
+        Route::apiResource('products', ProductController::class)->only('destroy')->middleware('permission:products.delete');
+        Route::patch('products/{product}/status', [ProductController::class, 'changeStatus'])->middleware('permission:products.update');
 
         // Bulk Actions (Example of REST extension)
         Route::prefix('products')->group(function () {
-            Route::post('bulk-status', [ProductController::class, 'bulkUpdateStatus']);
-            Route::post('bulk-delete', [ProductController::class, 'bulkDestroy']);
+            Route::post('bulk-status', [ProductController::class, 'bulkUpdateStatus'])->middleware('permission:products.update');
+            Route::post('bulk-delete', [ProductController::class, 'bulkDestroy'])->middleware('permission:products.delete');
         });
 
         Route::prefix('stock')->group(function () {
-            Route::get('alerts', [StockController::class, 'alerts']);
-            Route::get('movements', [StockController::class, 'movements']);
-            Route::post('movements', [StockController::class, 'store']);
-            Route::get('/', [StockController::class, 'index']);
+            Route::get('alerts', [StockController::class, 'alerts'])->middleware('permission:stock.view');
+            Route::get('movements', [StockController::class, 'movements'])->middleware('permission:stock.view');
+            Route::post('movements', [StockController::class, 'store'])->middleware(['permission:stock.update', 'throttle:admin-sensitive']);
+            Route::get('/', [StockController::class, 'index'])->middleware('permission:stock.view');
         });
 
         Route::middleware('permission:promotions.view')->group(function () {
@@ -139,7 +151,7 @@ Route::prefix('admin')->group(function () {
             Route::delete('banners/{banner}', [BannerController::class, 'destroy']);
         });
 
-        Route::middleware('permission:logs.view')->group(function () {
+        Route::middleware(['permission:logs.view', 'throttle:admin-reports'])->group(function () {
             Route::get('logs/visitors', [LogController::class, 'visitors']);
             Route::get('logs/team', [LogController::class, 'team']);
             Route::get('activity-logs', [ActivityLogController::class, 'index']);
@@ -157,8 +169,8 @@ Route::prefix('admin')->group(function () {
         Route::middleware('permission:users.update')->group(function () {
             Route::patch('users/{user}', [UserController::class, 'update'])->name('admin.users.update');
             Route::put('users/{user}', [UserController::class, 'update']);
-            Route::post('users/{user}/roles', [UserController::class, 'assignRoles'])->name('admin.users.assign-roles');
-            Route::delete('users/{user}/roles/{role}', [UserController::class, 'revokeRole'])->name('admin.users.revoke-role');
+            Route::post('users/{user}/roles', [UserController::class, 'assignRoles'])->middleware('permission:users.assign-role')->name('admin.users.assign-roles');
+            Route::delete('users/{user}/roles/{role}', [UserController::class, 'revokeRole'])->middleware('permission:users.assign-role')->name('admin.users.revoke-role');
         });
         Route::middleware('permission:users.delete')->group(function () {
             Route::delete('users/{user}', [UserController::class, 'destroy'])->name('admin.users.destroy');
@@ -176,7 +188,7 @@ Route::prefix('admin')->group(function () {
         Route::middleware('permission:roles.update')->group(function () {
             Route::patch('roles/{role}', [RoleController::class, 'update'])->name('admin.roles.update');
             Route::put('roles/{role}', [RoleController::class, 'update']);
-            Route::post('roles/{role}/permissions', [RoleController::class, 'syncPermissions'])->name('admin.roles.sync-permissions');
+            Route::post('roles/{role}/permissions', [RoleController::class, 'syncPermissions'])->middleware('permission:roles.assign-permission')->name('admin.roles.sync-permissions');
         });
         Route::middleware('permission:roles.delete')->group(function () {
             Route::delete('roles/{role}', [RoleController::class, 'destroy'])->name('admin.roles.destroy');

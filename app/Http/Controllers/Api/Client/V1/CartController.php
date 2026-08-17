@@ -22,14 +22,19 @@ class CartController extends BaseApiController
 {
     public function index(Request $request)
     {
+        // Always scope carts to the authenticated user. The `session_id` /
+        // `user_id` filters were IDOR risks: a logged-in client could pass
+        // any other user's id and list their carts. Guest carts are still
+        // supported via the explicit `session_id` filter, but only when no
+        // authenticated user is on the request.
         $query = Cart::with('items.product', 'items.variant');
 
-        if ($request->filled('session_id')) {
-            $query->where('session_id', $request->query('session_id'));
-        }
+        $user = $request->user();
 
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->query('user_id'));
+        if ($user) {
+            $query->where('user_id', $user->id);
+        } elseif ($request->filled('session_id')) {
+            $query->where('session_id', $request->query('session_id'));
         }
 
         return $this->success(CartResource::collection($query->orderBy('updated_at', 'desc')->paginate(15)));
@@ -39,7 +44,6 @@ class CartController extends BaseApiController
     {
         $payload = $request->validate([
             'session_id' => 'nullable|uuid',
-            'user_id' => 'nullable|exists:users,id',
             'currency' => 'sometimes|string|max:3',
         ]);
 
@@ -47,28 +51,39 @@ class CartController extends BaseApiController
             'currency' => $payload['currency'] ?? 'USD',
         ];
 
-        if (! isset($payload['session_id']) && ! isset($payload['user_id'])) {
-            $cart = Cart::create($attributes);
-        } else {
+        $user = $request->user();
+
+        // If a client is authenticated, the cart is always anchored to their
+        // user_id; client-supplied `user_id` is ignored to prevent one user
+        // from creating/updating a cart owned by another.
+        if ($user) {
             $cart = Cart::updateOrCreate(
-                [
-                    'session_id' => $payload['session_id'] ?? null,
-                    'user_id' => $payload['user_id'] ?? null,
-                ],
+                ['user_id' => $user->id, 'session_id' => null],
                 $attributes
             );
+        } elseif (isset($payload['session_id'])) {
+            $cart = Cart::updateOrCreate(
+                ['session_id' => $payload['session_id'], 'user_id' => null],
+                $attributes
+            );
+        } else {
+            $cart = Cart::create($attributes);
         }
 
         return $this->created(new CartResource($cart->fresh()));
     }
 
-    public function show(Cart $cart)
+    public function show(Request $request, Cart $cart)
     {
+        $this->ensureCartAccess($request, $cart);
+
         return $this->success(new CartResource($cart->load('items.product', 'items.variant')));
     }
 
     public function addItem(AddCartItemRequest $request, Cart $cart)
     {
+        $this->ensureCartAccess($request, $cart);
+
         $product = Product::find($request->product_id);
         $variant = null;
 
@@ -109,6 +124,9 @@ class CartController extends BaseApiController
 
     public function updateItem(UpdateCartItemRequest $request, Cart $cart, CartItem $item)
     {
+        $this->ensureCartAccess($request, $cart);
+        $this->ensureItemBelongsToCart($cart, $item);
+
         $item->update([
             'quantity' => $request->quantity,
             'subtotal' => $item->unit_price * $request->quantity,
@@ -120,8 +138,11 @@ class CartController extends BaseApiController
         return $this->success(new CartResource($cart->fresh()->load('items.product', 'items.variant')));
     }
 
-    public function removeItem(Cart $cart, CartItem $item)
+    public function removeItem(Request $request, Cart $cart, CartItem $item)
     {
+        $this->ensureCartAccess($request, $cart);
+        $this->ensureItemBelongsToCart($cart, $item);
+
         $item->delete();
 
         $this->recalculateCart($cart);
@@ -131,6 +152,8 @@ class CartController extends BaseApiController
 
     public function checkout(StoreOrderRequest $request, Cart $cart)
     {
+        $this->ensureCartAccess($request, $cart);
+
         if ($cart->items()->count() === 0) {
             return $this->error('Cart is empty.', 422);
         }
@@ -219,6 +242,38 @@ class CartController extends BaseApiController
         return $cart;
     }
 
+    /**
+     * Reject the request when the authenticated user does not own the cart
+     * and does not own the session that owns it. Without this check any
+     * logged-in client could read or mutate another user's cart by passing
+     * its id in the URL.
+     */
+    protected function ensureCartAccess(Request $request, Cart $cart): void
+    {
+        $user = $request->user();
+
+        if ($user) {
+            if ((int) $cart->user_id === (int) $user->id) {
+                return;
+            }
+
+            abort(403, 'You do not have access to this cart.');
+        }
+
+        if ($request->filled('session_id') && $cart->session_id === $request->string('session_id')->toString()) {
+            return;
+        }
+
+        abort(403, 'You do not have access to this cart.');
+    }
+
+    protected function ensureItemBelongsToCart(Cart $cart, CartItem $item): void
+    {
+        if ((int) $item->cart_id !== (int) $cart->id) {
+            abort(404, 'Cart item not found.');
+        }
+    }
+
     protected function generateOrderNumber(): string
     {
         return 'ORD-'.now()->format('YmdHis').'-'.Str::upper(Str::random(5));
@@ -227,7 +282,10 @@ class CartController extends BaseApiController
     protected function resolveAddressSnapshot(StoreOrderRequest $request): array
     {
         if ($request->filled('address_id')) {
-            $address = Address::find($request->address_id);
+            $address = Address::query()
+                ->whereKey($request->address_id)
+                ->where('user_id', $request->user()?->id)
+                ->first();
 
             return $address ? $address->only([
                 'full_name',

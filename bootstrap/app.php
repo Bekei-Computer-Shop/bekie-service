@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\ApiExceptionRenderer;
 use App\Http\Middleware\ApiSecurityHeaders;
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\EnsureJsonResponse;
@@ -30,5 +31,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('api', [LogAdminAction::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // The ApiExceptionRenderer is registered for all API routes.
+        $exceptions->renderable(app(ApiExceptionRenderer::class));
     })->create();

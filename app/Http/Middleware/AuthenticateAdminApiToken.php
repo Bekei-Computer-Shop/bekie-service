@@ -5,8 +5,10 @@ namespace App\Http\Middleware;
 use App\Models\ApiToken;
 use App\Services\JwtService;
 use Closure;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class AuthenticateAdminApiToken
 {
@@ -14,20 +16,19 @@ class AuthenticateAdminApiToken
     {
         $bearerToken = $request->bearerToken();
 
-        if (! $bearerToken) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Authorization bearer token is required.',
-            ], 401);
+        if (empty($bearerToken)) {
+            throw new AuthenticationException('Authorization bearer token is required.');
         }
 
-        $payload = (new JwtService)->decode($bearerToken);
+        try {
+            $payload = (new JwtService)->decode($bearerToken);
+        } catch (\Exception $e) {
+            Log::warning('Admin JWT decoding failed: '.$e->getMessage());
+            throw new AuthenticationException('Invalid or expired admin access token.');
+        }
 
-        if (! $payload || ! isset($payload['jti'])) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Invalid or expired admin access token.',
-            ], 401);
+        if (! $payload || ! isset($payload['jti']) || empty($payload['jti'])) {
+            throw new AuthenticationException('Invalid or malformed admin access token payload.');
         }
 
         $apiToken = ApiToken::where('token', hash('sha256', $payload['jti']))
@@ -35,11 +36,10 @@ class AuthenticateAdminApiToken
             ->where('scope', 'admin')
             ->first();
 
+        // Check if the token exists and is not expired.
+        // The `isExpired()` method on ApiToken model is assumed to be correct.
         if (! $apiToken || $apiToken->isExpired()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Invalid or expired admin access token.',
-            ], 401);
+            throw new AuthenticationException('Invalid or expired admin access token.');
         }
 
         $user = $apiToken->user;
@@ -47,7 +47,7 @@ class AuthenticateAdminApiToken
         if (! $user || ! $user->is_admin || ! $user->is_active || $user->is_banned) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Unauthorized: Admin access required.',
+                'message' => 'Unauthorized: User account is not valid for admin access.',
             ], 403);
         }
 

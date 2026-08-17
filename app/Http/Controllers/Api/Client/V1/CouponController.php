@@ -26,6 +26,10 @@ class CouponController extends BaseApiController
             return $this->error('Cart not found.', 404);
         }
 
+        if ((int) $cart->user_id !== (int) $request->user()?->id) {
+            abort(403, 'You do not have access to this cart.');
+        }
+
         $amount = $coupon->calculateDiscount($cart->subtotal);
 
         return $this->success([

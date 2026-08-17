@@ -18,20 +18,20 @@ class DashboardController extends BaseAdminController
 
         $stats = [
             'total_orders' => Order::count(),
-            'total_revenue' => Order::sum('total_amount'),
+            'total_revenue' => Order::sum('grand_total'),
             'total_products' => Product::count(),
             'total_customers' => User::where('is_admin', false)->count(),
             'today' => [
                 'orders' => Order::whereDate('created_at', $today)->count(),
-                'revenue' => Order::whereDate('created_at', $today)->sum('total_amount'),
+                'revenue' => Order::whereDate('created_at', $today)->sum('grand_total'),
             ],
             'this_month' => [
                 'orders' => Order::whereBetween('created_at', [$thisMonth, now()])->count(),
-                'revenue' => Order::whereBetween('created_at', [$thisMonth, now()])->sum('total_amount'),
+                'revenue' => Order::whereBetween('created_at', [$thisMonth, now()])->sum('grand_total'),
             ],
             'this_year' => [
                 'orders' => Order::whereBetween('created_at', [$thisYear, now()])->count(),
-                'revenue' => Order::whereBetween('created_at', [$thisYear, now()])->sum('total_amount'),
+                'revenue' => Order::whereBetween('created_at', [$thisYear, now()])->sum('grand_total'),
             ],
         ];
 

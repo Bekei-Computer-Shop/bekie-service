@@ -11,9 +11,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Idempotent seeder that installs the canonical admin RBAC permission set,
- * three default roles (admin / manager / staff), and the role-permission
- * grants for each. Re-running is safe: every create-or-find uses
- * firstOrCreate and syncPermissions diff-checks.
+ * four default roles (admin / manager / staff / user), and the baseline
+ * role-permission grants for each. Re-running only adds missing grants; it
+ * deliberately retains assignments added outside this seeder.
  *
  * Permissions follow `<resource>.<action>` naming so the API and middleware
  * map cleanly onto Spatie's string keys.
@@ -97,6 +97,25 @@ class AdminPermissionsSeeder extends Seeder
 
         // Activity logs
         'logs.view',
+
+        // Media and stock
+        'media.view',
+        'media.create',
+        'media.delete',
+        'stock.view',
+        'stock.update',
+
+        // Authenticated admin self-service
+        'admin.profile.view',
+        'admin.profile.update',
+        'admin.auth.logout',
+
+        // Authenticated customer actions
+        'client.auth.logout',
+        'client.coupons.apply',
+        'client.carts.manage',
+        'client.wishlists.manage',
+        'client.orders.manage',
     ];
 
     /**
@@ -117,6 +136,9 @@ class AdminPermissionsSeeder extends Seeder
             'administrators.view', 'administrators.create', 'administrators.update', 'administrators.delete',
             'banners.view', 'banners.create', 'banners.update', 'banners.delete',
             'logs.view',
+            'media.view', 'media.create', 'media.delete',
+            'stock.view', 'stock.update',
+            'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
         ],
         'manager' => [
             'users.view', 'users.create', 'users.update',
@@ -131,6 +153,9 @@ class AdminPermissionsSeeder extends Seeder
             'orders.view', 'orders.create', 'orders.update',
             'banners.view', 'banners.create', 'banners.update',
             'logs.view',
+            'media.view', 'media.create', 'media.delete',
+            'stock.view', 'stock.update',
+            'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
         ],
         'staff' => [
             'users.view',
@@ -143,6 +168,16 @@ class AdminPermissionsSeeder extends Seeder
             'orders.view',
             'banners.view',
             'logs.view',
+            'media.view',
+            'stock.view',
+            'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
+        ],
+        'user' => [
+            'client.auth.logout',
+            'client.coupons.apply',
+            'client.carts.manage',
+            'client.wishlists.manage',
+            'client.orders.manage',
         ],
     ];
 
@@ -165,8 +200,7 @@ class AdminPermissionsSeeder extends Seeder
                 );
             }
 
-            // 3. Sync grants per role. syncPermissions diff-checks, so it's
-            //    safe to re-run; revoked permissions are removed cleanly.
+            // 3. Add baseline grants without revoking existing assignments.
             foreach (self::ROLE_GRANTS as $roleName => $permissions) {
                 $role = Role::where('name', $roleName)
                     ->where('guard_name', 'api')
@@ -176,7 +210,9 @@ class AdminPermissionsSeeder extends Seeder
                     continue;
                 }
 
-                $role->syncPermissions($permissions);
+                foreach ($permissions as $permission) {
+                    $role->givePermissionTo($permission);
+                }
             }
         });
     }

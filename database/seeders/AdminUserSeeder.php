@@ -3,13 +3,13 @@
 namespace Database\Seeders;
 
 use App\Models\ApiToken;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use Spatie\Permission\Models\Role;
 
 class AdminUserSeeder extends Seeder
 {
@@ -42,8 +42,8 @@ class AdminUserSeeder extends Seeder
             // Remove existing admin tokens for the user to avoid unique constraint collisions
             ApiToken::where('user_id', $admin->id)->where('scope', 'admin')->delete();
 
-            $rawJti = 'test-admin-token-' . Str::random(40);
-            $rawRefresh = 'test-admin-refresh-token-' . Str::random(40);
+            $rawJti = 'test-admin-token-'.Str::random(40);
+            $rawRefresh = 'test-admin-refresh-token-'.Str::random(40);
 
             $token = ApiToken::create([
                 'user_id' => $admin->id,
