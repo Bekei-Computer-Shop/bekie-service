@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\ApiToken;
 use App\Models\User;
 use App\Services\AdminAuthService;
 use App\Services\AuthService;
@@ -26,6 +27,25 @@ test('a valid client JWT resolves its user through api_tokens', function (): voi
     $this->withHeader('Authorization', 'Bearer '.$token)
         ->getJson('/api/v1/carts')
         ->assertOk();
+});
+
+test('new client and admin tokens expire after sixty days', function (): void {
+    $client = User::factory()->create();
+    $clientToken = (new AuthService)->createToken($client, Request::create('/api/v1/auth/login', 'POST'));
+    $clientPayload = (new JwtService)->decode($clientToken['access_token']);
+
+    expect($clientToken['model']->expires_at->between(now()->addDays(60)->subSeconds(2), now()->addDays(60)->addSeconds(2)))->toBeTrue()
+        ->and($clientToken['model']->refresh_expires_at->between(now()->addDays(60)->subSeconds(2), now()->addDays(60)->addSeconds(2)))->toBeTrue()
+        ->and($clientPayload['exp'] - $clientPayload['iat'])->toBe(60 * 24 * 60 * 60);
+
+    $admin = User::factory()->superAdmin()->create();
+    $adminToken = (new AdminAuthService)->createAdminToken($admin);
+    $adminPayload = (new JwtService)->decode($adminToken['access_token']);
+    $adminRecord = ApiToken::where('token', hash('sha256', $adminPayload['jti']))->firstOrFail();
+
+    expect($adminRecord->expires_at->between(now()->addDays(60)->subSeconds(2), now()->addDays(60)->addSeconds(2)))->toBeTrue()
+        ->and($adminRecord->refresh_expires_at->between(now()->addDays(60)->subSeconds(2), now()->addDays(60)->addSeconds(2)))->toBeTrue()
+        ->and($adminPayload['exp'] - $adminPayload['iat'])->toBe(60 * 24 * 60 * 60);
 });
 
 test('client JWT middleware rejects missing invalid and expired tokens', function (): void {

@@ -16,7 +16,7 @@ class CouponController extends BaseApiController
             ->where('code', $request->code)
             ->first();
 
-        if (! $coupon) {
+        if (! $coupon || ! $coupon->isValid()) {
             return $this->error('Coupon code is invalid or expired.', 404);
         }
 

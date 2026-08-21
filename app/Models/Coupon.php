@@ -12,6 +12,7 @@ class Coupon extends Model
     use SoftDeletes;
 
     protected $fillable = [
+        'name',
         'code',
         'type',
         'value',
@@ -25,6 +26,8 @@ class Coupon extends Model
         'is_active',
         'applicable_products',
         'applicable_categories',
+        'description',
+        'banner_image',
     ];
 
     /*
