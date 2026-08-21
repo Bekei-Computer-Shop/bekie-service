@@ -10,6 +10,8 @@ use Illuminate\Support\Str;
 
 class AdminAuthService
 {
+    private const TOKEN_TTL_DAYS = 60;
+
     public function authenticateAdmin(string $email, string $password): ?array
     {
         $user = User::where('email', $email)
@@ -42,8 +44,8 @@ class AdminAuthService
     {
         $jti = Str::random(64);
         $refreshToken = Str::random(80);
-        $expiresAt = Carbon::now()->addMinutes(120);
-        $refreshExpiresAt = Carbon::now()->addDays(30);
+        $expiresAt = Carbon::now()->addDays(self::TOKEN_TTL_DAYS);
+        $refreshExpiresAt = Carbon::now()->addDays(self::TOKEN_TTL_DAYS);
 
         $jwt = (new JwtService)->encode([
             'iss' => config('app.url'),
@@ -51,7 +53,7 @@ class AdminAuthService
             'sub' => (string) $user->id,
             'jti' => $jti,
             'scope' => 'admin',
-        ], 120 * 60);
+        ], self::TOKEN_TTL_DAYS * 24 * 60 * 60);
 
         ApiToken::create([
             'user_id' => $user->id,

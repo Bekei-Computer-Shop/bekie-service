@@ -17,13 +17,18 @@ class UpdatePromotionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code' => ['sometimes', 'string', 'max:50', Rule::unique('promotions', 'code')->ignore($this->route('promotion')->id)],
+            'name' => ['sometimes', 'string', 'max:255'],
+            'code' => ['sometimes', 'string', 'max:50', Rule::unique('coupons', 'code')->ignore($this->route('promotion')->id)],
             'type' => ['sometimes', 'in:percentage,fixed'],
-            'discount_value' => ['sometimes', 'numeric', 'min:0'],
+            'value' => ['sometimes', 'numeric', 'min:0'],
+            'min_order_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'starts_at' => ['sometimes', 'date'],
-            'ends_at' => ['sometimes', 'nullable', 'date', 'after_or_equal:starts_at'],
+            'expires_at' => ['sometimes', 'nullable', 'date', 'after_or_equal:starts_at'],
             'usage_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
-            'usage_count' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'user_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'is_active' => ['sometimes', 'boolean'],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'banner_image' => ['sometimes', 'nullable', 'string', 'max:2048'],
         ];
     }
 }

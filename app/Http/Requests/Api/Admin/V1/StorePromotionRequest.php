@@ -16,13 +16,18 @@ class StorePromotionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code' => ['required', 'string', 'max:50', 'unique:promotions,code'],
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['required', 'string', 'max:50', 'unique:coupons,code'],
             'type' => ['required', 'in:percentage,fixed'],
-            'discount_value' => ['required', 'numeric', 'min:0'],
+            'value' => ['required', 'numeric', 'min:0'],
+            'min_order_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'starts_at' => ['required', 'date'],
-            'ends_at' => ['sometimes', 'nullable', 'date', 'after_or_equal:starts_at'],
+            'expires_at' => ['sometimes', 'nullable', 'date', 'after_or_equal:starts_at'],
             'usage_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
-            'usage_count' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'user_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'is_active' => ['sometimes', 'boolean'],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'banner_image' => ['sometimes', 'nullable', 'string', 'max:2048'],
         ];
     }
 }

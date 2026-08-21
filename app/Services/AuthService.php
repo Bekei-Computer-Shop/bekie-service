@@ -10,6 +10,8 @@ use Illuminate\Support\Str;
 
 class AuthService
 {
+    private const TOKEN_TTL_DAYS = 60;
+
     public function createToken(User $user, Request $request): array
     {
         $jti = Str::random(64);
@@ -21,14 +23,14 @@ class AuthService
             'sub' => (string) $user->id,
             'jti' => $jti,
             'scope' => 'client',
-        ], 60 * 60);
+        ], self::TOKEN_TTL_DAYS * 24 * 60 * 60);
 
         $token = ApiToken::create([
             'user_id' => $user->id,
             'token' => hash('sha256', $jti),
             'refresh_token' => hash('sha256', $refreshToken),
-            'expires_at' => Carbon::now()->addMinutes(60),
-            'refresh_expires_at' => Carbon::now()->addDays(7),
+            'expires_at' => Carbon::now()->addDays(self::TOKEN_TTL_DAYS),
+            'refresh_expires_at' => Carbon::now()->addDays(self::TOKEN_TTL_DAYS),
             'revoked' => false,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent() ?: 'api',
@@ -62,13 +64,13 @@ class AuthService
             'sub' => (string) $token->user_id,
             'jti' => $jti,
             'scope' => $token->scope ?? 'client',
-        ], 60 * 60);
+        ], self::TOKEN_TTL_DAYS * 24 * 60 * 60);
 
         $token->update([
             'token' => hash('sha256', $jti),
             'refresh_token' => hash('sha256', $newRefreshToken),
-            'expires_at' => Carbon::now()->addMinutes(60),
-            'refresh_expires_at' => Carbon::now()->addDays(7),
+            'expires_at' => Carbon::now()->addDays(self::TOKEN_TTL_DAYS),
+            'refresh_expires_at' => Carbon::now()->addDays(self::TOKEN_TTL_DAYS),
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent() ?: 'api',
         ]);
