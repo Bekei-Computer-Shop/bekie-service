@@ -15,7 +15,8 @@
         "laravel/sanctum": "^4.0",
         "spatie/laravel-permission": "^6.25",
         "maatwebsite/excel": "^3.1",
-        "barryvdh/laravel-dompdf": "^3.0"
+        "barryvdh/laravel-dompdf": "^3.0",
+        "dedoc/scramble": "^0.13.29"
     },
     "require-dev": {
         "dedoc/scramble": "^0.13.29",
