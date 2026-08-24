@@ -19,6 +19,13 @@ services:
     healthCheckPath: /api/health
     preDeployCommand: "php artisan migrate --force"
     dockerfilePath: ./Dockerfile
+    startCommand: >
+      php artisan migrate --force &&
+      php artisan optimize:clear &&
+      php artisan config:cache &&
+      php artisan route:cache &&
+      php artisan view:cache &&
+      php-fpm -F
     envVars:
       - key: APP_NAME
         value: Bekie Service
