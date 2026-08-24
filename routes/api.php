@@ -10,13 +10,20 @@ use App\Http\Controllers\Api\Client\V1\OrderController;
 use App\Http\Controllers\Api\Client\V1\ProductController;
 use App\Http\Controllers\Api\Client\V1\ShippingMethodController;
 use App\Http\Controllers\Api\Client\V1\WishlistController;
+use App\Http\Controllers\HealthController;
 use App\Http\Middleware\AuthenticateApiToken;
 use Illuminate\Support\Facades\Route;
 
+// Public health check. Lives outside the /v1 surface so external monitors
+// (Render, uptime robots) can hit a stable, unversioned URL.
+Route::get('/health', HealthController::class);
+
 Route::prefix('v1')->group(function () {
-    Route::post('auth/register', [AuthController::class, 'register']);
-    Route::post('auth/login', [AuthController::class, 'login']);
-    Route::post('auth/refresh', [AuthController::class, 'refresh']);
+    Route::middleware('throttle:credentials')->group(function () {
+        Route::post('auth/register', [AuthController::class, 'register']);
+        Route::post('auth/login', [AuthController::class, 'login']);
+        Route::post('auth/refresh', [AuthController::class, 'refresh']);
+    });
     Route::post('auth/logout', [AuthController::class, 'logout'])
         ->middleware(AuthenticateApiToken::class);
 
@@ -44,26 +51,30 @@ Route::prefix('v1')->group(function () {
         Route::prefix('carts')->group(function () {
             Route::get('/', [CartController::class, 'index']);
             Route::post('/', [CartController::class, 'store']);
-            Route::get('{cart}', [CartController::class, 'show']);
-            Route::post('{cart}/items', [CartController::class, 'addItem']);
-            Route::patch('{cart}/items/{item}', [CartController::class, 'updateItem']);
-            Route::delete('{cart}/items/{item}', [CartController::class, 'removeItem']);
-            Route::post('{cart}/checkout', [CartController::class, 'checkout']);
+            Route::middleware('owns-client-resource:cart')->group(function () {
+                Route::get('{cart}', [CartController::class, 'show']);
+                Route::post('{cart}/items', [CartController::class, 'addItem']);
+                Route::patch('{cart}/items/{item}', [CartController::class, 'updateItem']);
+                Route::delete('{cart}/items/{item}', [CartController::class, 'removeItem']);
+                Route::post('{cart}/checkout', [CartController::class, 'checkout']);
+            });
         });
 
         Route::prefix('wishlists')->group(function () {
             Route::get('/', [WishlistController::class, 'index']);
             Route::post('/', [WishlistController::class, 'store']);
-            Route::get('{wishlist}', [WishlistController::class, 'show']);
-            Route::delete('{wishlist}', [WishlistController::class, 'destroy']);
-            Route::post('{wishlist}/items', [WishlistController::class, 'addItem']);
-            Route::delete('{wishlist}/items/{item}', [WishlistController::class, 'removeItem']);
+            Route::middleware('owns-client-resource:wishlist')->group(function () {
+                Route::get('{wishlist}', [WishlistController::class, 'show']);
+                Route::delete('{wishlist}', [WishlistController::class, 'destroy']);
+                Route::post('{wishlist}/items', [WishlistController::class, 'addItem']);
+                Route::delete('{wishlist}/items/{item}', [WishlistController::class, 'removeItem']);
+            });
         });
 
         Route::prefix('orders')->group(function () {
             Route::get('/', [OrderController::class, 'index']);
             Route::post('/', [OrderController::class, 'store']);
-            Route::get('{order}', [OrderController::class, 'show']);
+            Route::middleware('owns-client-resource:order')->get('{order}', [OrderController::class, 'show']);
         });
     });
 

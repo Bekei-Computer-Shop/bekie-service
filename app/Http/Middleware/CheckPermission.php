@@ -27,7 +27,7 @@ class CheckPermission
     {
         $user = $request->user() ?? $request->attributes->get('authenticated_user');
 
-        if (! $user || ! method_exists($user, 'can') || ! $user->can($permission)) {
+        if (! $user || ! method_exists($user, 'can') || (! $user->isSuperAdmin() && ! $user->can($permission))) {
             return response()->json([
                 'status' => 'error',
                 'message' => "Forbidden: missing permission [{$permission}].",

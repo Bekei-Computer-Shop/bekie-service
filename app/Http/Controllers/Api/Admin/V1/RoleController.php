@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
-use App\Http\Controllers\Api\BaseAdminController;
 use App\Http\Requests\Api\Admin\V1\Role\StoreRoleRequest;
 use App\Http\Requests\Api\Admin\V1\Role\SyncRolePermissionsRequest;
 use App\Http\Requests\Api\Admin\V1\Role\UpdateRoleRequest;

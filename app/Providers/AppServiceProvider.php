@@ -19,7 +19,10 @@ use App\Policies\RolePolicy;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\SecurityDocumentation\MiddlewareAuthSecurityStrategy;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -32,7 +35,9 @@ class AppServiceProvider extends ServiceProvider
         // Tell Scramble to skip its default single-surface docs route — we
         // register two named surfaces (client + admin) in configureScramble()
         // and don't need the catch-all `/docs/api` endpoint.
-        Scramble::ignoreDefaultRoutes();
+        if (class_exists(Scramble::class)) {
+            Scramble::ignoreDefaultRoutes();
+        }
 
         // Tell Spatie Permission to use our app/Models/{Role,Permission} classes
         // (which add SoftDeletes + guard_name=api defaults) instead of its
@@ -48,6 +53,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('credentials', function (Request $request): Limit {
+            $identifier = strtolower((string) $request->input('email', $request->ip()));
+
+            return Limit::perMinute(5)->by($identifier.'|'.$request->ip());
+        });
+
         $policies = [
             User::class => AdminResourcePolicy::class,
             Order::class => AdminResourcePolicy::class,
@@ -66,7 +77,9 @@ class AppServiceProvider extends ServiceProvider
             Gate::policy($model, $policy);
         }
 
-        $this->configureScramble();
+        if (class_exists(Scramble::class)) {
+            $this->configureScramble();
+        }
     }
 
     /**

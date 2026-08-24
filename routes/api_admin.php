@@ -1,20 +1,20 @@
 <?php
 
-use App\Http\Controllers\Api\Admin\ActivityLogController;
-use App\Http\Controllers\Api\Admin\AdministratorController;
-use App\Http\Controllers\Api\Admin\BannerController;
-use App\Http\Controllers\Api\Admin\ContentController;
-use App\Http\Controllers\Api\Admin\CustomerController;
-use App\Http\Controllers\Api\Admin\LogController;
-use App\Http\Controllers\Api\Admin\OrderController;
-use App\Http\Controllers\Api\Admin\PromotionController;
-use App\Http\Controllers\Api\Admin\ReportController;
+use App\Http\Controllers\Api\Admin\V1\ActivityLogController;
+use App\Http\Controllers\Api\Admin\V1\ReportController;
+use App\Http\Controllers\Api\Admin\V1\AdministratorController;
 use App\Http\Controllers\Api\Admin\V1\AuthController;
+use App\Http\Controllers\Api\Admin\V1\BannerController;
 use App\Http\Controllers\Api\Admin\V1\BrandController;
 use App\Http\Controllers\Api\Admin\V1\CategoryController;
+use App\Http\Controllers\Api\Admin\V1\ContentController;
+use App\Http\Controllers\Api\Admin\V1\CustomerController;
+use App\Http\Controllers\Api\Admin\V1\LogController;
 use App\Http\Controllers\Api\Admin\V1\MediaController;
+use App\Http\Controllers\Api\Admin\V1\OrderController;
 use App\Http\Controllers\Api\Admin\V1\PermissionController;
 use App\Http\Controllers\Api\Admin\V1\ProductController;
+use App\Http\Controllers\Api\Admin\V1\PromotionController;
 use App\Http\Controllers\Api\Admin\V1\RoleController;
 use App\Http\Controllers\Api\Admin\V1\StockController;
 use App\Http\Controllers\Api\Admin\V1\UserController;
@@ -23,39 +23,54 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->group(function () {
     // Public Admin Auth
-    Route::post('auth/login', [AuthController::class, 'login']);
-    Route::post('auth/refresh', [AuthController::class, 'refresh']);
+    Route::middleware('throttle:credentials')->group(function () {
+        Route::post('auth/login', [AuthController::class, 'login']);
+        Route::post('auth/refresh', [AuthController::class, 'refresh']);
+    });
 
     // Protected Admin Routes
     Route::middleware([AuthenticateAdminApiToken::class])->group(function () {
         Route::get('auth/me', [AuthController::class, 'me']);
+        Route::match(['put', 'patch'], 'auth/profile', [AuthController::class, 'updateProfile']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::post('auth/change-password', [AuthController::class, 'changePassword']);
 
         // Catalog Management
-        Route::apiResource('brands', BrandController::class);
-        Route::apiResource('categories', CategoryController::class);
+        Route::middleware('permission:brands.view')->get('brands', [BrandController::class, 'index']);
+        Route::middleware('permission:brands.view')->get('brands/{brand}', [BrandController::class, 'show']);
+        Route::middleware('permission:brands.create')->post('brands', [BrandController::class, 'store']);
+        Route::middleware('permission:brands.update')->match(['put', 'patch'], 'brands/{brand}', [BrandController::class, 'update']);
+        Route::middleware('permission:brands.delete')->delete('brands/{brand}', [BrandController::class, 'destroy']);
+
+        Route::middleware('permission:categories.view')->get('categories', [CategoryController::class, 'index']);
+        Route::middleware('permission:categories.view')->get('categories/{category}', [CategoryController::class, 'show']);
+        Route::middleware('permission:categories.create')->post('categories', [CategoryController::class, 'store']);
+        Route::middleware('permission:categories.update')->match(['put', 'patch'], 'categories/{category}', [CategoryController::class, 'update']);
+        Route::middleware('permission:categories.delete')->delete('categories/{category}', [CategoryController::class, 'destroy']);
 
         // Media Management
-        Route::get('media', [MediaController::class, 'index'])->name('admin.media.index');
-        Route::post('media', [MediaController::class, 'store'])->name('admin.media.store');
-        Route::delete('media', [MediaController::class, 'destroy'])->name('admin.media.destroy');
+        Route::middleware('permission:media.view')->get('media', [MediaController::class, 'index'])->name('admin.media.index');
+        Route::middleware('permission:media.create')->post('media', [MediaController::class, 'store'])->name('admin.media.store');
+        Route::middleware('permission:media.delete')->delete('media', [MediaController::class, 'destroy'])->name('admin.media.destroy');
 
         // Product Management
-        Route::apiResource('products', ProductController::class);
-        Route::patch('products/{product}/status', [ProductController::class, 'changeStatus']);
+        Route::middleware('permission:products.view')->get('products', [ProductController::class, 'index']);
+        Route::middleware('permission:products.view')->get('products/{product}', [ProductController::class, 'show']);
+        Route::middleware('permission:products.create')->post('products', [ProductController::class, 'store']);
+        Route::middleware('permission:products.update')->match(['put', 'patch'], 'products/{product}', [ProductController::class, 'update']);
+        Route::middleware('permission:products.delete')->delete('products/{product}', [ProductController::class, 'destroy']);
+        Route::middleware('permission:products.update')->patch('products/{product}/status', [ProductController::class, 'changeStatus']);
 
-        // Bulk Actions (Example of REST extension)
         Route::prefix('products')->group(function () {
-            Route::post('bulk-status', [ProductController::class, 'bulkUpdateStatus']);
-            Route::post('bulk-delete', [ProductController::class, 'bulkDestroy']);
+            Route::middleware('permission:products.update')->post('bulk-status', [ProductController::class, 'bulkUpdateStatus']);
+            Route::middleware('permission:products.delete')->post('bulk-delete', [ProductController::class, 'bulkDestroy']);
         });
 
         Route::prefix('stock')->group(function () {
-            Route::get('alerts', [StockController::class, 'alerts']);
-            Route::get('movements', [StockController::class, 'movements']);
-            Route::post('movements', [StockController::class, 'store']);
-            Route::get('/', [StockController::class, 'index']);
+            Route::middleware('permission:stock.view')->get('alerts', [StockController::class, 'alerts']);
+            Route::middleware('permission:stock.view')->get('movements', [StockController::class, 'movements']);
+            Route::middleware('permission:stock.update')->post('movements', [StockController::class, 'store']);
+            Route::middleware('permission:stock.view')->get('/', [StockController::class, 'index']);
         });
 
         Route::middleware('permission:promotions.view')->group(function () {
