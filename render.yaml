@@ -148,8 +148,8 @@ services:
     # Runs migrations before each deploy. Requires Starter plan or above.
     # On Free, run manually via Render shell: php artisan migrate --force
     preDeployCommand: php artisan migrate --force
+
     startCommand: >
-      php artisan migrate --force &&
       php artisan optimize:clear &&
       php artisan config:cache &&
       php artisan route:cache &&
