@@ -110,7 +110,7 @@ services:
       # in the dashboard when you want to expose /docs/client and
       # /docs/admin (still gated by RestrictedDocsAccess middleware).
       - key: SCRAMBLE_ENABLED
-        value: "false"
+        value: "true"
 
       - key: API_VERSION
         value: "1.0.0"
