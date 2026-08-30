@@ -105,6 +105,15 @@ Route::prefix('admin')->group(function () {
             Route::get('customers', [CustomerController::class, 'index']);
             Route::get('customers/{user}', [CustomerController::class, 'show']);
         });
+        Route::middleware('permission:customers.create')->group(function () {
+            Route::post('customers', [CustomerController::class, 'store']);
+        });
+        Route::middleware('permission:customers.update')->group(function () {
+            Route::match(['put', 'patch'], 'customers/{user}', [CustomerController::class, 'update']);
+        });
+        Route::middleware('permission:customers.delete')->group(function () {
+            Route::delete('customers/{user}', [CustomerController::class, 'destroy']);
+        });
 
         Route::middleware('permission:orders.view')->group(function () {
             Route::get('orders', [OrderController::class, 'index']);

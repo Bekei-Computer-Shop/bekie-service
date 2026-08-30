@@ -133,6 +133,14 @@ class Coupon extends Model
         return $this->belongsToMany(User::class, 'coupon_user');
     }
 
+    /**
+     * Products this promotion applies to. Inverse of Product::promotions().
+     */
+    public function products(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'coupon_product');
+    }
+
     public function incrementUsage(): void
     {
         $this->increment('used_count');

@@ -6,12 +6,15 @@ namespace App\Http\Requests\Api\Admin\V1\Product;
 
 use App\Models\Brand;
 use App\Models\Category;
+use App\Http\Requests\Api\Admin\V1\Product\Concerns\ValidatesProductImages;
 use App\Models\ProductVariant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreProductRequest extends FormRequest
 {
+    use ValidatesProductImages;
+
     public function authorize(): bool
     {
         return true;
@@ -49,6 +52,13 @@ class StoreProductRequest extends FormRequest
             'is_featured' => ['nullable', 'boolean'],
             'is_digital' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:1000000'],
+
+            ...$this->productImageRules(),
+
+            // Promotions applied to this product. Validated against `coupons`:
+            // the admin promotions API is coupon-backed (PromotionController).
+            'promotion_ids' => ['nullable', 'array'],
+            'promotion_ids.*' => ['integer', Rule::exists('coupons', 'id')->whereNull('deleted_at')],
 
             // Nested variants (replaces the existing pattern of separate endpoints).
             'variants' => ['nullable', 'array'],
@@ -103,6 +113,8 @@ class StoreProductRequest extends FormRequest
                     $v->errors()->add('sale_price', 'Sale price must be less than or equal to price.');
                 }
             }
+
+            $this->validateSinglePrimaryImage($v);
         });
     }
 

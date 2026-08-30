@@ -23,7 +23,10 @@ class DatabaseSeeder extends Seeder
             AdminPermissionsSeeder::class,
             AdminUserSeeder::class,
             ProductSeeder::class,
+            CustomerSeeder::class,
             DemoOrderSeeder::class,
+            BannerSeeder::class,
+            PromotionSeeder::class,
         ]);
 
         User::firstOrCreate([

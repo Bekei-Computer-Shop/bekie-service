@@ -76,6 +76,9 @@ class AdminPermissionsSeeder extends Seeder
 
         // Customers
         'customers.view',
+        'customers.create',
+        'customers.update',
+        'customers.delete',
 
         // Orders
         'orders.view',
@@ -131,7 +134,7 @@ class AdminPermissionsSeeder extends Seeder
             'products.view', 'products.create', 'products.update', 'products.delete',
             'promotions.view', 'promotions.create', 'promotions.update', 'promotions.delete',
             'content.view', 'content.create', 'content.update', 'content.delete',
-            'customers.view',
+            'customers.view', 'customers.create', 'customers.update', 'customers.delete',
             'orders.view', 'orders.create', 'orders.update', 'orders.delete',
             'administrators.view', 'administrators.create', 'administrators.update', 'administrators.delete',
             'banners.view', 'banners.create', 'banners.update', 'banners.delete',

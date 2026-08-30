@@ -36,6 +36,12 @@ class AdminAuthService
                 'email' => $user->email,
                 'name' => $user->name,
                 'roles' => $user->getRoleNames(),
+                // Same list, and for the same reason, as the one /auth/me
+                // returns: the portal renders its navigation straight off this
+                // payload after sign-in, before it ever refreshes the profile.
+                // Leaving it out strands the admin on an empty sidebar until a
+                // reload.
+                'permissions' => $user->getAllPermissions()->pluck('name')->values(),
             ],
         ];
     }

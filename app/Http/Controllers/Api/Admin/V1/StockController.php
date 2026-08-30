@@ -29,7 +29,10 @@ class StockController extends BaseAdminController
         $page = (int) $request->input('page', 1);
 
         $query = Product::query()->with(['category:id,name', 'brand:id,name'])
-            ->select(['id', 'uuid', 'name', 'sku', 'stock_quantity', 'min_stock_alert', 'track_inventory', 'in_stock', 'category_id', 'brand_id'])
+            // `created_at` backs the Start-Date column on the admin stock
+            // screen; without it in the select list the field serialises as
+            // null and the column renders empty.
+            ->select(['id', 'uuid', 'name', 'sku', 'stock_quantity', 'min_stock_alert', 'track_inventory', 'in_stock', 'category_id', 'brand_id', 'created_at'])
             ->where('track_inventory', true)
             ->orderBy('stock_quantity');
 
