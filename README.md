@@ -63,6 +63,8 @@ All endpoints are versioned under:
 - `GET /api/v1/products`
 - `GET /api/v1/products/{product}`
 - `GET /api/v1/shipping-methods`
+- `GET /api/v1/slides`
+- `GET /api/v1/promotions`
 - `POST /api/v1/coupons/apply`
 - `GET /api/v1/carts`
 - `POST /api/v1/carts`

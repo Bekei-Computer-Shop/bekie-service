@@ -8,7 +8,9 @@ use App\Http\Controllers\Api\Client\V1\CouponController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
 use App\Http\Controllers\Api\Client\V1\OrderController;
 use App\Http\Controllers\Api\Client\V1\ProductController;
+use App\Http\Controllers\Api\Client\V1\PromotionController;
 use App\Http\Controllers\Api\Client\V1\ShippingMethodController;
+use App\Http\Controllers\Api\Client\V1\SlideController;
 use App\Http\Controllers\Api\Client\V1\WishlistController;
 use App\Http\Controllers\HealthController;
 use App\Http\Middleware\AuthenticateApiToken;
@@ -45,6 +47,10 @@ Route::prefix('v1')->group(function () {
     Route::get('products/{product}/variants', [ProductController::class, 'variants']);
 
     Route::get('shipping-methods', [ShippingMethodController::class, 'index']);
+
+    // Storefront content: homepage carousel slides and live promotions.
+    Route::get('slides', [SlideController::class, 'index']);
+    Route::get('promotions', [PromotionController::class, 'index']);
 
     Route::middleware(AuthenticateApiToken::class)->group(function () {
         Route::post('coupons/apply', [CouponController::class, 'apply'])

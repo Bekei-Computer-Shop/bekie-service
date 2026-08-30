@@ -153,9 +153,11 @@ GET /api/v1/products?page=2&category_id=7&search=macbook
 | `GET` | `/brands` | public | Paginated brands |
 | `GET` | `/brands/{brand}` | public | Brand detail |
 | `GET` | `/products` | public | Paginated products (filters: `category_id`, `brand_id`, `search`) |
-| `GET` | `/products/{product}` | public | Product detail with category, brand, variants |
+| `GET` | `/products/{product}` | public | Product detail by UUID with category, brand, active image gallery, active variants |
 | `GET` | `/products/{product}/variants` | public | Active variants for a product |
 | `GET` | `/shipping-methods` | public | Active shipping methods |
+| `GET` | `/slides` | public | Homepage carousel slides (optional `position` filter) |
+| `GET` | `/promotions` | public | Live storefront promotions (active coupons with capacity remaining) |
 
 ### Carts (`/api/v1/carts/*`, client auth)
 
