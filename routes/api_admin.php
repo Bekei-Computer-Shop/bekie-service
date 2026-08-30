@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Requests\Api\Admin\V1\Stock\BulkStockMovementRequest;
 use App\Http\Controllers\Api\Admin\V1\ActivityLogController;
 use App\Http\Controllers\Api\Admin\V1\AdministratorController;
 use App\Http\Controllers\Api\Admin\V1\AuthController;
@@ -65,9 +66,14 @@ Route::prefix('admin')->group(function () {
         });
 
         Route::prefix('stock')->group(function () {
+            Route::get('summary', [StockController::class, 'summary'])->middleware('permission:stock.view');
+            Route::post('movements/bulk', [StockController::class, 'bulkStore'])->middleware(['permission:stock.update', 'throttle:admin-sensitive']);
+            Route::get('export', [StockController::class, 'export'])->middleware(['permission:stock.view', 'throttle:admin-reports']);
+            Route::get('movements/export', [StockController::class, 'movementExport'])->middleware(['permission:stock.view', 'throttle:admin-reports']);
             Route::get('alerts', [StockController::class, 'alerts'])->middleware('permission:stock.view');
             Route::get('movements', [StockController::class, 'movements'])->middleware('permission:stock.view');
             Route::post('movements', [StockController::class, 'store'])->middleware(['permission:stock.update', 'throttle:admin-sensitive']);
+            Route::get('{id}', [StockController::class, 'show'])->middleware('permission:stock.view');
             Route::get('/', [StockController::class, 'index'])->middleware('permission:stock.view');
         });
 

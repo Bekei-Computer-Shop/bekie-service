@@ -25,10 +25,17 @@ class StockMovementResource extends JsonResource
             'source_location' => $this->source_location,
             'destination_location' => $this->destination_location,
             'metadata' => $this->metadata ?? [],
-            'created_by' => $this->createdBy?->only(['id', 'name', 'email']),
+            'created_by' => $this->createdBy ? [
+                'id'    => $this->createdBy->id,
+                'name'  => trim(($this->createdBy->first_name ?? '').' '.($this->createdBy->last_name ?? '')),
+                'email' => $this->createdBy->email,
+            ] : null,
             'created_at' => $this->created_at?->toIso8601String(),
             'stockable_type' => $this->stockable_type,
             'stockable_id' => $this->stockable_id,
+            'note' => $this->metadata['note'] ?? null,
+            'stockable_name' => $this->whenLoaded('stockable', fn() => $this->stockable?->name),
+            'stockable_sku'  => $this->whenLoaded('stockable', fn() => $this->stockable?->sku),
         ];
     }
 }

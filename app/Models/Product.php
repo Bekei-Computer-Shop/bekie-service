@@ -26,8 +26,10 @@ class Product extends Model
         'cost_price',
         'stock_quantity',
         'min_stock_alert',
+        'reorder_point',
         'track_inventory',
         'in_stock',
+        'warehouse_location',
         'weight',
         'length',
         'width',
@@ -41,6 +43,7 @@ class Product extends Model
         'views_count',
         'sales_count',
         'sort_order',
+        'version',
     ];
 
     /*
@@ -76,6 +79,10 @@ class Product extends Model
                 $product->uuid = (string) Str::uuid();
             }
         });
+
+        static::saving(function (self $product) {
+            $product->version++;
+        });
     }
 
     public function getRouteKeyName(): string
@@ -91,5 +98,23 @@ class Product extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    public function scopeOutOfStock($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('stock_quantity', '<=', 0)
+              ->orWhere('in_stock', false);
+        });
+    }
+
+    public function scopeByCategory($query, $categoryId)
+    {
+        return $query->where('category_id', $categoryId);
+    }
+
+    public function getStockValueAttribute()
+    {
+        return (int) $this->stock_quantity * (float) $this->cost_price;
     }
 }
