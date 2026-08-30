@@ -27,6 +27,7 @@ class AuthController extends BaseAdminController
             'email' => $user->email,
             'phone' => $user->phone,
             'roles' => $user->getRoleNames(),
+            'permissions' => $user->getAllPermissions()->pluck('name')->values(),
         ];
     }
 
