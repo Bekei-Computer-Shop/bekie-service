@@ -68,9 +68,33 @@ class SoldProductsReportService
             ];
         }
 
+        $tableRows = DB::table('order_items')
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->join('products', 'order_items.product_id', '=', 'products.id')
+            ->leftJoin('categories', 'products.category_id', '=', 'categories.id')
+            ->whereBetween('orders.created_at', [$startDate->toDateTimeString(), $endDate->endOfDay()->toDateTimeString()])
+            ->whereNotIn('orders.status', ['rejected', 'cancelled'])
+            ->selectRaw('products.id as product_id, products.name as product_name, products.sku as sku, categories.name as category_name')
+            ->selectRaw('SUM(order_items.quantity) as quantity_sold, SUM(order_items.total) as revenue')
+            ->groupBy('products.id', 'products.name', 'products.sku', 'categories.name')
+            ->orderByDesc('quantity_sold')
+            ->get();
+
+        $table = $tableRows->map(function ($row) {
+            return [
+                'productId' => $row->product_id,
+                'name' => $row->product_name,
+                'sku' => $row->sku,
+                'category' => $row->category_name ?? 'Uncategorized',
+                'units' => (int) $row->quantity_sold,
+                'revenue' => (float) $row->revenue,
+            ];
+        });
+
         return [
             'labels' => $labels,
             'series' => $series,
+            'table' => $table,
             'meta' => [
                 'preset' => $filters['preset'] ?? 'custom',
                 'date_from' => $startDate->toDateString(),

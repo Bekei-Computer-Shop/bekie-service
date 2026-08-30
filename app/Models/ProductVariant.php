@@ -31,11 +31,19 @@ class ProductVariant extends Model
         'is_default',
         'is_active',
         'sort_order',
+        'version',
     ];
 
     protected $casts = [
         'attributes' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $variant) {
+            $variant->version++;
+        });
+    }
 
     /*
     |--------------------------------------------------------------------------
