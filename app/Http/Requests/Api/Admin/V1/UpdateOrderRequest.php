@@ -21,12 +21,32 @@ class UpdateOrderRequest extends FormRequest
 
     public function rules(): array
     {
+        // The route admits orders.update and orders.approve. An approver moves
+        // an order through its statuses and nothing more, so payment state and
+        // notes are prohibited unless the caller also holds orders.update.
+        // Resolved the way CheckPermission does it: the admin token guard
+        // leaves the user on the request attributes, not always on user().
+        $user = $this->user() ?? $this->attributes->get('authenticated_user');
+        $statusOnly = ! $user || ! method_exists($user, 'can') || ! $user->can('orders.update');
+
         return [
             'status' => ['sometimes', 'in:'.implode(',', self::STATUSES)],
             // Payment state is recorded here rather than at creation — a new
             // order cannot already be paid, failed or refunded.
-            'payment_status' => ['sometimes', 'in:'.implode(',', StoreOrderRequest::PAYMENT_STATUSES)],
-            'notes' => ['sometimes', 'nullable', 'string'],
+            'payment_status' => $statusOnly
+                ? ['prohibited']
+                : ['sometimes', 'in:'.implode(',', StoreOrderRequest::PAYMENT_STATUSES)],
+            'notes' => $statusOnly
+                ? ['prohibited']
+                : ['sometimes', 'nullable', 'string'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'payment_status.prohibited' => 'Updating payment status requires the orders.update permission.',
+            'notes.prohibited' => 'Updating order notes requires the orders.update permission.',
         ];
     }
 }

@@ -85,6 +85,9 @@ class AdminPermissionsSeeder extends Seeder
         'orders.create',
         'orders.update',
         'orders.delete',
+        // Approval is deliberately separate from update: a manager approves
+        // and rejects orders without being able to edit or create them.
+        'orders.approve',
 
         // Administrators
         'administrators.view',
@@ -143,37 +146,33 @@ class AdminPermissionsSeeder extends Seeder
             'stock.view', 'stock.update',
             'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
         ],
+        // Scoped to the ten capabilities the requirements name: auth/profile
+        // self-service, order approval, products, slides (banners), news and
+        // website content, promotions, and product categories. No delete on
+        // anything — that stays with admin. media.view/create are support for
+        // uploading product, slide and news images; the portal never DELETEs
+        // media, so media.delete is deliberately absent.
         'manager' => [
-            'users.view', 'users.create', 'users.update',
-            'roles.view',
-            'permissions.view',
-            'categories.view', 'categories.create', 'categories.update',
-            'brands.view', 'brands.create', 'brands.update',
+            'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
+            'orders.view', 'orders.approve',
             'products.view', 'products.create', 'products.update',
-            'promotions.view', 'promotions.create', 'promotions.update',
-            'content.view', 'content.create', 'content.update',
-            'customers.view',
-            'orders.view', 'orders.create', 'orders.update',
+            'categories.view', 'categories.create', 'categories.update',
             'banners.view', 'banners.create', 'banners.update',
-            'logs.view',
-            'media.view', 'media.create', 'media.delete',
-            'stock.view', 'stock.update',
-            'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
+            'content.view', 'content.create', 'content.update',
+            'promotions.view', 'promotions.create', 'promotions.update',
+            'media.view', 'media.create',
         ],
+        // The same treatment as manager, one capability list shorter: staff
+        // has no Approval and no Slide, so no orders.* and no banners.* grant.
+        // Everything else matches, including the no-delete rule and the
+        // media.view/create support for product, news and promotion images.
         'staff' => [
-            'users.view',
-            'categories.view',
-            'brands.view',
-            'products.view',
-            'promotions.view',
-            'content.view',
-            'customers.view',
-            'orders.view',
-            'banners.view',
-            'logs.view',
-            'media.view',
-            'stock.view',
             'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
+            'products.view', 'products.create', 'products.update',
+            'categories.view', 'categories.create', 'categories.update',
+            'content.view', 'content.create', 'content.update',
+            'promotions.view', 'promotions.create', 'promotions.update',
+            'media.view', 'media.create',
         ],
         'user' => [
             'client.auth.logout',

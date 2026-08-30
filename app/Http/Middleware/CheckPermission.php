@@ -14,6 +14,10 @@ use Symfony\Component\HttpFoundation\Response;
  * Example:
  *     Route::middleware(['permission:users.create'])->post('users', ...);
  *
+ * Several permissions may be given, pipe-separated, and any one of them
+ * admits the request — matching Spatie's own middleware syntax:
+ *     Route::middleware(['permission:orders.update|orders.approve'])
+ *
  * Resolves the authenticated user from `$request->user()` first, then falls
  * back to the `authenticated_user` request attribute populated by
  * AuthenticateAdminApiToken. Returns a 403 JSON response on failure.
@@ -27,10 +31,18 @@ class CheckPermission
     {
         $user = $request->user() ?? $request->attributes->get('authenticated_user');
 
-        if (! $user || ! method_exists($user, 'can') || ! $user->can($permission)) {
+        $accepted = array_filter(explode('|', $permission), static fn (string $name): bool => $name !== '');
+
+        $allowed = $user
+            && method_exists($user, 'can')
+            && array_filter($accepted, static fn (string $name): bool => $user->can($name)) !== [];
+
+        if (! $allowed) {
+            $named = implode('] or [', $accepted);
+
             return response()->json([
                 'status' => 'error',
-                'message' => "Forbidden: missing permission [{$permission}].",
+                'message' => "Forbidden: missing permission [{$named}].",
             ], 403);
         }
 

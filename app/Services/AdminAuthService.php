@@ -20,7 +20,11 @@ class AdminAuthService
             ->where('is_banned', false)
             ->first();
 
-        if (! $user || ! Hash::check($password, $user->password) || ! $user->hasRole('admin')) {
+        // Authentication only proves who this is and that they belong in the
+        // admin panel at all. What they may then *do* is decided per-route by
+        // the `permission:` middleware — requiring the `admin` role here made
+        // every other role's grants unreachable.
+        if (! $user || ! Hash::check($password, $user->password)) {
             return null;
         }
 
