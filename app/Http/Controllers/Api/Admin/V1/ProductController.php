@@ -101,7 +101,7 @@ class ProductController extends BaseAdminController
 
     public function show(Product $product): JsonResponse
     {
-        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants']);
+        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants', 'images', 'promotions']);
 
         return $this->success(new ProductResource($product));
     }
@@ -110,21 +110,27 @@ class ProductController extends BaseAdminController
     {
         $data = $request->validated();
         $variants = $data['variants'] ?? [];
-        unset($data['variants']);
+        $images = $data['images'] ?? [];
+        $promotionIds = $data['promotion_ids'] ?? [];
+        $thumbnailWasSent = array_key_exists('thumbnail', $data);
+        unset($data['variants'], $data['images'], $data['promotion_ids']);
 
         $data['slug'] = $data['slug'] ?? Str::slug((string) $data['name']);
 
-        $product = DB::transaction(function () use ($data, $variants): Product {
+        $product = DB::transaction(function () use ($data, $variants, $images, $promotionIds, $thumbnailWasSent): Product {
             $product = Product::create($data);
 
             foreach ($variants as $row) {
                 $this->createVariant($product, $row);
             }
 
+            $this->syncImages($product, $images, $thumbnailWasSent);
+            $product->promotions()->sync($this->uniqueIds($promotionIds));
+
             return $product;
         });
 
-        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants']);
+        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants', 'images', 'promotions']);
 
         return $this->created(new ProductResource($product));
     }
@@ -139,9 +145,17 @@ class ProductController extends BaseAdminController
             $replaceVariants = $variants !== null;
         }
 
-        unset($data['variants'], $data['replace_variants']);
+        // A null here means "key absent" — the gallery is left alone. An empty
+        // array means "key present and empty", which clears the gallery.
+        $images = array_key_exists('images', $data) ? ($data['images'] ?? []) : null;
+        // Same absent-vs-empty distinction: omitting `promotion_ids` leaves the
+        // applied promotions alone, sending `[]` detaches every one of them.
+        $promotionIds = array_key_exists('promotion_ids', $data) ? ($data['promotion_ids'] ?? []) : null;
+        $thumbnailWasSent = array_key_exists('thumbnail', $data);
 
-        DB::transaction(function () use ($product, $data, $variants, $replaceVariants): void {
+        unset($data['variants'], $data['replace_variants'], $data['images'], $data['promotion_ids']);
+
+        DB::transaction(function () use ($product, $data, $variants, $replaceVariants, $images, $promotionIds, $thumbnailWasSent): void {
             if ($data !== []) {
                 // Cast booleans explicitly so the Eloquent model sees real bools
                 // (the FormRequest already coerced, but defence in depth).
@@ -174,9 +188,17 @@ class ProductController extends BaseAdminController
                     }
                 }
             }
+
+            if ($images !== null) {
+                $this->syncImages($product, $images, $thumbnailWasSent);
+            }
+
+            if ($promotionIds !== null) {
+                $product->promotions()->sync($this->uniqueIds($promotionIds));
+            }
         });
 
-        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants']);
+        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants', 'images', 'promotions']);
 
         return $this->success(new ProductResource($product));
     }
@@ -193,7 +215,7 @@ class ProductController extends BaseAdminController
         /** @var Product|null $product */
         $product = Product::onlyTrashed()->where('uuid', $uuid)->firstOrFail();
         $product->restore();
-        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants']);
+        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants', 'images', 'promotions']);
 
         return $this->success(new ProductResource($product));
     }
@@ -206,6 +228,87 @@ class ProductController extends BaseAdminController
         $product->save();
 
         return $this->success(new ProductResource($product));
+    }
+
+    /**
+     * Normalise submitted pivot ids for `sync()`.
+     *
+     * Cast to int and de-duplicated: `sync()` on a composite-primary-key pivot
+     * would otherwise attempt a duplicate insert if the same id arrives twice,
+     * and a numeric string id would not match an already-attached int on the
+     * detach comparison, causing a needless delete/insert churn.
+     *
+     * @param  array<int, mixed>  $ids
+     * @return array<int, int>
+     */
+    private function uniqueIds(array $ids): array
+    {
+        return array_values(array_unique(array_map('intval', $ids)));
+    }
+
+    /**
+     * Replace the product's gallery with the submitted set.
+     *
+     * Replace rather than merge: the rows carry no client-stable identity (the
+     * same file can legitimately appear twice, and the UI reorders freely), so
+     * matching them up would be guesswork. Old rows are force-deleted rather
+     * than soft-deleted — nothing reads a deleted image, and leaving them would
+     * grow the table without bound on every save.
+     *
+     * `sort_order` falls back to the submitted position, so the array order the
+     * client sends is the order the gallery comes back in.
+     *
+     * @param  array<int, array<string, mixed>>  $images
+     * @param  bool  $thumbnailWasSent  when the payload set `thumbnail` itself,
+     *                                  that wins; otherwise the primary image
+     *                                  becomes the thumbnail.
+     */
+    private function syncImages(Product $product, array $images, bool $thumbnailWasSent = false): void
+    {
+        $product->images()->forceDelete();
+
+        // Nothing marked primary: promote the first row, so `thumbnail` and the
+        // storefront's lead image never come out empty for a product that does
+        // have pictures.
+        $hasPrimary = false;
+        foreach ($images as $row) {
+            if (filter_var($row['is_primary'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                $hasPrimary = true;
+                break;
+            }
+        }
+
+        $primaryUrl = null;
+
+        foreach (array_values($images) as $position => $row) {
+            $isPrimary = $hasPrimary
+                ? filter_var($row['is_primary'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                : $position === 0;
+
+            if ($isPrimary) {
+                $primaryUrl = (string) $row['image'];
+            }
+
+            $product->images()->create([
+                'image' => $row['image'],
+                'disk' => $row['disk'] ?? 'public',
+                'mime_type' => $row['mime_type'] ?? null,
+                'file_size' => $row['file_size'] ?? null,
+                'alt_text' => $row['alt_text'] ?? $product->name,
+                'title' => $row['title'] ?? $product->name,
+                'type' => $row['type'] ?? ($isPrimary ? 'thumbnail' : 'gallery'),
+                'is_primary' => $isPrimary,
+                'is_active' => array_key_exists('is_active', $row)
+                    ? filter_var($row['is_active'], FILTER_VALIDATE_BOOLEAN)
+                    : true,
+                'sort_order' => $row['sort_order'] ?? $position,
+            ]);
+        }
+
+        if (! $thumbnailWasSent && $primaryUrl !== null && $primaryUrl !== $product->thumbnail) {
+            $product->thumbnail = $primaryUrl;
+            $product->save();
+        }
     }
 
     /**

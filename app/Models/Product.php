@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -67,9 +68,38 @@ class Product extends Model
         return $this->hasMany(ProductVariant::class);
     }
 
+    /**
+     * The product's image gallery, in the order the storefront should show it.
+     *
+     * Ordered on the relation rather than at the call site so every eager load
+     * (`with('images')`, `load('images')`) gets the same sequence — the primary
+     * image is not guaranteed to be sort_order 0, so it is not sorted first
+     * here; consumers pick it out via `is_primary`.
+     */
+    public function images()
+    {
+        return $this->hasMany(ProductImage::class)
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
     public function stockMovements()
     {
         return $this->morphMany(StockMovement::class, 'stockable');
+    }
+
+    /**
+     * Promotions applied to this product.
+     *
+     * Backed by `Coupon`, not `Promotion`: the admin promotions API
+     * (PromotionController) reads and writes coupons, so those are the rows the
+     * product form offers. Soft-deleted coupons are excluded so a deleted
+     * promotion stops applying without needing the pivot row cleaned up.
+     */
+    public function promotions(): BelongsToMany
+    {
+        return $this->belongsToMany(Coupon::class, 'coupon_product')
+            ->whereNull('coupons.deleted_at');
     }
 
     public static function booted(): void

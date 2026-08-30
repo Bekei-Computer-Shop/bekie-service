@@ -111,6 +111,15 @@ Route::prefix('admin')->group(function () {
             Route::get('customers', [CustomerController::class, 'index']);
             Route::get('customers/{user}', [CustomerController::class, 'show']);
         });
+        Route::middleware('permission:customers.create')->group(function () {
+            Route::post('customers', [CustomerController::class, 'store']);
+        });
+        Route::middleware('permission:customers.update')->group(function () {
+            Route::match(['put', 'patch'], 'customers/{user}', [CustomerController::class, 'update']);
+        });
+        Route::middleware('permission:customers.delete')->group(function () {
+            Route::delete('customers/{user}', [CustomerController::class, 'destroy']);
+        });
 
         Route::middleware('permission:orders.view')->group(function () {
             Route::get('orders', [OrderController::class, 'index']);
@@ -119,8 +128,16 @@ Route::prefix('admin')->group(function () {
         Route::middleware('permission:orders.create')->group(function () {
             Route::post('orders', [OrderController::class, 'store']);
         });
-        Route::middleware('permission:orders.update')->group(function () {
+        // orders.approve is allowed in here too: approving an order means
+        // moving it through its statuses, so an approver may PATCH `status`.
+        // UpdateOrderRequest prohibits payment_status and notes for a caller
+        // that holds only orders.approve — those stay with orders.update.
+        Route::middleware('permission:orders.update|orders.approve')->group(function () {
             Route::match(['put', 'patch'], 'orders/{order}', [OrderController::class, 'update']);
+        });
+        // Approval is separate from editing: a manager may approve and reject
+        // orders without being able to change or create them.
+        Route::middleware('permission:orders.approve')->group(function () {
             Route::post('orders/{order}/approve', [OrderController::class, 'approve']);
             Route::post('orders/{order}/reject', [OrderController::class, 'reject']);
         });

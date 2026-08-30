@@ -27,6 +27,11 @@ class AuthController extends BaseAdminController
             'email' => $user->email,
             'phone' => $user->phone,
             'roles' => $user->getRoleNames(),
+            // The admin portal gates its navigation and every write button on
+            // this list. It refreshes the cached profile from /auth/me on boot,
+            // so leaving permissions out here empties them on reload and hides
+            // controls the admin is entitled to.
+            'permissions' => $user->getAllPermissions()->pluck('name')->values(),
         ];
     }
 

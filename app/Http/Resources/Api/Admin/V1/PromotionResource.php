@@ -17,6 +17,7 @@ class PromotionResource extends JsonResource
             'type' => $this->type,
             'value' => number_format((float) $this->value, 2, '.', ''),
             'min_order_amount' => $this->min_order_amount === null ? null : number_format((float) $this->min_order_amount, 2, '.', ''),
+            'discount_value' => number_format((float) $this->discount_value, 2, '.', ''),
             'starts_at' => $this->starts_at?->toIso8601String(),
             'expires_at' => $this->expires_at?->toIso8601String(),
             'usage_limit' => $this->usage_limit,
