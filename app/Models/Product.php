@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RoutesByUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 
 class Product extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, RoutesByUuid, SoftDeletes;
 
     protected $fillable = [
         'uuid',
@@ -104,20 +104,9 @@ class Product extends Model
 
     public static function booted(): void
     {
-        static::creating(function (self $product): void {
-            if (! $product->uuid) {
-                $product->uuid = (string) Str::uuid();
-            }
-        });
-
         static::saving(function (self $product) {
             $product->version++;
         });
-    }
-
-    public function getRouteKeyName(): string
-    {
-        return 'uuid';
     }
 
     public function scopeLowStock($query)
@@ -134,7 +123,7 @@ class Product extends Model
     {
         return $query->where(function ($q) {
             $q->where('stock_quantity', '<=', 0)
-              ->orWhere('in_stock', false);
+                ->orWhere('in_stock', false);
         });
     }
 

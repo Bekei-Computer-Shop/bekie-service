@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             DemoOrderSeeder::class,
             BannerSeeder::class,
             PromotionSeeder::class,
+            ContentSeeder::class,
         ]);
 
         User::firstOrCreate([

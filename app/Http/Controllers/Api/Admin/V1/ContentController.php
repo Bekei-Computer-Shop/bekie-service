@@ -13,15 +13,34 @@ use Illuminate\Http\Request;
 
 class ContentController extends BaseAdminController
 {
+    private const PER_PAGE = 15;
+
+    private const MAX_PER_PAGE = 100;
+
     public function index(Request $request): JsonResponse
     {
-        $content = ContentItem::with('author')
+        $perPage = min(
+            max($request->integer('per_page', self::PER_PAGE), 1),
+            self::MAX_PER_PAGE,
+        );
+
+        $paginator = ContentItem::with('author')
             ->when($request->filled('type'), fn ($query) => $query->where('type', $request->input('type')))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->input('status')))
             ->latest()
-            ->paginate(15);
+            ->paginate($perPage)
+            ->withQueryString();
 
-        return $this->success(ContentItemResource::collection($content));
+        return $this->success([
+            'items' => ContentItemResource::collection($paginator->getCollection())->resolve($request),
+            'pagination' => [
+                'total' => $paginator->total(),
+                'per_page' => $paginator->perPage(),
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'count' => $paginator->count(),
+            ],
+        ]);
     }
 
     public function show(ContentItem $item): JsonResponse

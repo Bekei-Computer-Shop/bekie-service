@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
@@ -15,6 +15,8 @@ use Illuminate\Support\Carbon;
  * @property string $type
  * @property string $title
  * @property string|null $body
+ * @property string|null $category
+ * @property string|null $image_url
  * @property string $status
  * @property int $author_id
  * @property Carbon|null $published_at
@@ -27,6 +29,8 @@ class ContentItem extends Model
         'type',
         'title',
         'body',
+        'category',
+        'image_url',
         'status',
         'author_id',
         'published_at',
