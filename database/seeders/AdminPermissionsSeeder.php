@@ -111,6 +111,10 @@ class AdminPermissionsSeeder extends Seeder
         'stock.view',
         'stock.update',
 
+        // Dashboard. Held by every admin role, because it gates the portal's
+        // landing page rather than a capability any one role should lack.
+        'dashboard.view',
+
         // Authenticated admin self-service
         'admin.profile.view',
         'admin.profile.update',
@@ -144,6 +148,7 @@ class AdminPermissionsSeeder extends Seeder
             'logs.view',
             'media.view', 'media.create', 'media.delete',
             'stock.view', 'stock.update',
+            'dashboard.view',
             'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
         ],
         // Scoped to the ten capabilities the requirements name: auth/profile
@@ -153,6 +158,7 @@ class AdminPermissionsSeeder extends Seeder
         // uploading product, slide and news images; the portal never DELETEs
         // media, so media.delete is deliberately absent.
         'manager' => [
+            'dashboard.view',
             'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
             'orders.view', 'orders.approve',
             'products.view', 'products.create', 'products.update',
@@ -167,6 +173,7 @@ class AdminPermissionsSeeder extends Seeder
         // Everything else matches, including the no-delete rule and the
         // media.view/create support for product, news and promotion images.
         'staff' => [
+            'dashboard.view',
             'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
             'products.view', 'products.create', 'products.update',
             'categories.view', 'categories.create', 'categories.update',
