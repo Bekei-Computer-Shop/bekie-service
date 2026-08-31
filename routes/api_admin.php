@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Requests\Api\Admin\V1\Stock\BulkStockMovementRequest;
 use App\Http\Controllers\Api\Admin\V1\ActivityLogController;
 use App\Http\Controllers\Api\Admin\V1\AdministratorController;
 use App\Http\Controllers\Api\Admin\V1\AuthController;
@@ -179,6 +178,7 @@ Route::prefix('admin')->group(function () {
             Route::get('logs/team', [LogController::class, 'team']);
             Route::get('activity-logs', [ActivityLogController::class, 'index']);
             Route::get('reports/sold-products', [ReportController::class, 'soldProducts']);
+            Route::get('reports/customer-orders', [ReportController::class, 'customerOrders']);
         });
 
         // ─── User management (admin/staff CRUD + role assignment) ────

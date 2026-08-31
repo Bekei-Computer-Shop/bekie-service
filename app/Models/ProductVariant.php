@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TracksInventory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ProductVariant extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, TracksInventory;
 
     protected $fillable = [
         'product_id',
@@ -19,7 +20,11 @@ class ProductVariant extends Model
         'sale_price',
         'cost_price',
         'stock_quantity',
+        'reserved_stock',
+        'damaged_stock',
+        'incoming_stock',
         'min_stock_alert',
+        'max_stock_level',
         'track_inventory',
         'in_stock',
         'weight',
@@ -58,6 +63,7 @@ class ProductVariant extends Model
 
     public function stockMovements()
     {
-        return $this->morphMany(StockMovement::class, 'stockable');
+        // Explicit morph keys for consistency with Product::stockMovements().
+        return $this->morphMany(StockMovement::class, 'stockable', 'stockable_type', 'stockable_id');
     }
 }

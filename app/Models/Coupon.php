@@ -138,7 +138,9 @@ class Coupon extends Model
      */
     public function products(): BelongsToMany
     {
-        return $this->belongsToMany(Product::class, 'coupon_product');
+        // Explicit pivot keys: the related pivot key would otherwise be
+        // derived as `product_uuid` from Product's key name.
+        return $this->belongsToMany(Product::class, 'coupon_product', 'coupon_id', 'product_id');
     }
 
     public function incrementUsage(): void
