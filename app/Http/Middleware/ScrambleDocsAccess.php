@@ -10,7 +10,13 @@ class ScrambleDocsAccess
 {
     public function handle(Request $request, Closure $next)
     {
-        if (filter_var(env('SCRAMBLE_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        $scrambleEnabled = env('SCRAMBLE_ENABLED');
+
+        if ($scrambleEnabled === null) {
+            return $next($request);
+        }
+
+        if (filter_var($scrambleEnabled, FILTER_VALIDATE_BOOLEAN)) {
             return $next($request);
         }
 
