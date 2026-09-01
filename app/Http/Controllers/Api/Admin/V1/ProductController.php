@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
-use App\Http\Controllers\Api\Admin\V1\BaseAdminController;
 use App\Http\Requests\Api\Admin\V1\Product\IndexProductsRequest;
 use App\Http\Requests\Api\Admin\V1\Product\StoreProductRequest;
 use App\Http\Requests\Api\Admin\V1\Product\UpdateProductRequest;
@@ -32,7 +31,8 @@ class ProductController extends BaseAdminController
     {
         $perPage = (int) $request->input('per_page', 18);
         $page = (int) $request->input('page', 1);
-        $sort = $request->input('sort', 'id');
+        $sort = $request->input('sort', 'created_at');
+        $sort = $sort === 'id' ? 'created_at' : $sort;
         $direction = $request->input('direction', 'desc');
         $withTrashed = (bool) $request->input('with_trashed', false);
         $onlyTrashed = (bool) $request->input('only_trashed', false);

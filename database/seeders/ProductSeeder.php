@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ProductSeeder extends Seeder
@@ -17,6 +18,10 @@ class ProductSeeder extends Seeder
      */
     public function run(): void
     {
+        DB::table('product_images')->delete();
+        DB::table('product_variants')->delete();
+        DB::table('products')->delete();
+
         $categories = [];
         foreach ([
             'Laptops',

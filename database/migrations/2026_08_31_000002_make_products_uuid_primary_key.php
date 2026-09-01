@@ -118,6 +118,7 @@ return new class extends Migration
 
             $this->tryStatement("alter table {$table} drop column if exists product_id;");
             $this->tryStatement("alter table {$table} rename column product_uuid to product_id;");
+            $this->tryStatement("alter table {$table} alter column product_id type uuid using product_id::text::uuid;");
         }
 
         // 4) Widen the morph column so it can hold UUIDs, then re-link products.

@@ -17,7 +17,9 @@ use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 #[Group(name: 'Stock Management', description: 'Inventory overview, low-stock alerts, and stock movement history for admin operators.')]
@@ -34,7 +36,6 @@ class StockController extends BaseAdminController
 
         $query = Product::query()->with(['category:id,name,slug', 'brand:id,name,slug'])
             ->select([
-                'id',
                 'uuid',
                 'name',
                 'sku',
@@ -84,20 +85,21 @@ class StockController extends BaseAdminController
         }
 
         if ($request->filled('updated_from')) {
-            $query->whereDate('updated_at', '>=', \Illuminate\Support\Carbon::parse($request->input('updated_from')));
+            $query->whereDate('updated_at', '>=', Carbon::parse($request->input('updated_from')));
         }
 
         if ($request->filled('updated_to')) {
-            $query->whereDate('updated_at', '<=', \Illuminate\Support\Carbon::parse($request->input('updated_to')));
+            $query->whereDate('updated_at', '<=', Carbon::parse($request->input('updated_to')));
         }
 
         if ($request->boolean('low_stock')) {
             $query->whereColumn('stock_quantity', '<=', 'min_stock_alert');
         }
 
-        $sort = $request->input('sort', 'id');
+        $sort = $request->input('sort', 'updated_at');
+        $sort = $sort === 'id' ? 'updated_at' : $sort;
         $direction = $request->input('direction', 'desc') === 'asc' ? 'asc' : 'desc';
-        if (in_array($sort, ['id', 'name', 'sku', 'stock_quantity', 'created_at', 'updated_at'], true)) {
+        if (in_array($sort, ['name', 'sku', 'stock_quantity', 'created_at', 'updated_at'], true)) {
             $query->orderBy($sort, $direction);
         } else {
             $query->orderBy('stock_quantity', 'asc');
@@ -146,13 +148,11 @@ class StockController extends BaseAdminController
             ->with([
                 'category:id,name,slug',
                 'brand:id,name,slug',
-                'variants:id,product_id,name,sku,stock_quantity,min_stock_alert,in_stock'
+                'variants:id,product_id,name,sku,stock_quantity,min_stock_alert,in_stock',
             ]);
 
         if (Str::isUuid($id)) {
             $product = $query->where('uuid', $id)->firstOrFail();
-        } elseif (is_numeric($id)) {
-            $product = $query->where('id', (int) $id)->firstOrFail();
         } else {
             $product = $query->where('sku', $id)->firstOrFail();
         }
@@ -163,10 +163,10 @@ class StockController extends BaseAdminController
             $movementsQuery->where('movement_type', $request->input('movement_type'));
         }
         if ($request->filled('movements_from')) {
-            $movementsQuery->whereDate('created_at', '>=', \Illuminate\Support\Carbon::parse($request->input('movements_from')));
+            $movementsQuery->whereDate('created_at', '>=', Carbon::parse($request->input('movements_from')));
         }
         if ($request->filled('movements_to')) {
-            $movementsQuery->whereDate('created_at', '<=', \Illuminate\Support\Carbon::parse($request->input('movements_to')));
+            $movementsQuery->whereDate('created_at', '<=', Carbon::parse($request->input('movements_to')));
         }
 
         $movementsPage = (int) $request->input('movements_page', 1);
@@ -207,8 +207,8 @@ class StockController extends BaseAdminController
                     'per_page' => $movements->perPage(),
                     'current_page' => $movements->currentPage(),
                     'last_page' => $movements->lastPage(),
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 
@@ -221,11 +221,9 @@ class StockController extends BaseAdminController
 
         if ($request->filled('product_id')) {
             $productId = (string) $request->input('product_id');
-            $resolvedId = is_numeric($productId)
-                ? (int) $productId
-                : (Str::isUuid($productId)
-                    ? Product::where('uuid', $productId)->value('id')
-                    : Product::where('sku', $productId)->value('id'));
+            $resolvedId = Str::isUuid($productId)
+                ? Product::where('uuid', $productId)->value('uuid')
+                : Product::where('sku', $productId)->value('uuid');
 
             if ($resolvedId) {
                 $query->where('stockable_type', Product::class)
@@ -284,7 +282,7 @@ class StockController extends BaseAdminController
 
             return $this->created(new StockMovementResource($movement));
         } catch (\InvalidArgumentException $e) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'quantity' => [$e->getMessage()],
             ]);
         }
@@ -352,9 +350,10 @@ class StockController extends BaseAdminController
 
         try {
             $movements = $this->stockService->bulkAdjust($prepared);
+
             return $this->created(StockMovementResource::collection($movements));
         } catch (\InvalidArgumentException $e) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'items' => [$e->getMessage()],
             ]);
         }
@@ -364,34 +363,38 @@ class StockController extends BaseAdminController
     {
         $query = Product::query()
             ->with(['category:id,name', 'brand:id,name'])
-            ->select(['id','uuid','name','sku','barcode','stock_quantity','min_stock_alert','cost_price','price','in_stock','warehouse_location','category_id','brand_id','updated_at'])
+            ->select(['uuid', 'name', 'sku', 'barcode', 'stock_quantity', 'min_stock_alert', 'cost_price', 'price', 'in_stock', 'warehouse_location', 'category_id', 'brand_id', 'updated_at'])
             ->where('track_inventory', true);
 
         if ($request->filled('q')) {
             $like = '%'.$request->input('q').'%';
-            $query->where(fn($q) => $q->where('name','like',$like)->orWhere('sku','like',$like));
+            $query->where(fn ($q) => $q->where('name', 'like', $like)->orWhere('sku', 'like', $like));
         }
-        if ($request->filled('category_id')) { $query->where('category_id', $request->integer('category_id')); }
-        if ($request->filled('brand_id')) { $query->where('brand_id', $request->integer('brand_id')); }
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->integer('category_id'));
+        }
+        if ($request->filled('brand_id')) {
+            $query->where('brand_id', $request->integer('brand_id'));
+        }
         if ($stock_status = $request->input('stock_status')) {
-            match($stock_status) {
-                'out' => $query->where('stock_quantity','<=',0),
-                'low' => $query->where('stock_quantity','>',0)->whereColumn('stock_quantity','<=','min_stock_alert'),
+            match ($stock_status) {
+                'out' => $query->where('stock_quantity', '<=', 0),
+                'low' => $query->where('stock_quantity', '>', 0)->whereColumn('stock_quantity', '<=', 'min_stock_alert'),
                 default => null,
             };
         }
         if ($request->filled('updated_from')) {
-            $query->whereDate('updated_at', '>=', \Illuminate\Support\Carbon::parse($request->input('updated_from')));
+            $query->whereDate('updated_at', '>=', Carbon::parse($request->input('updated_from')));
         }
         if ($request->filled('updated_to')) {
-            $query->whereDate('updated_at', '<=', \Illuminate\Support\Carbon::parse($request->input('updated_to')));
+            $query->whereDate('updated_at', '<=', Carbon::parse($request->input('updated_to')));
         }
 
         $filename = 'stock-export-'.now()->format('Y-m-d').'.csv';
 
         return response()->streamDownload(function () use ($query) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['ID','Name','SKU','Barcode','Category','Brand','Stock Qty','Min Alert','Cost Price','Sale Price','In Stock','Warehouse','Last Updated']);
+            fputcsv($handle, ['ID', 'Name', 'SKU', 'Barcode', 'Category', 'Brand', 'Stock Qty', 'Min Alert', 'Cost Price', 'Sale Price', 'In Stock', 'Warehouse', 'Last Updated']);
             $query->orderBy('name')->chunk(500, function ($products) use ($handle) {
                 foreach ($products as $p) {
                     fputcsv($handle, [
@@ -415,9 +418,15 @@ class StockController extends BaseAdminController
             ->with(['createdBy:id,first_name,last_name', 'stockable'])
             ->latest();
 
-        if ($request->filled('movement_type')) { $query->where('movement_type', $request->input('movement_type')); }
-        if ($request->filled('from')) { $query->whereDate('created_at', '>=', $request->input('from')); }
-        if ($request->filled('to')) { $query->whereDate('created_at', '<=', $request->input('to')); }
+        if ($request->filled('movement_type')) {
+            $query->where('movement_type', $request->input('movement_type'));
+        }
+        if ($request->filled('from')) {
+            $query->whereDate('created_at', '>=', $request->input('from'));
+        }
+        if ($request->filled('to')) {
+            $query->whereDate('created_at', '<=', $request->input('to'));
+        }
         if ($request->filled('product_id')) {
             $query->where('stockable_type', Product::class)->where('stockable_id', $request->integer('product_id'));
         }
@@ -426,7 +435,7 @@ class StockController extends BaseAdminController
 
         return response()->streamDownload(function () use ($query) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Date','Product','SKU','Type','Qty Change','Prev Qty','New Qty','Reason','Reference','Source','Destination','Adjusted By']);
+            fputcsv($handle, ['Date', 'Product', 'SKU', 'Type', 'Qty Change', 'Prev Qty', 'New Qty', 'Reason', 'Reference', 'Source', 'Destination', 'Adjusted By']);
             $query->chunk(500, function ($movements) use ($handle) {
                 foreach ($movements as $m) {
                     fputcsv($handle, [
