@@ -10,6 +10,7 @@ class ProductResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'uuid' => $this->uuid,
             'category_id' => $this->category_id,
             'brand_id' => $this->brand_id,
             'name' => $this->name,
@@ -20,7 +21,6 @@ class ProductResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price,
             'sale_price' => $this->sale_price,
-            'cost_price' => $this->cost_price,
             'stock_quantity' => $this->stock_quantity,
             'min_stock_alert' => $this->min_stock_alert,
             'track_inventory' => $this->track_inventory,
@@ -41,6 +41,7 @@ class ProductResource extends JsonResource
             'category' => new CategoryResource($this->whenLoaded('category')),
             'brand' => new BrandResource($this->whenLoaded('brand')),
             'variants' => ProductVariantResource::collection($this->whenLoaded('variants')),
+            'images' => $this->whenLoaded('images', fn () => ProductImageResource::collection($this->images)),
         ];
     }
 }

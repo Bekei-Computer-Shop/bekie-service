@@ -6,6 +6,8 @@ use App\Http\Requests\Api\Client\V1\StoreOrderRequest;
 use App\Http\Resources\Api\Client\V1\OrderResource;
 use App\Models\Address;
 use App\Models\Cart;
+use App\Models\Coupon;
+use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ShippingMethod;
@@ -16,7 +18,9 @@ class OrderController extends BaseApiController
 {
     public function index(Request $request)
     {
-        $query = Order::with('items')->where('user_id', $request->user()->id);
+        $query = Order::with('items');
+
+        $query->where('user_id', $request->user()->id);
 
         return $this->success(OrderResource::collection($query->orderBy('created_at', 'desc')->paginate(15)));
     }
@@ -24,6 +28,8 @@ class OrderController extends BaseApiController
     public function store(StoreOrderRequest $request)
     {
         $cart = Cart::with('items.product', 'items.variant')->findOrFail($request->cart_id);
+
+        abort_unless((int) $cart->user_id === (int) $request->user()->id, 403, 'You do not have access to this cart.');
 
         if ($cart->items->isEmpty()) {
             return $this->error('Cart must contain at least one item.', 422);
@@ -34,12 +40,21 @@ class OrderController extends BaseApiController
 
         $shippingWeight = $this->calculateCartWeight($cart);
 
+        // The coupon the customer applied to the cart, if it still exists. The
+        // code is snapshotted onto the order regardless; the model is only used
+        // to link the usage row and bump the usage counter.
+        $coupon = $cart->coupon_code
+            ? Coupon::where('code', $cart->coupon_code)->first()
+            : null;
+
         $order = Order::create([
             'user_id' => $cart->user_id,
             'address_id' => $request->address_id,
             'order_number' => $this->generateOrderNumber(),
             'subtotal' => $cart->subtotal,
             'discount_total' => $cart->discount_total,
+            'coupon_id' => $coupon?->id,
+            'coupon_code' => $cart->coupon_code,
             'tax_total' => $cart->tax_total,
             'shipping_total' => $shippingMethod->calculateCost($shippingWeight),
             'grand_total' => $cart->subtotal + $cart->tax_total + $shippingMethod->calculateCost($shippingWeight) - $cart->discount_total,
@@ -92,13 +107,28 @@ class OrderController extends BaseApiController
             }
         }
 
+        if ($coupon) {
+            CouponUsage::create([
+                'coupon_id' => $coupon->id,
+                'user_id' => $cart->user_id,
+                'order_id' => $order->id,
+                'coupon_code' => $coupon->code,
+                'discount_amount' => $cart->discount_total,
+                'used_at' => now(),
+            ]);
+
+            $coupon->incrementUsage();
+        }
+
         $cart->update(['status' => 'converted']);
 
         return $this->created(new OrderResource($order->load('items')));
     }
 
-    public function show(Order $order)
+    public function show(Request $request, Order $order)
     {
+        abort_unless((int) $order->user_id === (int) $request->user()->id, 403, 'You do not have access to this order.');
+
         return $this->success(new OrderResource($order->load('items')));
     }
 

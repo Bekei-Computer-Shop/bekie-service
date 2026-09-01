@@ -80,6 +80,80 @@ class AppServiceProvider extends ServiceProvider
         if (class_exists(Scramble::class)) {
             $this->configureScramble();
         }
+
+        $this->configureRateLimiters();
+    }
+
+    /**
+     * Register the named rate limiters used by the API throttle middleware.
+     *
+     * Limiters are scoped to the requesting IP plus an optional authenticated
+     * user id so a single user behind a NAT does not lock out their peers, and
+     * so an attacker rotating IPs cannot multiply the budget on a single
+     * account. Admin limiters are tighter because the blast radius of an
+     * account takeover is much larger.
+     */
+    private function configureRateLimiters(): void
+    {
+        // Customer-facing auth: credentials and account-creation endpoints.
+        RateLimiter::for('auth-client', function (Request $request): array {
+            return [
+                Limit::perMinutes(1, 10)->by($request->ip()),
+                Limit::perMinutes(15, 60)->by($request->ip().'|'.$this->key($request)),
+            ];
+        });
+
+        // Admin auth — tighter because admin takeovers are catastrophic.
+        RateLimiter::for('auth-admin', function (Request $request): array {
+            return [
+                Limit::perMinutes(1, 5)->by($request->ip()),
+                Limit::perMinutes(15, 20)->by($request->ip().'|'.$this->key($request)),
+            ];
+        });
+
+        // Admin password change / profile mutation — strict on top of admin
+        // auth so a stolen cookie cannot reset a password at full speed.
+        RateLimiter::for('auth-admin-sensitive', function (Request $request): array {
+            $userId = optional($request->user())->id ?? $request->attributes->get('authenticated_user')?->id;
+
+            return [
+                Limit::perMinutes(1, 5)->by($request->ip()),
+                Limit::perMinutes(15, 15)->by(($userId ?: $request->ip()).'|admin-sensitive'),
+            ];
+        });
+
+        // Coupon / promo abuse protection: 30 attempts per minute per IP.
+        RateLimiter::for('promo-apply', function (Request $request): array {
+            return [
+                Limit::perMinute(30)->by($request->ip()),
+                Limit::perMinutes(5, 100)->by($request->ip().'|promo'),
+            ];
+        });
+
+        RateLimiter::for('client-checkout', function (Request $request): array {
+            return [Limit::perMinute(10)->by($this->key($request))];
+        });
+
+        RateLimiter::for('admin-sensitive', function (Request $request): array {
+            return [Limit::perMinute(20)->by($this->key($request))];
+        });
+
+        // Admin heavy read endpoints (reports, logs) — keep one operator
+        // from saturating the database through the UI.
+        RateLimiter::for('admin-reports', function (Request $request): array {
+            $userId = optional($request->user())->id ?? $request->attributes->get('authenticated_user')?->id;
+
+            return [
+                Limit::perMinute(60)->by($userId ?: $request->ip()),
+            ];
+        });
+    }
+
+    private function key(Request $request): string
+    {
+        $user = $request->user() ?? $request->attributes->get('authenticated_user');
+
+        return $user ? 'u:'.$user->getAuthIdentifier() : 'ip:'.$request->ip();
     }
 
     /**

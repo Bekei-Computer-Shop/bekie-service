@@ -12,14 +12,21 @@ class PromotionResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'name' => $this->name,
             'code' => $this->code,
             'type' => $this->type,
-            'discount_value' => number_format($this->discount_value, 2, '.', ''),
+            'kind' => $this->kind,
+            'value' => number_format((float) $this->value, 2, '.', ''),
+            'min_order_amount' => $this->min_order_amount === null ? null : number_format((float) $this->min_order_amount, 2, '.', ''),
+            'discount_value' => number_format((float) $this->discount_value, 2, '.', ''),
             'starts_at' => $this->starts_at?->toIso8601String(),
-            'ends_at' => $this->ends_at?->toIso8601String(),
+            'expires_at' => $this->expires_at?->toIso8601String(),
             'usage_limit' => $this->usage_limit,
+            'user_limit' => $this->user_limit,
             'used_count' => $this->used_count,
-            'is_active' => $this->starts_at <= now() && ($this->ends_at === null || $this->ends_at >= now()) && ($this->usage_limit === null || $this->used_count < $this->usage_limit),
+            'is_active' => (bool) $this->is_active,
+            'description' => $this->description,
+            'banner_image' => $this->banner_image,
         ];
     }
 }

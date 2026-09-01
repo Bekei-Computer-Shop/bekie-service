@@ -15,6 +15,7 @@ class OrderResource extends JsonResource
             'address_id' => $this->address_id,
             'subtotal' => $this->subtotal,
             'discount_total' => $this->discount_total,
+            'coupon_code' => $this->coupon_code,
             'tax_total' => $this->tax_total,
             'shipping_total' => $this->shipping_total,
             'grand_total' => $this->grand_total,

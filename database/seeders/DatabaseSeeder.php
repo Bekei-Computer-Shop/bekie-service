@@ -22,6 +22,13 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AdminPermissionsSeeder::class,
             AdminUserSeeder::class,
+            CategorySeeder::class,
+            ProductSeeder::class,
+            CustomerSeeder::class,
+            DemoOrderSeeder::class,
+            BannerSeeder::class,
+            PromotionSeeder::class,
+            ContentSeeder::class,
         ]);
 
         User::firstOrCreate([

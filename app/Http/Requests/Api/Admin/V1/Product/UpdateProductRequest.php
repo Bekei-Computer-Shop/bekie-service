@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\Admin\V1\Product;
 
+use App\Http\Requests\Api\Admin\V1\Product\Concerns\ValidatesProductImages;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
@@ -12,6 +13,8 @@ use Illuminate\Validation\Rule;
 
 class UpdateProductRequest extends FormRequest
 {
+    use ValidatesProductImages;
+
     public function authorize(): bool
     {
         return true;
@@ -68,6 +71,15 @@ class UpdateProductRequest extends FormRequest
             'is_digital' => ['sometimes', 'boolean'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:1000000'],
 
+            // Image gallery. Sending the key replaces the whole set; omitting
+            // it leaves the existing gallery untouched.
+            ...$this->productImageRules(),
+
+            // Promotions applied to this product. Validated against `coupons`:
+            // the admin promotions API is coupon-backed (PromotionController).
+            'promotion_ids' => ['sometimes', 'array'],
+            'promotion_ids.*' => ['integer', Rule::exists('coupons', 'id')->whereNull('deleted_at')],
+
             // Variant array. When `replace_variants` is omitted or true, the
             // submitted set replaces the existing set. When false, the
             // controller treats the array as additive.
@@ -116,6 +128,8 @@ class UpdateProductRequest extends FormRequest
             if ($price !== null && $sale !== null && (float) $sale > (float) $price) {
                 $v->errors()->add('sale_price', 'Sale price must be less than or equal to price.');
             }
+
+            $this->validateSinglePrimaryImage($v);
         });
     }
 }

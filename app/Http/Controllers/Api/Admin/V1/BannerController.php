@@ -16,7 +16,10 @@ class BannerController extends BaseAdminController
         $banners = Banner::query()
             ->when($request->filled('position'), fn ($query) => $query->where('position', $request->input('position')))
             ->when($request->filled('status'), fn ($query) => $query->where('is_active', $request->input('status') === 'active'))
-            ->latest()
+            // Carousel order, not recency: the admin list is a reorder surface,
+            // so it has to show banners in the sequence the storefront plays
+            // them. `ordered()` sorts by sort_order, then id as a tiebreak.
+            ->ordered()
             ->paginate(15);
 
         return $this->success(BannerResource::collection($banners));

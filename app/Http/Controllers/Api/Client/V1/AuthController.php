@@ -32,7 +32,7 @@ class AuthController extends BaseApiController
         }
 
         $user = DB::transaction(function () use ($data, $email, $phone) {
-            return User::create([
+            $user = User::create([
                 'email' => $email,
                 'phone' => $phone,
                 'first_name' => $data['first_name'] ?? null,
@@ -40,6 +40,10 @@ class AuthController extends BaseApiController
                 'name' => $data['name'] ?? null, // mutator fills first/last
                 'password' => $data['password'], // 'hashed' cast hashes on save
             ]);
+
+            $user->assignRole('user');
+
+            return $user;
         });
 
         $tokenPair = $this->authService->createToken($user, $request);

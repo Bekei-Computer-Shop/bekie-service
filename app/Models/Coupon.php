@@ -11,9 +11,29 @@ class Coupon extends Model
 {
     use SoftDeletes;
 
+    /**
+     * Campaign kinds the admin promotion form offers.
+     *
+     * Distinct from `type`, which stays ('fixed'|'percentage') and drives
+     * calculateDiscount(). A kind says what the campaign IS; the type says how
+     * its money is worked out. A null kind is an ordinary discount.
+     *
+     * Note that nothing in checkout acts on these yet: a 'free_shipping' coupon
+     * still discounts the subtotal by its type and value like any other.
+     */
+    public const KINDS = [
+        'flash_sale',
+        'bogo',
+        'free_shipping',
+        'bundle',
+        'free_gift',
+    ];
+
     protected $fillable = [
+        'name',
         'code',
         'type',
+        'kind',
         'value',
         'usage_limit',
         'used_count',
@@ -25,6 +45,8 @@ class Coupon extends Model
         'is_active',
         'applicable_products',
         'applicable_categories',
+        'description',
+        'banner_image',
     ];
 
     /*
@@ -128,6 +150,16 @@ class Coupon extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'coupon_user');
+    }
+
+    /**
+     * Products this promotion applies to. Inverse of Product::promotions().
+     */
+    public function products(): BelongsToMany
+    {
+        // Explicit pivot keys: the related pivot key would otherwise be
+        // derived as `product_uuid` from Product's key name.
+        return $this->belongsToMany(Product::class, 'coupon_product', 'coupon_id', 'product_id');
     }
 
     public function incrementUsage(): void

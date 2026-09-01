@@ -22,3 +22,10 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+.neon
+.env.neon
+.agents
+.neon
+skills-lock.json
+*.drawio
+*.mmd

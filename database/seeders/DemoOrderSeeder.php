@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Http\Requests\Admin\UpdateOrderRequest;
+use App\Http\Requests\Api\Admin\V1\UpdateOrderRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 /**
  * Sample orders for developing/demoing the admin Orders screen.
+ *
+ * The buyers are the shoppers CustomerSeeder creates — this seeder makes no
+ * users of its own. Every non-admin user is a customer as far as
+ * CustomerController is concerned, so a second set of buyers would show up on
+ * the Customers screen as duplicates of the ones already there.
+ * Run CustomerSeeder first; DatabaseSeeder already orders them that way.
  *
  * Every row it creates is tagged with metadata->seeded_by so demo data can be
  * told apart from real orders and removed again (see the class docblock note at
@@ -35,23 +40,17 @@ class DemoOrderSeeder extends Seeder
 
     private const METHODS = ['cod', 'bank_transfer', 'stripe', 'paypal'];
 
-    private const CUSTOMERS = [
-        ['Sokha', 'Chan'],
-        ['Dara', 'Lim'],
-        ['Vichea', 'Pen'],
-        ['Bopha', 'Sok'],
-        ['Rithy', 'Norng'],
-        ['Kanha', 'Meas'],
-        ['Sovann', 'Ly'],
-        ['Chenda', 'Kim'],
-    ];
-
     public function run(): void
     {
-        $existing = Order::query()->where('metadata->seeded_by', self::TAG)->count();
+        $this->warnAboutLegacyBuyers();
+
+        // withTrashed: orders soft-delete, and a soft-deleted row still holds
+        // its order_number in the unique index. Counting only live rows would
+        // report a clean slate and then fail on the first insert.
+        $existing = Order::query()->withTrashed()->where('metadata->seeded_by', self::TAG)->count();
         if ($existing > 0) {
-            $this->command->warn("Skipped: {$existing} seeded demo orders already exist.");
-            $this->command->line('Remove them first if you want a fresh set:');
+            $this->command->warn("Skipped: {$existing} seeded demo orders already exist (including any soft-deleted ones).");
+            $this->command->line('Remove them for good if you want a fresh set:');
             $this->command->line("  delete from order_items where order_id in (select id from orders where metadata->>'seeded_by' = '".self::TAG."');");
             $this->command->line("  delete from orders where metadata->>'seeded_by' = '".self::TAG."';");
 
@@ -66,6 +65,12 @@ class DemoOrderSeeder extends Seeder
         }
 
         $customers = $this->customers();
+        if ($customers->isEmpty()) {
+            $this->command->error('No seeded customers found — run CustomerSeeder first.');
+
+            return;
+        }
+
         $created = 0;
 
         for ($i = 1; $i <= self::ORDER_COUNT; $i++) {
@@ -140,71 +145,44 @@ class DemoOrderSeeder extends Seeder
     }
 
     /**
-     * Demo buyers, reused on re-runs. Emails use .test so they can never collide
-     * with a real address.
+     * Earlier runs of this seeder made their own `demo.*@bekie.test` buyers,
+     * duplicating CustomerSeeder's shoppers on the admin Customers screen.
+     * Nothing here creates them any more, but a database seeded before that
+     * change still holds them, so point them out rather than leaving the
+     * duplicates to be puzzled over.
      */
-    private function customers()
+    private function warnAboutLegacyBuyers(): void
     {
-        return collect(self::CUSTOMERS)->map(function (array $person, int $index) {
-            [$first, $last] = $person;
-
-            $user = User::firstOrCreate(
-                ['email' => 'demo.'.strtolower($first).$index.'@bekie.test'],
-                [
-                    'first_name' => $first,
-                    'last_name' => $last,
-                    'username' => 'demo_'.strtolower($first).$index,
-                    'phone' => '+85512'.str_pad((string) (100000 + $index), 6, '0'),
-                    'password' => Hash::make('password'),
-                    'role' => 'user',
-                    'is_active' => true,
-                ]
-            );
-
-            $this->ensureAddress($user, $index);
-
-            return $user;
-        })->values();
-    }
-
-    /** Street addresses the demo customers deliver to. */
-    private const STREETS = [
-        ['12 Street 240', 'Chamkarmon', 'Phnom Penh', '12301'],
-        ['88 Norodom Blvd', 'Daun Penh', 'Phnom Penh', '12207'],
-        ['45 Street 271', 'Toul Kork', 'Phnom Penh', '12151'],
-        ['7 Sivutha Blvd', 'Svay Dangkum', 'Siem Reap', '17252'],
-        ['203 Ekareach St', 'Buon', 'Sihanoukville', '18000'],
-        ['31 Street 105', 'Prampi Makara', 'Phnom Penh', '12253'],
-        ['9 Mondul 2', 'Svay Dangkum', 'Siem Reap', '17259'],
-        ['150 Street 63', 'Boeung Keng Kang', 'Phnom Penh', '12302'],
-    ];
-
-    /**
-     * Gives each demo customer one default shipping address, so the order forms
-     * and printed orders have a delivery address to show. Idempotent.
-     */
-    private function ensureAddress(User $user, int $index): void
-    {
-        if ($user->addresses()->exists()) {
+        $legacy = User::query()->where('email', 'like', 'demo.%@bekie.test')->count();
+        if ($legacy === 0) {
             return;
         }
 
-        [$line1, $state, $city, $postal] = self::STREETS[$index % count(self::STREETS)];
+        $this->command->warn("{$legacy} buyers from an older run of this seeder are still on the Customers screen.");
+        $this->command->line('They are no longer created. Remove them and the orders they hold with:');
+        $this->command->line("  delete from order_items where order_id in (select id from orders where user_id in (select id from users where email like 'demo.%@bekie.test'));");
+        $this->command->line("  delete from orders where user_id in (select id from users where email like 'demo.%@bekie.test');");
+        $this->command->line("  delete from users where email like 'demo.%@bekie.test';");
+    }
 
-        $user->addresses()->create([
-            'type' => 'shipping',
-            'label' => 'Home',
-            'full_name' => $user->name,
-            'phone' => $user->phone,
-            'email' => $user->email,
-            'address_line_1' => $line1,
-            'city' => $city,
-            'state' => $state,
-            'postal_code' => $postal,
-            'country' => 'Cambodia',
-            'is_default' => true,
-            'is_active' => true,
-        ]);
+    /**
+     * The buyers: CustomerSeeder's shoppers, in seed order.
+     *
+     * Only the ones that seeder already gives order history to — it leaves one
+     * customer at zero orders on purpose, and adding demo orders for them would
+     * erase that empty-spend row from the Customers list.
+     */
+    private function customers()
+    {
+        $emails = CustomerSeeder::buyerEmails();
+
+        return User::query()
+            ->whereIn('email', $emails)
+            ->get()
+            // Ordered by the seed list rather than by id, so which buyer gets
+            // which order stays the same between runs.
+            ->sortBy(fn (User $user) => array_search($user->email, $emails, true))
+            ->values();
     }
 
     /**

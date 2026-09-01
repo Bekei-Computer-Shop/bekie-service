@@ -16,6 +16,9 @@ return [
     */
 
     'defaults' => [
+        // API requests use the dedicated JWT middleware, which resolves a
+        // hashed JTI from api_tokens. The legacy token driver would instead
+        // query users.api_token when Auth is resolved.
         'guard' => env('AUTH_GUARD', 'api'),
         'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
     ],
@@ -39,7 +42,7 @@ return [
 
     'guards' => [
         'api' => [
-            'driver' => 'token',
+            'driver' => 'session',
             'provider' => 'users',
         ],
     ],

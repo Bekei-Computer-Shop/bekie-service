@@ -18,41 +18,151 @@ use App\Models\ShippingMethod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
+/**
+ * Shopping Cart Management
+ *
+ * Manage customer shopping carts and checkout process.
+ * Authenticated users have a single cart; guest carts are identified by session_id.
+ */
 class CartController extends BaseApiController
 {
+    /**
+     * Get authenticated user's cart
+     *
+     * Returns the authenticated user's single cart with all items.
+     * Automatically creates the cart if it doesn't exist.
+     *
+     * @response 200 {
+     *   "status": "success",
+     *   "data": {
+     *     "id": 1,
+     *     "user_id": 5,
+     *     "currency": "USD",
+     *     "subtotal": 99.99,
+     *     "discount_total": 0,
+     *     "tax_total": 8.00,
+     *     "shipping_total": 10.00,
+     *     "grand_total": 117.99,
+     *     "status": "active",
+     *     "items": [...]
+     *   }
+     * }
+     */
     public function index(Request $request)
     {
-        $query = Cart::with('items.product', 'items.variant')
-            ->where('user_id', $request->user()->id);
+        $user = $request->user();
 
-        return $this->success(CartResource::collection($query->orderBy('updated_at', 'desc')->paginate(15)));
-    }
-
-    public function store(Request $request)
-    {
-        $payload = $request->validate([
-            'currency' => 'sometimes|string|max:3',
-        ]);
-
-        $attributes = [
-            'currency' => $payload['currency'] ?? 'USD',
-        ];
-
-        $cart = Cart::updateOrCreate(
-            ['user_id' => $request->user()->id, 'status' => 'active'],
-            $attributes,
+        $cart = Cart::firstOrCreate(
+            ['user_id' => $user->id, 'session_id' => null],
+            [
+                'currency' => 'USD',
+                'subtotal' => 0,
+                'discount_total' => 0,
+                'tax_total' => 0,
+                'shipping_total' => 0,
+                'grand_total' => 0,
+                'status' => 'active',
+                'last_activity_at' => now(),
+            ]
         );
 
-        return $this->created(new CartResource($cart->fresh()));
-    }
-
-    public function show(Cart $cart)
-    {
         return $this->success(new CartResource($cart->load('items.product', 'items.variant')));
     }
 
-    public function addItem(AddCartItemRequest $request, Cart $cart)
+    /**
+     * Update authenticated user's cart
+     *
+     * Updates the cart settings for the authenticated user.
+     * Creates the cart if it doesn't exist.
+     *
+     * @bodyParam currency string Currency code (max 3 chars). Example: "USD"
+     * @bodyParam status string Cart status (active, abandoned, converted). Example: "active"
+     *
+     * @response 200 {
+     *   "status": "success",
+     *   "data": {
+     *     "id": 1,
+     *     "user_id": 5,
+     *     "currency": "USD",
+     *     "subtotal": 0,
+     *     "grand_total": 0,
+     *     "items": []
+     *   }
+     * }
+     */
+    public function store(Request $request)
     {
+        $validated = $request->validate([
+            'currency' => 'sometimes|string|max:3',
+            'status' => 'sometimes|string|in:active,abandoned,converted',
+        ]);
+
+        $user = $request->user();
+
+        $cart = Cart::firstOrCreate(
+            ['user_id' => $user->id, 'session_id' => null],
+            [
+                'currency' => 'USD',
+                'subtotal' => 0,
+                'discount_total' => 0,
+                'tax_total' => 0,
+                'shipping_total' => 0,
+                'grand_total' => 0,
+                'status' => 'active',
+                'last_activity_at' => now(),
+            ]
+        );
+
+        if (! empty($validated)) {
+            $cart->update($validated);
+        }
+
+        return $this->success(new CartResource($cart->fresh()->load('items.product', 'items.variant')));
+    }
+
+    /**
+     * Add product to authenticated user's cart
+     *
+     * Adds a product (with optional variant) to the user's cart.
+     * If the product already exists in cart, quantity is updated.
+     * Cart totals are automatically recalculated.
+     *
+     * @bodyParam product_id integer required The product ID. Example: 1
+     * @bodyParam product_variant_id integer The product variant ID (optional). Example: 1
+     * @bodyParam quantity integer required The quantity to add (min: 1). Example: 2
+     *
+     * @response 201 {
+     *   "status": "success",
+     *   "data": {
+     *     "id": 1,
+     *     "user_id": 5,
+     *     "subtotal": 199.98,
+     *     "grand_total": 207.98,
+     *     "items": [...]
+     *   }
+     * }
+     * @response 422 {
+     *   "status": "error",
+     *   "message": "The quantity must be at least 1.",
+     *   "errors": {"quantity": ["The quantity must be at least 1."]}
+     * }
+     */
+    public function addItem(AddCartItemRequest $request)
+    {
+        $cart = Cart::firstOrCreate(
+            ['user_id' => $request->user()->id, 'session_id' => null],
+            [
+                'currency' => 'USD',
+                'subtotal' => 0,
+                'discount_total' => 0,
+                'tax_total' => 0,
+                'shipping_total' => 0,
+                'grand_total' => 0,
+                'status' => 'active',
+                'last_activity_at' => now(),
+            ]
+        );
+
         $product = Product::find($request->product_id);
         $variant = null;
 
@@ -91,8 +201,35 @@ class CartController extends BaseApiController
         return $this->created(new CartResource($cart->fresh()->load('items.product', 'items.variant')));
     }
 
-    public function updateItem(UpdateCartItemRequest $request, Cart $cart, CartItem $item)
+    /**
+     * Update cart item quantity
+     *
+     * Updates the quantity of an item in the authenticated user's cart.
+     * Cart totals are automatically recalculated.
+     *
+     * @bodyParam quantity integer required The new quantity (min: 1). Example: 3
+     *
+     * @response 200 {
+     *   "status": "success",
+     *   "data": {
+     *     "id": 1,
+     *     "subtotal": 299.97,
+     *     "grand_total": 307.97,
+     *     "items": [...]
+     *   }
+     * }
+     * @response 422 {
+     *   "status": "error",
+     *   "message": "The quantity must be at least 1.",
+     *   "errors": {"quantity": ["The quantity must be at least 1."]}
+     * }
+     * @response 404 Item not found
+     */
+    public function updateItem(UpdateCartItemRequest $request, CartItem $item)
     {
+        $cart = Cart::where('user_id', $request->user()->id)->firstOrFail();
+        $this->ensureItemBelongsToCart($cart, $item);
+
         $item->update([
             'quantity' => $request->quantity,
             'subtotal' => $item->unit_price * $request->quantity,
@@ -104,8 +241,20 @@ class CartController extends BaseApiController
         return $this->success(new CartResource($cart->fresh()->load('items.product', 'items.variant')));
     }
 
-    public function removeItem(Cart $cart, CartItem $item)
+    /**
+     * Remove item from authenticated user's cart
+     *
+     * Removes a product from the user's cart.
+     * Cart totals are automatically recalculated.
+     *
+     * @response 204 Item removed successfully
+     * @response 404 Item not found
+     */
+    public function removeItem(Request $request, CartItem $item)
     {
+        $cart = Cart::where('user_id', $request->user()->id)->firstOrFail();
+        $this->ensureItemBelongsToCart($cart, $item);
+
         $item->delete();
 
         $this->recalculateCart($cart);
@@ -113,8 +262,53 @@ class CartController extends BaseApiController
         return $this->noContent();
     }
 
-    public function checkout(StoreOrderRequest $request, Cart $cart)
+    /**
+     * Checkout authenticated user's cart and create order
+     *
+     * Converts the user's cart into an order. Validates cart contents, applies shipping,
+     * deducts inventory, and marks cart as converted.
+     * Returns the created order with all details.
+     *
+     * @bodyParam shipping_method_id integer required The shipping method ID. Example: 1
+     * @bodyParam email string required Customer email. Example: "customer@example.com"
+     * @bodyParam phone string required Customer phone. Example: "+1234567890"
+     * @bodyParam address_id integer User's saved address ID (optional if providing address fields). Example: 1
+     * @bodyParam recipient_name string Recipient full name (if not using saved address). Example: "John Doe"
+     * @bodyParam address_line_1 string Street address (if not using saved address). Example: "123 Main St"
+     * @bodyParam address_line_2 string Additional address info (optional). Example: "Apt 4B"
+     * @bodyParam city string City (if not using saved address). Example: "New York"
+     * @bodyParam state string State/Province (if not using saved address). Example: "NY"
+     * @bodyParam postal_code string Postal code (if not using saved address). Example: "10001"
+     * @bodyParam country string Country (if not using saved address). Example: "US"
+     * @bodyParam payment_method string Payment method. Default: "manual". Example: "credit_card"
+     * @bodyParam metadata object Additional metadata as JSON. Example: {}
+     *
+     * @response 201 {
+     *   "status": "success",
+     *   "data": {
+     *     "id": 1,
+     *     "order_number": "ORD-20240101120000-ABC12",
+     *     "user_id": 5,
+     *     "subtotal": 99.99,
+     *     "tax_total": 8.00,
+     *     "shipping_total": 10.00,
+     *     "grand_total": 117.99,
+     *     "status": "pending",
+     *     "payment_status": "pending",
+     *     "items": [...]
+     *   }
+     * }
+     * @response 422 {
+     *   "status": "error",
+     *   "message": "Cart is empty.",
+     *   "errors": {}
+     * }
+     * @response 404 Cart not found
+     */
+    public function checkout(StoreOrderRequest $request)
     {
+        $cart = Cart::where('user_id', $request->user()->id)->firstOrFail();
+
         if ($cart->items()->count() === 0) {
             return $this->error('Cart is empty.', 422);
         }
@@ -203,6 +397,13 @@ class CartController extends BaseApiController
         return $cart;
     }
 
+    protected function ensureItemBelongsToCart(Cart $cart, CartItem $item): void
+    {
+        if ((int) $item->cart_id !== (int) $cart->id) {
+            abort(404, 'Cart item not found.');
+        }
+    }
+
     protected function generateOrderNumber(): string
     {
         return 'ORD-'.now()->format('YmdHis').'-'.Str::upper(Str::random(5));
@@ -211,7 +412,10 @@ class CartController extends BaseApiController
     protected function resolveAddressSnapshot(StoreOrderRequest $request): array
     {
         if ($request->filled('address_id')) {
-            $address = Address::find($request->address_id);
+            $address = Address::query()
+                ->whereKey($request->address_id)
+                ->where('user_id', $request->user()?->id)
+                ->first();
 
             return $address ? $address->only([
                 'full_name',

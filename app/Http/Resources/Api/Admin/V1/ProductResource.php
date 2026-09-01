@@ -58,6 +58,24 @@ class ProductResource extends JsonResource
             'variants' => $product->relationLoaded('variants')
                 ? ProductVariantResource::collection($product->variants)->resolve($request)
                 : $this->whenCounted('variants'),
+            // Omitted rather than sent as [] when not loaded, so a client can
+            // tell "this product has no gallery" from "the list endpoint didn't
+            // ship one" — index() stays light and only sends `thumbnail`.
+            'images' => $product->relationLoaded('images')
+                ? ProductImageResource::collection($product->images)->resolve($request)
+                : $this->whenCounted('images'),
+            // Ids drive the product form's promotion checkboxes; the nested
+            // objects save it a second request for the labels. Both omitted
+            // when the relation is not loaded, so the light index() payload
+            // does not imply "this product has no promotions".
+            'promotion_ids' => $this->when(
+                $product->relationLoaded('promotions'),
+                fn () => $product->promotions->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            ),
+            'promotions' => $this->when(
+                $product->relationLoaded('promotions'),
+                fn () => PromotionResource::collection($product->promotions)->resolve($request),
+            ),
             'created_at' => $product->created_at?->toIso8601String(),
             'updated_at' => $product->updated_at?->toIso8601String(),
             'deleted_at' => $product->deleted_at?->toIso8601String(),

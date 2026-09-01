@@ -15,6 +15,8 @@ class ContentItemResource extends JsonResource
             'type' => $this->type,
             'title' => $this->title,
             'body' => $this->body,
+            'category' => $this->category,
+            'image_url' => $this->image_url,
             'status' => $this->status,
             'author' => [
                 'id' => $this->author?->id,

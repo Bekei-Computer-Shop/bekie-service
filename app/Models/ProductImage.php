@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Support\Facades\Storage;
 
 class ProductImage extends Model
 {
@@ -23,6 +25,13 @@ class ProductImage extends Model
         'sort_order',
     ];
 
+    protected $casts = [
+        'is_primary' => 'boolean',
+        'is_active' => 'boolean',
+        'file_size' => 'integer',
+        'sort_order' => 'integer',
+    ];
+
     /*
     |--------------------------------------------------------------------------
     | Relationships
@@ -40,8 +49,25 @@ class ProductImage extends Model
     |--------------------------------------------------------------------------
     */
 
+    /**
+     * A URL the browser can actually load.
+     *
+     * Uploads go through MediaController to Cloudinary, which hands back an
+     * absolute secure_url — that is what `image` normally holds, and running it
+     * through Storage::url() would mangle it into a doubled path. Only a
+     * relative path is resolved against the disk.
+     */
     public function getUrlAttribute(): string
     {
-        return Storage::disk($this->disk)->url($this->image);
+        $image = (string) $this->image;
+
+        if ($image === '' || preg_match('#^(https?://|data:|//)#i', $image) === 1) {
+            return $image;
+        }
+
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk($this->disk ?: 'public');
+
+        return $disk->url($image);
     }
 }

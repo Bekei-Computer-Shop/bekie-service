@@ -11,9 +11,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Idempotent seeder that installs the canonical admin RBAC permission set,
- * three default roles (admin / manager / staff), and the role-permission
- * grants for each. Re-running is safe: every create-or-find uses
- * firstOrCreate and syncPermissions diff-checks.
+ * four default roles (admin / manager / staff / user), and the baseline
+ * role-permission grants for each. Re-running only adds missing grants; it
+ * deliberately retains assignments added outside this seeder.
  *
  * Permissions follow `<resource>.<action>` naming so the API and middleware
  * map cleanly onto Spatie's string keys.
@@ -85,12 +85,18 @@ class AdminPermissionsSeeder extends Seeder
 
         // Customers
         'customers.view',
+        'customers.create',
+        'customers.update',
+        'customers.delete',
 
         // Orders
         'orders.view',
         'orders.create',
         'orders.update',
         'orders.delete',
+        // Approval is deliberately separate from update: a manager approves
+        // and rejects orders without being able to edit or create them.
+        'orders.approve',
 
         // Administrators
         'administrators.view',
@@ -106,6 +112,29 @@ class AdminPermissionsSeeder extends Seeder
 
         // Activity logs
         'logs.view',
+
+        // Media and stock
+        'media.view',
+        'media.create',
+        'media.delete',
+        'stock.view',
+        'stock.update',
+
+        // Dashboard. Held by every admin role, because it gates the portal's
+        // landing page rather than a capability any one role should lack.
+        'dashboard.view',
+
+        // Authenticated admin self-service
+        'admin.profile.view',
+        'admin.profile.update',
+        'admin.auth.logout',
+
+        // Authenticated customer actions
+        'client.auth.logout',
+        'client.coupons.apply',
+        'client.carts.manage',
+        'client.wishlists.manage',
+        'client.orders.manage',
     ];
 
     /**
@@ -123,41 +152,52 @@ class AdminPermissionsSeeder extends Seeder
             'stock.view', 'stock.update',
             'promotions.view', 'promotions.create', 'promotions.update', 'promotions.delete',
             'content.view', 'content.create', 'content.update', 'content.delete',
-            'customers.view',
+            'customers.view', 'customers.create', 'customers.update', 'customers.delete',
             'orders.view', 'orders.create', 'orders.update', 'orders.delete',
             'administrators.view', 'administrators.create', 'administrators.update', 'administrators.delete',
             'banners.view', 'banners.create', 'banners.update', 'banners.delete',
             'logs.view',
-        ],
-        'manager' => [
-            'users.view', 'users.create', 'users.update',
-            'roles.view',
-            'permissions.view',
-            'categories.view', 'categories.create', 'categories.update',
-            'brands.view', 'brands.create', 'brands.update',
-            'products.view', 'products.create', 'products.update',
-            'media.view', 'media.create',
+            'media.view', 'media.create', 'media.delete',
             'stock.view', 'stock.update',
-            'promotions.view', 'promotions.create', 'promotions.update',
-            'content.view', 'content.create', 'content.update',
-            'customers.view',
-            'orders.view', 'orders.create', 'orders.update',
-            'banners.view', 'banners.create', 'banners.update',
-            'logs.view',
+            'dashboard.view',
+            'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
         ],
+        // Scoped to the ten capabilities the requirements name: auth/profile
+        // self-service, order approval, products, slides (banners), news and
+        // website content, promotions, and product categories. No delete on
+        // anything — that stays with admin. media.view/create are support for
+        // uploading product, slide and news images; the portal never DELETEs
+        // media, so media.delete is deliberately absent.
+        'manager' => [
+            'dashboard.view',
+            'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
+            'orders.view', 'orders.approve',
+            'products.view', 'products.create', 'products.update',
+            'categories.view', 'categories.create', 'categories.update',
+            'banners.view', 'banners.create', 'banners.update',
+            'content.view', 'content.create', 'content.update',
+            'promotions.view', 'promotions.create', 'promotions.update',
+            'media.view', 'media.create',
+        ],
+        // The same treatment as manager, one capability list shorter: staff
+        // has no Approval and no Slide, so no orders.* and no banners.* grant.
+        // Everything else matches, including the no-delete rule and the
+        // media.view/create support for product, news and promotion images.
         'staff' => [
-            'users.view',
-            'categories.view',
-            'brands.view',
-            'products.view',
-            'media.view',
-            'stock.view',
-            'promotions.view',
-            'content.view',
-            'customers.view',
-            'orders.view',
-            'banners.view',
-            'logs.view',
+            'dashboard.view',
+            'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
+            'products.view', 'products.create', 'products.update',
+            'categories.view', 'categories.create', 'categories.update',
+            'content.view', 'content.create', 'content.update',
+            'promotions.view', 'promotions.create', 'promotions.update',
+            'media.view', 'media.create',
+        ],
+        'user' => [
+            'client.auth.logout',
+            'client.coupons.apply',
+            'client.carts.manage',
+            'client.wishlists.manage',
+            'client.orders.manage',
         ],
     ];
 
@@ -180,8 +220,7 @@ class AdminPermissionsSeeder extends Seeder
                 );
             }
 
-            // 3. Sync grants per role. syncPermissions diff-checks, so it's
-            //    safe to re-run; revoked permissions are removed cleanly.
+            // 3. Add baseline grants without revoking existing assignments.
             foreach (self::ROLE_GRANTS as $roleName => $permissions) {
                 $role = Role::where('name', $roleName)
                     ->where('guard_name', 'api')
@@ -191,7 +230,9 @@ class AdminPermissionsSeeder extends Seeder
                     continue;
                 }
 
-                $role->syncPermissions($permissions);
+                foreach ($permissions as $permission) {
+                    $role->givePermissionTo($permission);
+                }
             }
         });
     }

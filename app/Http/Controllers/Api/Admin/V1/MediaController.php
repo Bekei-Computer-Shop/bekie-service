@@ -17,7 +17,11 @@ class MediaController extends BaseAdminController
         $folder = $request->input('folder', '/');
 
         try {
-            $response = Http::timeout(15)->get('https://api.cloudinary.com/v1_1/'.config('cloudinary.cloud_name').'/resources/image', [
+            // The Admin API authenticates with basic auth, not an upload signature.
+            $response = Http::withBasicAuth(
+                (string) config('cloudinary.api_key'),
+                (string) config('cloudinary.api_secret'),
+            )->timeout(15)->get('https://api.cloudinary.com/v1_1/'.config('cloudinary.cloud_name').'/resources/image', [
                 'type' => 'upload',
                 'prefix' => $folder === '/' ? null : $folder,
             ]);
@@ -57,15 +61,15 @@ class MediaController extends BaseAdminController
 
         try {
             $timestamp = (string) time();
-            $params = [
+
+            // resource_type is carried by the URL path, not the body: Cloudinary
+            // excludes it from the signed string, so signing it yields 401.
+            $signature = $this->signParams([
                 'folder' => $folder,
-                'resource_type' => 'image',
                 'timestamp' => $timestamp,
-            ];
+            ], $apiSecret);
 
-            $signature = hash_hmac('sha256', http_build_query($params, '', '&'), $apiSecret);
-
-            $response = Http::asMultipart()->timeout(30)->post("https://api.cloudinary.com/v1_1/{$cloudName}/upload", [
+            $response = Http::asMultipart()->timeout(30)->post("https://api.cloudinary.com/v1_1/{$cloudName}/image/upload", [
                 [
                     'name' => 'file',
                     'contents' => fopen($file->getRealPath(), 'r'),
@@ -74,10 +78,6 @@ class MediaController extends BaseAdminController
                 [
                     'name' => 'folder',
                     'contents' => $folder,
-                ],
-                [
-                    'name' => 'resource_type',
-                    'contents' => 'image',
                 ],
                 [
                     'name' => 'api_key',
@@ -110,6 +110,32 @@ class MediaController extends BaseAdminController
     }
 
     /**
+     * Sign an upload/destroy request the way Cloudinary verifies it: a plain
+     * SHA-1 of the alphabetically sorted params, concatenated with the API
+     * secret. Not an HMAC — Cloudinary hashes `<query string><secret>`.
+     *
+     * Every param sent in the request body must be signed here, except `file`,
+     * `api_key`, `resource_type` and `signature`, which Cloudinary excludes.
+     * Adding a body param without adding it here yields 401 Invalid Signature.
+     *
+     * Values are joined raw and MUST NOT be URL-encoded: Cloudinary signs
+     * `public_id=products/photo`, not `public_id=products%2Fphoto`, so
+     * http_build_query() here breaks any value containing a slash.
+     *
+     * @param  array<string, string>  $params
+     */
+    private function signParams(array $params, string $apiSecret): string
+    {
+        ksort($params);
+
+        $stringToSign = collect($params)
+            ->map(fn (string $value, string $key): string => $key.'='.$value)
+            ->implode('&');
+
+        return sha1($stringToSign.$apiSecret);
+    }
+
+    /**
      * Remove the specified resource from storage.
      */
     public function destroy(Request $request): JsonResponse
@@ -127,7 +153,10 @@ class MediaController extends BaseAdminController
 
         try {
             $timestamp = (string) time();
-            $signature = hash_hmac('sha256', http_build_query(['public_id' => $path, 'timestamp' => $timestamp], '', '&'), $apiSecret);
+            $signature = $this->signParams([
+                'public_id' => $path,
+                'timestamp' => $timestamp,
+            ], $apiSecret);
 
             $response = Http::asForm()->timeout(30)->post("https://api.cloudinary.com/v1_1/{$cloudName}/image/destroy", [
                 'public_id' => $path,
