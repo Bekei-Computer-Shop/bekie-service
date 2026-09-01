@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
+use App\Http\Requests\Api\Admin\V1\ResetAdministratorPasswordRequest;
 use App\Http\Requests\Api\Admin\V1\StoreAdministratorRequest;
 use App\Http\Requests\Api\Admin\V1\UpdateAdministratorRequest;
 use App\Http\Resources\Api\Admin\V1\UserResource;
+use App\Models\ApiToken;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
@@ -62,6 +64,28 @@ class AdministratorController extends BaseAdminController
         }
 
         return $this->success(new UserResource($user));
+    }
+
+    public function resetPassword(ResetAdministratorPasswordRequest $request, User $user): JsonResponse
+    {
+        $actor = $request->user() ?? $request->attributes->get('authenticated_user');
+
+        if (! $actor instanceof User || ! $actor->isSuperAdmin()) {
+            return $this->error('Only a super-admin can reset an administrator password.', 403);
+        }
+
+        if (! $user->is_admin || ! $user->is_active || $user->is_banned) {
+            return $this->error('The target administrator account is not active.', 422);
+        }
+
+        $user->update(['password' => Hash::make($request->validated('password'))]);
+
+        ApiToken::query()
+            ->where('user_id', $user->id)
+            ->where('scope', 'admin')
+            ->update(['revoked' => true]);
+
+        return $this->success(message: 'Administrator password reset successfully.');
     }
 
     public function destroy(User $user): JsonResponse

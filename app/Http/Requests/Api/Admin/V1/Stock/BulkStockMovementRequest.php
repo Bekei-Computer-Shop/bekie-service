@@ -4,6 +4,7 @@ namespace App\Http\Requests\Api\Admin\V1\Stock;
 
 use App\Models\Product;
 use App\Models\ProductVariant;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class BulkStockMovementRequest extends FormRequest
@@ -37,14 +38,14 @@ class BulkStockMovementRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
             'items' => ['required', 'array', 'min:1', 'max:100'],
-            'items.*.stockable_type' => ['required', 'string', 'in:' . Product::class . ',' . ProductVariant::class],
-            'items.*.stockable_id' => ['required', 'integer'],
+            'items.*.stockable_type' => ['required', 'string', 'in:'.Product::class.','.ProductVariant::class],
+            'items.*.stockable_id' => ['required', 'string', 'max:36'],
             'items.*.movement_type' => ['required', 'string', 'in:adjust,reconcile,stock_in,stock_out,transfer'],
             'items.*.quantity' => ['required', 'integer'],
             'items.*.reason' => ['nullable', 'string', 'max:255'],
@@ -59,30 +60,37 @@ class BulkStockMovementRequest extends FormRequest
     {
         $validator->after(function ($validator) {
             $items = $this->input('items', []);
-            if (!is_array($items)) return;
+            if (! is_array($items)) {
+                return;
+            }
 
             foreach ($items as $index => $item) {
-                if (!isset($item['stockable_type']) || !isset($item['stockable_id'])) continue;
+                if (! isset($item['stockable_type']) || ! isset($item['stockable_id'])) {
+                    continue;
+                }
 
                 $class = $item['stockable_type'];
-                if (!class_exists($class)) continue;
+                if (! class_exists($class)) {
+                    continue;
+                }
 
                 $stockable = $class::find($item['stockable_id']);
-                if (!$stockable) {
-                    $validator->errors()->add("items.{$index}.stockable_id", "The selected stockable item does not exist.");
+                if (! $stockable) {
+                    $validator->errors()->add("items.{$index}.stockable_id", 'The selected stockable item does not exist.');
+
                     continue;
                 }
 
                 if (isset($item['movement_type']) && isset($item['quantity'])) {
                     $qty = (int) $item['quantity'];
                     if ($item['movement_type'] === 'adjust' && $qty === 0) {
-                        $validator->errors()->add("items.{$index}.quantity", "Quantity cannot be zero for adjust.");
+                        $validator->errors()->add("items.{$index}.quantity", 'Quantity cannot be zero for adjust.');
                     }
                     if ($item['movement_type'] === 'reconcile' && $qty < 0) {
-                        $validator->errors()->add("items.{$index}.quantity", "Quantity must be at least 0 for reconcile.");
+                        $validator->errors()->add("items.{$index}.quantity", 'Quantity must be at least 0 for reconcile.');
                     }
                     if (in_array($item['movement_type'], ['stock_in', 'stock_out', 'transfer']) && $qty < 1) {
-                        $validator->errors()->add("items.{$index}.quantity", "Quantity must be at least 1 for this movement type.");
+                        $validator->errors()->add("items.{$index}.quantity", 'Quantity must be at least 1 for this movement type.');
                     }
 
                     $current = (int) $stockable->stock_quantity;

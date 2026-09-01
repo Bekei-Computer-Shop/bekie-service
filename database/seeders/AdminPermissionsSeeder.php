@@ -103,6 +103,7 @@ class AdminPermissionsSeeder extends Seeder
         'administrators.create',
         'administrators.update',
         'administrators.delete',
+        'administrators.password-reset',
 
         // Banners / slides
         'banners.view',
@@ -154,7 +155,7 @@ class AdminPermissionsSeeder extends Seeder
             'content.view', 'content.create', 'content.update', 'content.delete',
             'customers.view', 'customers.create', 'customers.update', 'customers.delete',
             'orders.view', 'orders.create', 'orders.update', 'orders.delete',
-            'administrators.view', 'administrators.create', 'administrators.update', 'administrators.delete',
+            'administrators.view', 'administrators.create', 'administrators.update', 'administrators.delete', 'administrators.password-reset',
             'banners.view', 'banners.create', 'banners.update', 'banners.delete',
             'logs.view',
             'media.view', 'media.create', 'media.delete',

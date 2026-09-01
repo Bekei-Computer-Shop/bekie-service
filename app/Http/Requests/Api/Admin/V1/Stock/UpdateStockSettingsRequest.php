@@ -37,7 +37,7 @@ class UpdateStockSettingsRequest extends FormRequest
     {
         return [
             'stockable_type' => ['required', Rule::in([Product::class, ProductVariant::class])],
-            'stockable_id' => ['required', 'integer'],
+            'stockable_id' => ['required', 'string', 'max:36'],
             'min_stock_alert' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:1000000000'],
             'max_stock_level' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:1000000000'],
             'reorder_point' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:1000000000'],

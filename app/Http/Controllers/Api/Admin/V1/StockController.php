@@ -238,7 +238,7 @@ class StockController extends BaseAdminController
             }
 
             $query->where('stockable_type', $stockableType)
-                ->where('stockable_id', (int) $request->input('stockable_id'));
+                ->where('stockable_id', (string) $request->input('stockable_id'));
         }
 
         if ($request->filled('movement_type')) {
@@ -263,7 +263,7 @@ class StockController extends BaseAdminController
     #[Response(status: 201, description: 'Stock movement created successfully.')]
     public function store(StockMovementRequest $request): JsonResponse
     {
-        $stockable = $this->resolveStockable($request->input('stockable_type'), (int) $request->input('stockable_id'));
+        $stockable = $this->resolveStockable($request->input('stockable_type'), (string) $request->input('stockable_id'));
         $movementType = $request->input('movement_type');
         $quantity = (int) $request->input('quantity');
         $reason = $request->input('reason');
@@ -288,7 +288,7 @@ class StockController extends BaseAdminController
         }
     }
 
-    protected function resolveStockable(string $stockableType, int $stockableId): Product|ProductVariant
+    protected function resolveStockable(string $stockableType, string $stockableId): Product|ProductVariant
     {
         $normalizedType = match (strtolower(trim($stockableType))) {
             'product', 'app\\models\\product' => Product::class,
@@ -337,7 +337,7 @@ class StockController extends BaseAdminController
 
         $prepared = [];
         foreach ($items as $item) {
-            $stockable = $this->resolveStockable($item['stockable_type'], (int) $item['stockable_id']);
+            $stockable = $this->resolveStockable($item['stockable_type'], (string) $item['stockable_id']);
             $prepared[] = [
                 'stockable' => $stockable,
                 'movement_type' => $item['movement_type'],
@@ -428,7 +428,7 @@ class StockController extends BaseAdminController
             $query->whereDate('created_at', '<=', $request->input('to'));
         }
         if ($request->filled('product_id')) {
-            $query->where('stockable_type', Product::class)->where('stockable_id', $request->integer('product_id'));
+            $query->where('stockable_type', Product::class)->where('stockable_id', (string) $request->input('product_id'));
         }
 
         $filename = 'stock-movements-'.now()->format('Y-m-d').'.csv';

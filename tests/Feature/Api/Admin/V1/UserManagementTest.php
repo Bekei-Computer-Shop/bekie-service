@@ -205,3 +205,37 @@ test('admin cannot disable their own is_admin flag', function (): void {
     $response->assertForbidden();
     expect($admin->fresh()->is_admin)->toBeTrue();
 });
+
+test('super-admin can reset an administrator password and revoke their tokens', function (): void {
+    [$admin, $token] = adminAuthedUser();
+    $target = User::factory()->superAdmin()->create(['password' => 'old-password']);
+    $targetToken = (new AdminAuthService)->createAdminToken($target);
+
+    $response = $this->withHeaders(authHeader($token))
+        ->postJson('/api/v1/admin/administrators/'.$target->id.'/reset-password', [
+            'password' => 'New-strong-password-123!',
+            'password_confirmation' => 'New-strong-password-123!',
+        ]);
+
+    $response->assertOk();
+    expect(Hash::check('New-strong-password-123!', $target->fresh()->password))->toBeTrue();
+    expect(ApiToken::where('user_id', $target->id)->where('scope', 'admin')->where('revoked', false)->exists())->toBeFalse();
+    expect($targetToken['access_token'])->toBeString();
+});
+
+test('non-super-admin cannot reset an administrator password', function (): void {
+    $this->seed(AdminPermissionsSeeder::class);
+    $manager = User::factory()->create(['is_admin' => true, 'role' => 'manager']);
+    $manager->assignRole('manager');
+    $target = User::factory()->superAdmin()->create();
+    $request = Request::create('/admin/auth/login', 'POST');
+    app()->instance('request', $request);
+    $token = (new AdminAuthService)->createAdminToken($manager)['access_token'];
+
+    $this->withHeaders(authHeader($token))
+        ->postJson('/api/v1/admin/administrators/'.$target->id.'/reset-password', [
+            'password' => 'New-strong-password-123!',
+            'password_confirmation' => 'New-strong-password-123!',
+        ])
+        ->assertForbidden();
+});

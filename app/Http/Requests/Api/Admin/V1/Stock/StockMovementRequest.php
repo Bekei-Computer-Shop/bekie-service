@@ -46,7 +46,7 @@ class StockMovementRequest extends FormRequest
 
         return [
             'stockable_type' => ['required', Rule::in([Product::class, ProductVariant::class])],
-            'stockable_id' => ['required', 'integer'],
+            'stockable_id' => ['required', 'string', 'max:36'],
             'movement_type' => ['required', Rule::in(['adjust', 'reconcile', 'stock_in', 'stock_out', 'transfer'])],
             'quantity' => $quantityRules,
             'reason' => ['nullable', 'string', 'max:255'],
@@ -83,6 +83,7 @@ class StockMovementRequest extends FormRequest
 
             if (! $stockable) {
                 $validator->errors()->add('stockable_id', 'The selected stock item does not exist.');
+
                 return;
             }
 

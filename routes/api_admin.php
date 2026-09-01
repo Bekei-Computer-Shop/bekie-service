@@ -163,6 +163,9 @@ Route::prefix('admin')->group(function () {
         Route::middleware('permission:administrators.update')->group(function () {
             Route::match(['put', 'patch'], 'administrators/{user}', [AdministratorController::class, 'update']);
         });
+        Route::middleware('permission:administrators.password-reset')->group(function () {
+            Route::post('administrators/{user}/reset-password', [AdministratorController::class, 'resetPassword']);
+        });
         Route::middleware('permission:administrators.delete')->group(function () {
             Route::delete('administrators/{user}', [AdministratorController::class, 'destroy']);
         });
