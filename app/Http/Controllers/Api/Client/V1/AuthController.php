@@ -7,6 +7,7 @@ use App\Http\Requests\Api\Client\V1\RefreshTokenRequest;
 use App\Http\Requests\Api\Client\V1\RegisterRequest;
 use App\Models\ApiToken;
 use App\Models\User;
+use App\Services\AdminNotificationService;
 use App\Services\AuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +46,8 @@ class AuthController extends BaseApiController
 
             return $user;
         });
+
+        app(AdminNotificationService::class)->newCustomer($user);
 
         $tokenPair = $this->authService->createToken($user, $request);
 

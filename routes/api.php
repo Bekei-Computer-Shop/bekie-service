@@ -13,8 +13,15 @@ use App\Http\Controllers\Api\Client\V1\ShippingMethodController;
 use App\Http\Controllers\Api\Client\V1\SlideController;
 use App\Http\Controllers\Api\Client\V1\WishlistController;
 use App\Http\Controllers\HealthController;
+use App\Http\Middleware\AuthenticateAdminApiToken;
 use App\Http\Middleware\AuthenticateApiToken;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
+
+Broadcast::routes([
+    'prefix' => 'v1',
+    'middleware' => [AuthenticateAdminApiToken::class],
+]);
 
 // Public health check. Lives outside the /v1 surface so external monitors
 // (Render, uptime robots) can hit a stable, unversioned URL.

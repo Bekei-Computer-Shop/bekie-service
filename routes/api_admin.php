@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Admin\V1\CustomerController;
 use App\Http\Controllers\Api\Admin\V1\DashboardController;
 use App\Http\Controllers\Api\Admin\V1\LogController;
 use App\Http\Controllers\Api\Admin\V1\MediaController;
+use App\Http\Controllers\Api\Admin\V1\NotificationController;
 use App\Http\Controllers\Api\Admin\V1\OrderController;
 use App\Http\Controllers\Api\Admin\V1\PermissionController;
 use App\Http\Controllers\Api\Admin\V1\ProductController;
@@ -36,6 +37,10 @@ Route::prefix('admin')->group(function () {
         Route::post('auth/logout', [AuthController::class, 'logout'])->middleware('permission:admin.auth.logout');
         Route::post('auth/change-password', [AuthController::class, 'changePassword'])
             ->middleware(['permission:admin.profile.update', 'throttle:auth-admin-sensitive']);
+
+        Route::get('notifications', [NotificationController::class, 'index']);
+        Route::post('notifications/{notification}/read', [NotificationController::class, 'read']);
+        Route::post('notifications/read-all', [NotificationController::class, 'readAll']);
 
         // Dashboard — the portal's landing page, so every admin role is granted
         // dashboard.view rather than it being scoped to a single capability.

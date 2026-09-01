@@ -225,7 +225,7 @@ class StockService
                     'in_stock' => $newQuantity > 0,
                 ])->save();
 
-                return $stockable->stockMovements()->create([
+                $movement = $stockable->stockMovements()->create([
                     'movement_type' => $movementType,
                     'quantity' => $quantity,
                     'previous_quantity' => $previousQuantity,
@@ -237,6 +237,8 @@ class StockService
                     'destination_location' => $destinationLocation,
                     'created_by_id' => auth()->check() ? auth()->id() : null,
                 ]);
+
+                return $movement;
             });
         }
 

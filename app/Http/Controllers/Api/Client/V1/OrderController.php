@@ -11,6 +11,7 @@ use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ShippingMethod;
+use App\Services\AdminNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -99,7 +100,14 @@ class OrderController extends BaseApiController
             ]);
 
             if ($cartItem->product?->track_inventory) {
+                $previousQuantity = (int) $cartItem->product->stock_quantity;
                 $cartItem->product->decrement('stock_quantity', $cartItem->quantity);
+                $newQuantity = $previousQuantity - (int) $cartItem->quantity;
+                app(AdminNotificationService::class)->inventoryStatus(
+                    $cartItem->product->fresh(),
+                    $previousQuantity,
+                    $newQuantity,
+                );
             }
 
             if ($cartItem->variant?->track_inventory) {
@@ -121,6 +129,8 @@ class OrderController extends BaseApiController
         }
 
         $cart->update(['status' => 'converted']);
+
+        app(AdminNotificationService::class)->newOrder($order, 'app');
 
         return $this->created(new OrderResource($order->load('items')));
     }

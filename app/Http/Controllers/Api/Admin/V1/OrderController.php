@@ -11,6 +11,7 @@ use App\Http\Resources\Api\Admin\V1\OrderResource;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\AdminNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -201,6 +202,8 @@ class OrderController extends BaseAdminController
 
             return $order;
         });
+
+        app(AdminNotificationService::class)->newOrder($order, 'web');
 
         return $this->created(new OrderResource($order->fresh(['user', 'items.product', 'coupon'])));
     }

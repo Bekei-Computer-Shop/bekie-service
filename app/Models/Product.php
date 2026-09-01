@@ -3,11 +3,13 @@
 namespace App\Models;
 
 use App\Models\Concerns\TracksInventory;
+use App\Services\AdminNotificationService;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Product extends Model
 {
@@ -154,6 +156,17 @@ class Product extends Model
     {
         static::saving(function (self $product) {
             $product->version++;
+        });
+
+        static::saved(function (self $product): void {
+            if (! $product->wasChanged('stock_quantity') || ! $product->track_inventory) {
+                return;
+            }
+
+            $previousQuantity = (int) $product->getOriginal('stock_quantity');
+            $newQuantity = (int) $product->stock_quantity;
+            DB::afterCommit(fn () => app(AdminNotificationService::class)
+                ->inventoryStatus($product, $previousQuantity, $newQuantity));
         });
     }
 
