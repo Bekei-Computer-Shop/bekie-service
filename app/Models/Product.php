@@ -2,7 +2,8 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\RoutesByUuid;
+use App\Models\Concerns\TracksInventory;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -10,7 +11,41 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-    use HasFactory, RoutesByUuid, SoftDeletes;
+    use HasFactory, HasUuids, SoftDeletes, TracksInventory;
+
+    /**
+     * The public, auto-generated UUID is the real primary key now — the
+     * integer `id` column was removed by the
+     * `2026_08_31_000002_make_products_uuid_primary_key` migration. `uuid`
+     * is filled automatically by `HasUuids` on create (and stays unique via the
+     * column's unique index / primary key at the database level).
+     */
+    protected $primaryKey = 'uuid';
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * Column(s) that receive an auto-generated UUID on create (HasUuids).
+     *
+     * @return list<string>
+     */
+    public function uniqueIds(): array
+    {
+        return ['uuid'];
+    }
+
+    /**
+     * Backward-compatible `->id` reader. The `id` column no longer exists,
+     * but a lot of code (resources, controllers, seeders) still reads
+     * `$product->id` — it now yields the UUID via this accessor, so those
+     * call sites keep working unchanged.
+     */
+    public function getIdAttribute(): string
+    {
+        return (string) $this->uuid;
+    }
 
     protected $fillable = [
         'uuid',
@@ -26,7 +61,11 @@ class Product extends Model
         'sale_price',
         'cost_price',
         'stock_quantity',
+        'reserved_stock',
+        'damaged_stock',
+        'incoming_stock',
         'min_stock_alert',
+        'max_stock_level',
         'reorder_point',
         'track_inventory',
         'in_stock',
@@ -65,7 +104,10 @@ class Product extends Model
 
     public function variants()
     {
-        return $this->hasMany(ProductVariant::class);
+        // The child column is `product_id` (holding a UUID since the products
+        // uuid-key migration); Laravel would otherwise derive `product_uuid`
+        // from this model's key name.
+        return $this->hasMany(ProductVariant::class, 'product_id');
     }
 
     /**
@@ -78,14 +120,18 @@ class Product extends Model
      */
     public function images()
     {
-        return $this->hasMany(ProductImage::class)
+        // Explicit foreign key: the default would derive `product_uuid`
+        // from this model's key name.
+        return $this->hasMany(ProductImage::class, 'product_id')
             ->orderBy('sort_order')
             ->orderBy('id');
     }
 
     public function stockMovements()
     {
-        return $this->morphMany(StockMovement::class, 'stockable');
+        // Explicit morph keys: the defaults would derive `stockable_uuid`
+        // from this model's key name.
+        return $this->morphMany(StockMovement::class, 'stockable', 'stockable_type', 'stockable_id');
     }
 
     /**
@@ -98,7 +144,9 @@ class Product extends Model
      */
     public function promotions(): BelongsToMany
     {
-        return $this->belongsToMany(Coupon::class, 'coupon_product')
+        // Explicit pivot keys: the foreign pivot key would otherwise be
+        // derived as `product_uuid` from this model's key name.
+        return $this->belongsToMany(Coupon::class, 'coupon_product', 'product_id', 'coupon_id')
             ->whereNull('coupons.deleted_at');
     }
 

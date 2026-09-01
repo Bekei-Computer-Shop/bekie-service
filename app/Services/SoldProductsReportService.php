@@ -19,18 +19,19 @@ class SoldProductsReportService
 
         $periodExpression = $this->periodExpression($groupBy, DB::connection()->getDriverName());
 
+        // `order_items.product_id` holds the product ID (bigint reference to products.id).
         $rows = DB::table('order_items')
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
             ->join('products', 'order_items.product_id', '=', 'products.id')
             ->whereBetween('orders.created_at', [$startDate->toDateTimeString(), $endDate->endOfDay()->toDateTimeString()])
             ->whereNotIn('orders.status', ['rejected', 'cancelled'])
             ->selectRaw($periodExpression.' as period')
-            ->selectRaw('products.id as product_id')
+            ->selectRaw('COALESCE(CAST(products.uuid AS text), CAST(products.id AS text)) as product_id')
             ->selectRaw('products.name as product_name')
             ->selectRaw('SUM(order_items.quantity) as quantity_sold')
             ->selectRaw('SUM(order_items.total) as revenue')
             ->groupByRaw($periodExpression)
-            ->groupBy('products.id', 'products.name')
+            ->groupBy('products.id', 'products.uuid', 'products.name')
             ->orderBy('period')
             ->orderBy('product_name')
             ->get();
@@ -74,9 +75,9 @@ class SoldProductsReportService
             ->leftJoin('categories', 'products.category_id', '=', 'categories.id')
             ->whereBetween('orders.created_at', [$startDate->toDateTimeString(), $endDate->endOfDay()->toDateTimeString()])
             ->whereNotIn('orders.status', ['rejected', 'cancelled'])
-            ->selectRaw('products.id as product_id, products.name as product_name, products.sku as sku, categories.name as category_name')
+            ->selectRaw('COALESCE(CAST(products.uuid AS text), CAST(products.id AS text)) as product_id, products.name as product_name, products.sku as sku, categories.name as category_name')
             ->selectRaw('SUM(order_items.quantity) as quantity_sold, SUM(order_items.total) as revenue')
-            ->groupBy('products.id', 'products.name', 'products.sku', 'categories.name')
+            ->groupBy('products.id', 'products.uuid', 'products.name', 'products.sku', 'categories.name')
             ->orderByDesc('quantity_sold')
             ->get();
 
@@ -114,11 +115,11 @@ class SoldProductsReportService
                 default => "to_char(orders.created_at, 'YYYY-MM-DD')",
             },
             'mysql' => match ($groupBy) {
-                '%Y-%m-%d' => "DATE(orders.created_at)",
+                '%Y-%m-%d' => 'DATE(orders.created_at)',
                 '%Y-%m' => "DATE_FORMAT(orders.created_at, '%Y-%m')",
                 '%x-%v' => "DATE_FORMAT(orders.created_at, '%x-%v')",
                 '%Y' => "DATE_FORMAT(orders.created_at, '%Y')",
-                default => "DATE(orders.created_at)",
+                default => 'DATE(orders.created_at)',
             },
             'sqlite' => match ($groupBy) {
                 '%Y-%m-%d' => "strftime('%Y-%m-%d', orders.created_at)",
@@ -128,11 +129,11 @@ class SoldProductsReportService
                 default => "strftime('%Y-%m-%d', orders.created_at)",
             },
             default => match ($groupBy) {
-                '%Y-%m-%d' => "DATE(orders.created_at)",
+                '%Y-%m-%d' => 'DATE(orders.created_at)',
                 '%Y-%m' => "DATE_FORMAT(orders.created_at, '%Y-%m')",
                 '%x-%v' => "DATE_FORMAT(orders.created_at, '%x-%v')",
                 '%Y' => "DATE_FORMAT(orders.created_at, '%Y')",
-                default => "DATE(orders.created_at)",
+                default => 'DATE(orders.created_at)',
             },
         };
     }
@@ -146,24 +147,28 @@ class SoldProductsReportService
         if ($preset === 'daily') {
             $startDate = Carbon::parse($dateFrom ?? now()->subDays(6)->toDateString());
             $endDate = Carbon::parse($dateTo ?? now()->toDateString());
+
             return [$startDate, $endDate, '%Y-%m-%d', 'Y-m-d'];
         }
 
         if ($preset === 'weekly') {
             $startDate = Carbon::parse($dateFrom ?? now()->subWeeks(4)->startOfWeek()->toDateString());
             $endDate = Carbon::parse($dateTo ?? now()->endOfWeek()->toDateString());
+
             return [$startDate, $endDate, '%x-%v', 'Y-W'];
         }
 
         if ($preset === 'monthly') {
             $startDate = Carbon::parse($dateFrom ?? now()->subMonths(6)->startOfMonth()->toDateString());
             $endDate = Carbon::parse($dateTo ?? now()->endOfMonth()->toDateString());
+
             return [$startDate, $endDate, '%Y-%m', 'Y-m'];
         }
 
         if ($preset === 'yearly') {
             $startDate = Carbon::parse($dateFrom ?? now()->subYears(2)->startOfYear()->toDateString());
             $endDate = Carbon::parse($dateTo ?? now()->endOfYear()->toDateString());
+
             return [$startDate, $endDate, '%Y', 'Y'];
         }
 

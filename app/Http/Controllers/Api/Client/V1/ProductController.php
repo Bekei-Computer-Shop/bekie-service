@@ -41,7 +41,20 @@ class ProductController extends BaseApiController
 
     public function show(Product $product)
     {
-        $product->load(['category', 'brand', 'variants']);
+        // Unpublished products are not part of the storefront catalog.
+        abort_unless($product->is_active, 404);
+
+        $product->load([
+            'category',
+            'brand',
+            // The storefront gallery is assembled from the active images, in
+            // the display order (`sort_order`, then id) the admin configured.
+            'images' => fn ($query) => $query->where('is_active', true),
+            // Only variants shoppers can actually buy.
+            'variants' => fn ($query) => $query->where('is_active', true),
+        ]);
+
+        $product->increment('views_count');
 
         return $this->success(new ProductResource($product));
     }
