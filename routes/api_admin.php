@@ -63,7 +63,6 @@ Route::prefix('admin')->group(function () {
         Route::apiResource('products', ProductController::class)->only('destroy')->middleware('permission:products.delete');
         Route::patch('products/{product}/status', [ProductController::class, 'changeStatus'])->middleware('permission:products.update');
 
-        // Bulk Actions (Example of REST extension)
         Route::prefix('products')->group(function () {
             Route::post('bulk-status', [ProductController::class, 'bulkUpdateStatus'])->middleware('permission:products.update');
             Route::post('bulk-delete', [ProductController::class, 'bulkDestroy'])->middleware('permission:products.delete');

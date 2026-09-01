@@ -62,6 +62,15 @@ class AdminPermissionsSeeder extends Seeder
         'products.update',
         'products.delete',
 
+        // Media
+        'media.view',
+        'media.create',
+        'media.delete',
+
+        // Stock
+        'stock.view',
+        'stock.update',
+
         // Promotions
         'promotions.view',
         'promotions.create',
@@ -139,6 +148,8 @@ class AdminPermissionsSeeder extends Seeder
             'categories.view', 'categories.create', 'categories.update', 'categories.delete',
             'brands.view', 'brands.create', 'brands.update', 'brands.delete',
             'products.view', 'products.create', 'products.update', 'products.delete',
+            'media.view', 'media.create', 'media.delete',
+            'stock.view', 'stock.update',
             'promotions.view', 'promotions.create', 'promotions.update', 'promotions.delete',
             'content.view', 'content.create', 'content.update', 'content.delete',
             'customers.view', 'customers.create', 'customers.update', 'customers.delete',

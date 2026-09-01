@@ -53,6 +53,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('credentials', function (Request $request): Limit {
+            $identifier = strtolower((string) $request->input('email', $request->ip()));
+
+            return Limit::perMinute(5)->by($identifier.'|'.$request->ip());
+        });
+
         $policies = [
             User::class => AdminResourcePolicy::class,
             Order::class => AdminResourcePolicy::class,

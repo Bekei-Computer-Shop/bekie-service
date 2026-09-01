@@ -20,7 +20,9 @@ class CouponController extends BaseApiController
             return $this->error('Coupon code is invalid or expired.', 404);
         }
 
-        $cart = Cart::find($request->cart_id);
+        $cart = Cart::whereKey($request->cart_id)
+            ->where('user_id', $request->user()->id)
+            ->first();
 
         if (! $cart) {
             return $this->error('Cart not found.', 404);
