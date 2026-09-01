@@ -11,10 +11,29 @@ class Coupon extends Model
 {
     use SoftDeletes;
 
+    /**
+     * Campaign kinds the admin promotion form offers.
+     *
+     * Distinct from `type`, which stays ('fixed'|'percentage') and drives
+     * calculateDiscount(). A kind says what the campaign IS; the type says how
+     * its money is worked out. A null kind is an ordinary discount.
+     *
+     * Note that nothing in checkout acts on these yet: a 'free_shipping' coupon
+     * still discounts the subtotal by its type and value like any other.
+     */
+    public const KINDS = [
+        'flash_sale',
+        'bogo',
+        'free_shipping',
+        'bundle',
+        'free_gift',
+    ];
+
     protected $fillable = [
         'name',
         'code',
         'type',
+        'kind',
         'value',
         'usage_limit',
         'used_count',

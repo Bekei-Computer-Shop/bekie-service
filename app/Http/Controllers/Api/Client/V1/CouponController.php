@@ -32,6 +32,14 @@ class CouponController extends BaseApiController
 
         $amount = $coupon->calculateDiscount($cart->subtotal);
 
+        // Persist the coupon on the cart so checkout (OrderController@store) can
+        // stamp it onto the order and record the usage. Without this the apply
+        // call was only ever a preview.
+        $cart->update([
+            'coupon_code' => $coupon->code,
+            'discount_total' => $amount,
+        ]);
+
         return $this->success([
             'coupon' => $coupon->code,
             'discount_amount' => $amount,

@@ -27,3 +27,5 @@ Thumbs.db
 .agents
 .neon
 skills-lock.json
+*.drawio
+*.mmd

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\Admin\V1;
 
+use App\Models\Coupon;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StorePromotionRequest extends FormRequest
 {
@@ -19,6 +21,8 @@ class StorePromotionRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:50', 'unique:coupons,code'],
             'type' => ['required', 'in:percentage,fixed'],
+            // The campaign label. Kept off `type` on purpose — see Coupon::KINDS.
+            'kind' => ['sometimes', 'nullable', Rule::in(Coupon::KINDS)],
             'value' => ['required', 'numeric', 'min:0'],
             'min_order_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'starts_at' => ['required', 'date'],

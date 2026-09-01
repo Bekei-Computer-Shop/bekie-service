@@ -53,7 +53,7 @@ class OrderController extends BaseAdminController
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')));
 
         $total = (clone $query)->count();
-        $items = $query->with(['user', 'items.product'])
+        $items = $query->with(['user', 'items.product', 'coupon'])
             ->orderBy($sort, $direction)
             ->skip(($page - 1) * $perPage)
             ->take($perPage)
@@ -123,7 +123,7 @@ class OrderController extends BaseAdminController
 
     public function show(Order $order): JsonResponse
     {
-        $order->load(['user', 'items.product']);
+        $order->load(['user.defaultAddress', 'items.product', 'coupon']);
 
         return $this->success(new OrderResource($order));
     }
@@ -202,7 +202,7 @@ class OrderController extends BaseAdminController
             return $order;
         });
 
-        return $this->created(new OrderResource($order->fresh(['user', 'items.product'])));
+        return $this->created(new OrderResource($order->fresh(['user', 'items.product', 'coupon'])));
     }
 
     public function update(UpdateOrderRequest $request, Order $order): JsonResponse
@@ -222,7 +222,7 @@ class OrderController extends BaseAdminController
 
         $order->update($validated);
 
-        return $this->success(new OrderResource($order->fresh(['user', 'items.product'])));
+        return $this->success(new OrderResource($order->fresh(['user', 'items.product', 'coupon'])));
     }
 
     public function destroy(Order $order): JsonResponse
@@ -242,7 +242,7 @@ class OrderController extends BaseAdminController
     {
         $order->update(['status' => 'processing']);
 
-        return $this->success(new OrderResource($order->fresh(['user', 'items.product'])));
+        return $this->success(new OrderResource($order->fresh(['user', 'items.product', 'coupon'])));
     }
 
     /**
@@ -252,6 +252,6 @@ class OrderController extends BaseAdminController
     {
         $order->update(['status' => 'cancelled']);
 
-        return $this->success(new OrderResource($order->fresh(['user', 'items.product'])));
+        return $this->success(new OrderResource($order->fresh(['user', 'items.product', 'coupon'])));
     }
 }

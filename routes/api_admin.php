@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Admin\V1\BrandController;
 use App\Http\Controllers\Api\Admin\V1\CategoryController;
 use App\Http\Controllers\Api\Admin\V1\ContentController;
 use App\Http\Controllers\Api\Admin\V1\CustomerController;
+use App\Http\Controllers\Api\Admin\V1\DashboardController;
 use App\Http\Controllers\Api\Admin\V1\LogController;
 use App\Http\Controllers\Api\Admin\V1\MediaController;
 use App\Http\Controllers\Api\Admin\V1\OrderController;
@@ -35,6 +36,10 @@ Route::prefix('admin')->group(function () {
         Route::post('auth/logout', [AuthController::class, 'logout'])->middleware('permission:admin.auth.logout');
         Route::post('auth/change-password', [AuthController::class, 'changePassword'])
             ->middleware(['permission:admin.profile.update', 'throttle:auth-admin-sensitive']);
+
+        // Dashboard — the portal's landing page, so every admin role is granted
+        // dashboard.view rather than it being scoped to a single capability.
+        Route::get('dashboard', [DashboardController::class, 'index'])->middleware('permission:dashboard.view');
 
         // Catalog Management
         Route::apiResource('brands', BrandController::class)->only(['index', 'show'])->middleware('permission:brands.view');

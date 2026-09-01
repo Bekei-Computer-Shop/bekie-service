@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RoutesByUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 
 class Order extends Model
 {
-    use SoftDeletes;
+    use RoutesByUuid, SoftDeletes;
 
     protected $fillable = [
         'uuid',
@@ -17,6 +17,8 @@ class Order extends Model
         'order_number',
         'subtotal',
         'discount_total',
+        'coupon_id',
+        'coupon_code',
         'tax_total',
         'shipping_total',
         'grand_total',
@@ -50,20 +52,6 @@ class Order extends Model
         'refunded_at' => 'datetime',
     ];
 
-    public static function booted(): void
-    {
-        static::creating(function (self $order): void {
-            if (! $order->uuid) {
-                $order->uuid = (string) Str::uuid();
-            }
-        });
-    }
-
-    public function getRouteKeyName(): string
-    {
-        return 'uuid';
-    }
-
     public function items()
     {
         return $this->hasMany(OrderItem::class);
@@ -72,5 +60,19 @@ class Order extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The coupon applied at checkout, when one still exists. `coupon_code` is
+     * the snapshot to trust — this can be null even when a code was used.
+     */
+    public function coupon()
+    {
+        return $this->belongsTo(Coupon::class);
+    }
+
+    public function couponUsages()
+    {
+        return $this->hasMany(CouponUsage::class);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\Admin\V1;
 
+use App\Models\Coupon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -20,6 +21,8 @@ class UpdatePromotionRequest extends FormRequest
             'name' => ['sometimes', 'string', 'max:255'],
             'code' => ['sometimes', 'string', 'max:50', Rule::unique('coupons', 'code')->ignore($this->route('promotion')->id)],
             'type' => ['sometimes', 'in:percentage,fixed'],
+            // The campaign label. Kept off `type` on purpose — see Coupon::KINDS.
+            'kind' => ['sometimes', 'nullable', Rule::in(Coupon::KINDS)],
             'value' => ['sometimes', 'numeric', 'min:0'],
             'min_order_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'starts_at' => ['sometimes', 'date'],
