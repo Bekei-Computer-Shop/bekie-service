@@ -53,6 +53,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $scrambleEnabled = filter_var(env('SCRAMBLE_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
+        config(['scramble.enabled' => $scrambleEnabled]);
+
+        Gate::define('viewApiDocs', function (): bool {
+            if (app()->environment('local')) {
+                return true;
+            }
+
+            return (bool) config('scramble.enabled', false);
+        });
+
         RateLimiter::for('credentials', function (Request $request): Limit {
             $identifier = strtolower((string) $request->input('email', $request->ip()));
 

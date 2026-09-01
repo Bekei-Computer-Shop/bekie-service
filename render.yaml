@@ -147,14 +147,17 @@ services:
 
     # Runs migrations before each deploy. Requires Starter plan or above.
     # On Free, run manually via Render shell: php artisan migrate --force
-    preDeployCommand: php artisan migrate --force
+    preDeployCommand: >
+      php artisan migrate --force &&
+      php artisan db:seed --class=AdminPermissionsSeeder --force &&
+      php artisan db:seed --class=AdminUserSeeder --force
 
     startCommand: >
       php artisan optimize:clear &&
       php artisan config:cache &&
       php artisan route:cache &&
       php artisan view:cache &&
-      php-fpm -F
+      /usr/local/bin/railway-entrypoint apache2-foreground
 
 # Provision the database and Redis in the Render dashboard (or via
 # render.yaml infra blocks). The Starter plan is sufficient for both.
