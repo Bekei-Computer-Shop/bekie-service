@@ -107,8 +107,19 @@ Every environment variable the application reads is listed below. Set the ones m
 
 | Key | Value | Notes |
 |---|---|---|
-| `SCRAMBLE_ENABLED` | `false` | Gated. Flip to `true` in the dashboard when you want `/docs/client` and `/docs/admin` reachable. |
+| `SCRAMBLE_ENABLED` | `true` | Publishes `/docs/client` and `/docs/admin` openly — no auth, so the full admin API surface is readable by anyone with the URL. Set `false` to gate them behind the `viewApiDocs` gate (403 in production). **Leaving this key unset also leaves the docs open**, since `ScrambleDocsAccess` passes through on a `null` value — always set it explicitly. |
 | `API_VERSION` | `1.0.0` | Used in the OpenAPI `info.version` field. |
+
+**`dedoc/scramble` must stay in `composer.json` `require`, not `require-dev`.** The `Dockerfile`
+installs with `--no-dev`, so a dev-only Scramble does not exist in the built image. The
+`class_exists(Scramble::class)` guard in `AppServiceProvider` then skips `configureScramble()`,
+the `/docs/client` and `/docs/admin` routes are never registered, and both 404 — regardless of
+`SCRAMBLE_ENABLED`. This is easy to miss because it works locally, where `APP_ENV=local`
+short-circuits the `viewApiDocs` gate. Regressed once and was fixed on 2026-09-03; if the docs
+start 404ing (rather than 403ing), check this first.
+
+Both surfaces survive the `config:cache` + `route:cache` in `startCommand` — all four Scramble
+routes are captured in the route cache, so no `startCommand` change is needed to serve them.
 
 ### 2.9 Hardening (Required)
 
@@ -259,7 +270,7 @@ Do not promote to production before the staging instance has validated the full 
 2. Hit `/api/v1/...` and `/api/v1/admin/...` — verify the canonical JSON envelope (`{status, message, data}`).
 3. Run a full auth round-trip: `POST /api/v1/admin/auth/login` → token → `GET /api/v1/admin/...` with the bearer token.
 4. Test the media upload at `/api/v1/admin/media` (POST an image, verify it lands in Cloudinary).
-5. Hit `/docs/client` and `/docs/admin` — should return 403 (gated) since `SCRAMBLE_ENABLED=false`. Flip the env var to `true` and confirm the docs render.
+5. Hit `/docs/client` and `/docs/admin` — should return 200 and render the Stoplight UI, since `render.yaml` ships `SCRAMBLE_ENABLED=true`. To confirm the gate still works, set the env var to `false` and re-check: both must return 403. Note that *removing* the variable does **not** gate them — it leaves them open.
 6. Watch the Render logs for any stack traces during a 10-minute soak.
 
 ### 6.3 Production promotion
