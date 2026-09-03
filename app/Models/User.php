@@ -89,8 +89,12 @@ class User extends Authenticatable
         return trim(($this->first_name ?? '').' '.($this->last_name ?? ''));
     }
 
-    public function setNameAttribute(string $value): void
+    public function setNameAttribute(?string $value): void
     {
+        if ($value === null) {
+            return;
+        }
+
         [$firstName, $lastName] = array_pad(explode(' ', $value, 2), 2, '');
 
         $this->attributes['first_name'] = $firstName;
