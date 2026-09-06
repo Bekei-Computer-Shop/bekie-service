@@ -127,7 +127,7 @@ class CartController extends BaseApiController
      * If the product already exists in cart, quantity is updated.
      * Cart totals are automatically recalculated.
      *
-     * @bodyParam product_id integer required The product ID. Example: 1
+     * @bodyParam product_id string required The product UUID. Example: "550e8400-e29b-41d4-a716-446655440000"
      * @bodyParam product_variant_id integer The product variant ID (optional). Example: 1
      * @bodyParam quantity integer required The quantity to add (min: 1). Example: 2
      *

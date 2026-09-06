@@ -72,7 +72,7 @@ class Review extends Model
         return $query->where('is_verified_purchase', true);
     }
 
-    public function scopeForProduct(Builder $query, int $productId): Builder
+    public function scopeForProduct(Builder $query, string $productId): Builder
     {
         return $query->where('product_id', $productId);
     }

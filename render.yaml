@@ -106,9 +106,11 @@ services:
       - key: CLOUDINARY_FOLDER
         value: bekie
 
-      # Scramble — gated in production. Flip SCRAMBLE_ENABLED to "true"
-      # in the dashboard when you want to expose /docs/client and
-      # /docs/admin (still gated by RestrictedDocsAccess middleware).
+      # Scramble API docs. "true" publishes /docs/client and /docs/admin
+      # openly — no auth, so the full admin API surface is readable by
+      # anyone with the URL. Set to "false" to gate them behind the
+      # viewApiDocs gate (returns 403 in production). Note: leaving this
+      # key unset also leaves the docs open, so set it explicitly.
       - key: SCRAMBLE_ENABLED
         value: "true"
 

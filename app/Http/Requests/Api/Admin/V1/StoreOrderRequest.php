@@ -37,7 +37,7 @@ class StoreOrderRequest extends FormRequest
             'transaction_id' => ['sometimes', 'nullable', 'string', 'max:255'],
 
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'exists:products,id'],
+            'items.*.product_id' => ['required', 'uuid', 'exists:products,uuid'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.unit_price' => ['required', 'numeric', 'min:0'],
         ];

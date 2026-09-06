@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.2",
         "barryvdh/laravel-dompdf": "^3.0",
+        "dedoc/scramble": "^0.13.29",
         "laravel/framework": "^12.0",
         "laravel/reverb": "^1.11",
         "laravel/sanctum": "^4.0",
@@ -19,7 +20,6 @@
         "spatie/laravel-permission": "^6.25"
     },
     "require-dev": {
-        "dedoc/scramble": "^0.13.29",
         "fakerphp/faker": "^1.23",
         "laravel/boost": "^2.2",
         "laravel/pail": "^1.2.2",

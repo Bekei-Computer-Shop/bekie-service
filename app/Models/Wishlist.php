@@ -97,14 +97,14 @@ class Wishlist extends Model
         ]);
     }
 
-    public function addItem(int $productId): void
+    public function addItem(string $productId): void
     {
         $this->items()->firstOrCreate([
             'product_id' => $productId,
         ]);
     }
 
-    public function removeItem(int $productId): void
+    public function removeItem(string $productId): void
     {
         $this->items()
             ->where('product_id', $productId)

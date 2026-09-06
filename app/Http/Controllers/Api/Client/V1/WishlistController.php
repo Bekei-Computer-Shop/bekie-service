@@ -118,7 +118,7 @@ class WishlistController extends BaseApiController
      * Adds a product (with optional variant) to the user's wishlist.
      * Prevents duplicate items from being added.
      *
-     * @bodyParam product_id integer required The product ID. Example: 1
+     * @bodyParam product_id string required The product UUID. Example: "550e8400-e29b-41d4-a716-446655440000"
      * @bodyParam product_variant_id integer The product variant ID (optional). Example: 1
      * @bodyParam quantity integer The quantity (default: 1). Example: 1
      * @bodyParam metadata object Additional metadata as JSON. Example: {}
@@ -128,7 +128,7 @@ class WishlistController extends BaseApiController
      *   "data": {
      *     "id": 1,
      *     "wishlist_id": 1,
-     *     "product_id": 5,
+     *     "product_id": "550e8400-e29b-41d4-a716-446655440000",
      *     "product_variant_id": null,
      *     "quantity": 1
      *   }
@@ -188,7 +188,7 @@ class WishlistController extends BaseApiController
      *
      * Checks whether a specific product (with optional variant) is in the user's wishlist.
      *
-     * @queryParam product_id integer required The product ID. Example: 1
+     * @queryParam product_id string required The product UUID. Example: "550e8400-e29b-41d4-a716-446655440000"
      * @queryParam product_variant_id integer The product variant ID (optional). Example: 1
      *
      * @response 200 {
@@ -198,7 +198,7 @@ class WishlistController extends BaseApiController
      *     "item": {
      *       "id": 1,
      *       "wishlist_id": 1,
-     *       "product_id": 5,
+     *       "product_id": "550e8400-e29b-41d4-a716-446655440000",
      *       "product_variant_id": null
      *     }
      *   }
@@ -216,7 +216,7 @@ class WishlistController extends BaseApiController
         }
 
         $validated = $request->validate([
-            'product_id' => 'required|exists:products,id',
+            'product_id' => 'required|uuid|exists:products,uuid',
             'product_variant_id' => 'nullable|exists:product_variants,id',
         ]);
 
