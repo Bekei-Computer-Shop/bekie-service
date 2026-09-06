@@ -39,8 +39,10 @@ class ProductController extends BaseApiController
         return $this->success(ProductResource::collection($products));
     }
 
-    public function show(Product $product)
+    public function show(string $id)
     {
+        $product = Product::query()->findOrFail($id);
+
         // Unpublished products are not part of the storefront catalog.
         abort_unless($product->is_active, 404);
 

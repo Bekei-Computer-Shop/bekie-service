@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Admin\V1\PromotionController;
 use App\Http\Controllers\Api\Admin\V1\ReportController;
 use App\Http\Controllers\Api\Admin\V1\RoleController;
 use App\Http\Controllers\Api\Admin\V1\StockController;
+use App\Http\Controllers\Api\Admin\V1\StoreSettingsController;
 use App\Http\Controllers\Api\Admin\V1\UserController;
 use App\Http\Middleware\AuthenticateAdminApiToken;
 use Illuminate\Support\Facades\Route;
@@ -45,6 +46,9 @@ Route::prefix('admin')->group(function () {
         // Dashboard — the portal's landing page, so every admin role is granted
         // dashboard.view rather than it being scoped to a single capability.
         Route::get('dashboard', [DashboardController::class, 'index'])->middleware('permission:dashboard.view');
+        Route::get('settings/store', [StoreSettingsController::class, 'show'])->middleware('permission:settings.view');
+        Route::patch('settings/store', [StoreSettingsController::class, 'update'])->middleware('permission:settings.update');
+        Route::post('settings/store/payway/check', [StoreSettingsController::class, 'checkPaywayConnection'])->middleware('permission:settings.view');
 
         // Catalog Management
         Route::apiResource('brands', BrandController::class)->only(['index', 'show'])->middleware('permission:brands.view');
@@ -191,6 +195,7 @@ Route::prefix('admin')->group(function () {
             Route::get('activity-logs', [ActivityLogController::class, 'index']);
             Route::get('reports/sold-products', [ReportController::class, 'soldProducts']);
             Route::get('reports/customer-orders', [ReportController::class, 'customerOrders']);
+            Route::get('reports/sales', [ReportController::class, 'sales']);
         });
 
         // ─── User management (admin/staff CRUD + role assignment) ────

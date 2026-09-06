@@ -14,7 +14,7 @@ class StoreOrderRequest extends FormRequest
     }
 
     /** Payment methods the orders table documents. */
-    public const PAYMENT_METHODS = ['cod', 'bank_transfer', 'stripe', 'paypal'];
+    public const PAYMENT_METHODS = ['aba_payway', 'cod'];
 
     /** Payment states the orders table documents. */
     public const PAYMENT_STATUSES = ['pending', 'paid', 'failed', 'refunded'];
@@ -24,7 +24,7 @@ class StoreOrderRequest extends FormRequest
         return [
             'customer_id' => ['required', 'exists:users,id'],
             'notes' => ['sometimes', 'nullable', 'string'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => ['sometimes', 'string', 'in:USD,KHR'],
 
             // Order-level amounts. Line items drive the subtotal; these adjust
             // it into the grand total.

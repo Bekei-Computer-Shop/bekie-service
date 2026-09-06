@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Client\V1\AuthController;
+use App\Http\Controllers\Api\Client\V1\AbaPayWayController;
 use App\Http\Controllers\Api\Client\V1\BrandController;
 use App\Http\Controllers\Api\Client\V1\CartController;
 use App\Http\Controllers\Api\Client\V1\CategoryController;
@@ -50,10 +51,12 @@ Route::prefix('v1')->group(function () {
     Route::get('brands/{brand}', [BrandController::class, 'show']);
 
     Route::get('products', [ProductController::class, 'index']);
-    Route::get('products/{product}', [ProductController::class, 'show']);
+    Route::get('products/{id}', [ProductController::class, 'show']);
     Route::get('products/{product}/variants', [ProductController::class, 'variants']);
 
     Route::get('shipping-methods', [ShippingMethodController::class, 'index']);
+    Route::get('payments/options', [AbaPayWayController::class, 'options']);
+    Route::post('payments/aba/callback', [AbaPayWayController::class, 'callback']);
 
     // Storefront content: homepage carousel slides and live promotions.
     Route::get('slides', [SlideController::class, 'index']);
@@ -85,6 +88,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/', [OrderController::class, 'index']);
             Route::post('/', [OrderController::class, 'store'])->middleware('throttle:client-checkout');
             Route::get('{order}', [OrderController::class, 'show']);
+        });
+
+        Route::middleware('permission:client.orders.manage')->group(function () {
+            Route::post('payments/aba/purchase', [AbaPayWayController::class, 'purchase'])->middleware('throttle:client-checkout');
+            Route::get('payments/aba/{transactionId}', [AbaPayWayController::class, 'check'])->middleware('throttle:client-checkout');
         });
     });
 

@@ -26,7 +26,8 @@ class StoreOrderRequest extends FormRequest
             'state' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:50',
             'country' => 'required_without:address_id|string|max:100',
-            'payment_method' => 'nullable|string|max:50',
+            'payment_method' => 'nullable|in:aba_payway,cod',
+            'currency' => 'nullable|in:USD,KHR',
             'metadata' => 'nullable|array',
         ];
     }

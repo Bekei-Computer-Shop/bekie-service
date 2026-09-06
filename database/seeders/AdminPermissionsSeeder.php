@@ -130,6 +130,10 @@ class AdminPermissionsSeeder extends Seeder
         'admin.profile.update',
         'admin.auth.logout',
 
+        // Store configuration
+        'settings.view',
+        'settings.update',
+
         // Authenticated customer actions
         'client.auth.logout',
         'client.coupons.apply',
@@ -161,6 +165,7 @@ class AdminPermissionsSeeder extends Seeder
             'media.view', 'media.create', 'media.delete',
             'stock.view', 'stock.update',
             'dashboard.view',
+            'settings.view', 'settings.update',
             'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
         ],
         // Scoped to the ten capabilities the requirements name: auth/profile
@@ -171,6 +176,7 @@ class AdminPermissionsSeeder extends Seeder
         // media, so media.delete is deliberately absent.
         'manager' => [
             'dashboard.view',
+            'settings.view', 'settings.update',
             'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
             'orders.view', 'orders.approve',
             'products.view', 'products.create', 'products.update',

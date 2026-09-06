@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\Admin\V1;
 
 use App\Services\CustomerOrdersReportService;
+use App\Services\SalesReportService;
 use App\Services\SoldProductsReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,7 @@ class ReportController extends BaseAdminController
     public function __construct(
         private readonly SoldProductsReportService $soldProductsService,
         private readonly CustomerOrdersReportService $customerOrdersService,
+        private readonly SalesReportService $salesService,
     ) {}
 
     public function soldProducts(Request $request): JsonResponse
@@ -48,5 +50,20 @@ class ReportController extends BaseAdminController
         ]);
 
         return $this->success($payload);
+    }
+
+    public function sales(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'preset' => ['nullable', 'in:daily,weekly,monthly,yearly,custom'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+        ]);
+
+        return $this->success($this->salesService->build([
+            'preset' => $validated['preset'] ?? 'weekly',
+            'date_from' => $validated['date_from'] ?? null,
+            'date_to' => $validated['date_to'] ?? null,
+        ]));
     }
 }

@@ -6261,7 +6261,7 @@
                 }
             }
         },
-        "/v1/products/{product}": {
+        "/v1/products/{id}": {
             "get": {
                 "operationId": "client.v1.product.show",
                 "tags": [
@@ -6269,10 +6269,10 @@
                 ],
                 "parameters": [
                     {
-                        "name": "product",
+                        "name": "id",
                         "in": "path",
                         "required": true,
-                        "description": "The product UUID",
+                        "description": "The product ID",
                         "schema": {
                             "type": "string",
                             "format": "uuid"
@@ -9728,12 +9728,6 @@
                     "id": {
                         "type": "integer"
                     },
-                    "uuid": {
-                        "type": [
-                            "string",
-                            "null"
-                        ]
-                    },
                     "category_id": {
                         "type": [
                             "integer",
@@ -9953,7 +9947,6 @@
                 },
                 "required": [
                     "id",
-                    "uuid",
                     "category_id",
                     "brand_id",
                     "name",
@@ -11359,12 +11352,6 @@
                     "id": {
                         "type": "integer"
                     },
-                    "uuid": {
-                        "type": [
-                            "string",
-                            "null"
-                        ]
-                    },
                     "category_id": {
                         "type": [
                             "integer",
@@ -11506,7 +11493,6 @@
                 },
                 "required": [
                     "id",
-                    "uuid",
                     "category_id",
                     "brand_id",
                     "name",
