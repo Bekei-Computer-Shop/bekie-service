@@ -1,11 +1,12 @@
 <?php
 
-use App\Http\Controllers\Api\Client\V1\AuthController;
 use App\Http\Controllers\Api\Client\V1\AbaPayWayController;
+use App\Http\Controllers\Api\Client\V1\AuthController;
 use App\Http\Controllers\Api\Client\V1\BrandController;
 use App\Http\Controllers\Api\Client\V1\CartController;
 use App\Http\Controllers\Api\Client\V1\CategoryController;
 use App\Http\Controllers\Api\Client\V1\CouponController;
+use App\Http\Controllers\Api\Client\V1\KhqrController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
 use App\Http\Controllers\Api\Client\V1\OrderController;
 use App\Http\Controllers\Api\Client\V1\ProductController;
@@ -55,7 +56,10 @@ Route::prefix('v1')->group(function () {
     Route::get('products/{product}/variants', [ProductController::class, 'variants']);
 
     Route::get('shipping-methods', [ShippingMethodController::class, 'index']);
+
+    // Payment options (public endpoints)
     Route::get('payments/options', [AbaPayWayController::class, 'options']);
+    Route::get('payments/khqr/options', [KhqrController::class, 'options']);
     Route::post('payments/aba/callback', [AbaPayWayController::class, 'callback']);
 
     // Storefront content: homepage carousel slides and live promotions.
@@ -91,8 +95,15 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::middleware('permission:client.orders.manage')->group(function () {
+            // ABA PayWay payment endpoints
             Route::post('payments/aba/purchase', [AbaPayWayController::class, 'purchase'])->middleware('throttle:client-checkout');
             Route::get('payments/aba/{transactionId}', [AbaPayWayController::class, 'check'])->middleware('throttle:client-checkout');
+
+            // KHQR payment endpoints
+            Route::post('payments/khqr/generate', [KhqrController::class, 'generate'])->middleware('throttle:client-checkout');
+            Route::get('payments/khqr/{transactionId}', [KhqrController::class, 'check'])->middleware('throttle:client-checkout');
+            Route::post('payments/khqr/{transactionId}/confirm', [KhqrController::class, 'confirm'])->middleware('throttle:client-checkout');
+            Route::delete('payments/khqr/{transactionId}', [KhqrController::class, 'cancel'])->middleware('throttle:client-checkout');
         });
     });
 

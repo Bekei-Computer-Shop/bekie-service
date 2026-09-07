@@ -6,6 +6,7 @@ namespace App\Services;
 
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -111,6 +112,7 @@ class AbaPayWayService
             ->post(config('services.payway.check_url'), $payload);
 
         $this->throwIfGatewayFailed($response);
+
         return $response->json() ?? [];
     }
 
@@ -152,7 +154,14 @@ class AbaPayWayService
 
     public function verifyCallback(array $payload, ?string $signature): bool
     {
-        if (! $signature || ! config('services.payway.api_key')) return false;
+        if (! $signature || ! config('services.payway.api_key')) {
+            Log::warning('PayWay callback verification failed: missing signature or API key', [
+                'has_signature' => (bool) $signature,
+                'has_api_key' => (bool) config('services.payway.api_key'),
+            ]);
+
+            return false;
+        }
 
         ksort($payload);
         $input = '';
@@ -160,7 +169,18 @@ class AbaPayWayService
             $input .= is_array($value) ? json_encode($value, JSON_THROW_ON_ERROR) : (string) $value;
         }
 
-        return hash_equals($this->hash($input), $signature);
+        $computedHash = $this->hash($input);
+        $isValid = hash_equals($computedHash, $signature);
+
+        if (! $isValid) {
+            Log::warning('PayWay callback signature verification failed', [
+                'tran_id' => $payload['tran_id'] ?? 'unknown',
+                'expected_hash' => substr($computedHash, 0, 20).'...',
+                'received_hash' => substr($signature, 0, 20).'...',
+            ]);
+        }
+
+        return $isValid;
     }
 
     public function publicConfig(): array
@@ -177,7 +197,9 @@ class AbaPayWayService
 
     private function ensureConfigured(): void
     {
-        if (! $this->isConfigured()) throw new RuntimeException('ABA PayWay is not configured.');
+        if (! $this->isConfigured()) {
+            throw new RuntimeException('ABA PayWay is not configured.');
+        }
     }
 
     private function throwIfGatewayFailed(Response $response): void

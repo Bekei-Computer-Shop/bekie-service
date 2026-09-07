@@ -196,14 +196,6 @@
                         "schema": {
                             "type": "string"
                         }
-                    },
-                    {
-                        "name": "product_id",
-                        "in": "query",
-                        "schema": {
-                            "type": "integer",
-                            "default": 0
-                        }
                     }
                 ],
                 "responses": {
@@ -260,13 +252,10 @@
                                                 "type": "object",
                                                 "properties": {
                                                     "id": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "numeric_id": {
-                                                        "type": "integer"
+                                                        "type": "string"
                                                     },
                                                     "name": {
                                                         "type": "string"
@@ -506,13 +495,10 @@
                                             "type": "object",
                                             "properties": {
                                                 "id": {
-                                                    "type": "integer"
+                                                    "type": "string"
                                                 },
                                                 "uuid": {
-                                                    "type": [
-                                                        "string",
-                                                        "null"
-                                                    ]
+                                                    "type": "string"
                                                 },
                                                 "name": {
                                                     "type": "string"
@@ -734,7 +720,7 @@
                         "in": "query",
                         "schema": {
                             "type": "string",
-                            "default": "id"
+                            "default": "updated_at"
                         }
                     }
                 ],
@@ -801,6 +787,136 @@
                                         "message",
                                         "data"
                                     ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/payments/options": {
+            "get": {
+                "operationId": "abaPayWay.options",
+                "description": "Use `platform=web` for a PayWay popup checkout. Use `platform=mobile`\nfor hosted checkout and provide `return_deeplink` when starting payment.\nCredentials are never returned by this endpoint.",
+                "summary": "List payment methods available to the web or mobile client",
+                "tags": [
+                    "AbaPayWay"
+                ],
+                "parameters": [
+                    {
+                        "name": "platform",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "web",
+                                "mobile"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "integer",
+                                    "const": 200
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/v1/payments/aba/callback": {
+            "post": {
+                "operationId": "abaPayWay.callback",
+                "description": "PayWay sends JSON and the `X-PayWay-Hmac-Sha512` header. This endpoint is\npublic because PayWay calls it directly; the signature is verified before\nthe related order is updated.",
+                "summary": "Receive and verify the PayWay payment callback",
+                "tags": [
+                    "AbaPayWay"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "integer",
+                                    "const": 200
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/payments/aba/purchase": {
+            "post": {
+                "operationId": "abaPayWay.purchase",
+                "description": "For web clients, omit `view_type` to use the popup checkout. For mobile\nclients, send `platform=mobile` and a `return_deeplink`; the request then\ndefaults to hosted checkout.",
+                "summary": "Create an ABA PayWay checkout for an authenticated customer's order",
+                "tags": [
+                    "AbaPayWay"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AbaPayWayPurchaseRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "integer",
+                                    "const": 200
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/v1/payments/aba/{transactionId}": {
+            "get": {
+                "operationId": "abaPayWay.check",
+                "summary": "Check the payment status of an ABA PayWay transaction belonging to the customer",
+                "tags": [
+                    "AbaPayWay"
+                ],
+                "parameters": [
+                    {
+                        "name": "transactionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "integer",
+                                    "const": 200
                                 }
                             }
                         }
@@ -1133,6 +1249,99 @@
                 "responses": {
                     "204": {
                         "description": "No content"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
+                    }
+                }
+            }
+        },
+        "/v1/admin/administrators/{user}/reset-password": {
+            "post": {
+                "operationId": "administrator.resetPassword",
+                "tags": [
+                    "Administrator"
+                ],
+                "parameters": [
+                    {
+                        "name": "user",
+                        "in": "path",
+                        "required": true,
+                        "description": "The user ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResetAdministratorPasswordRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Administrator password reset successfully."
+                                        },
+                                        "data": {
+                                            "type": "null"
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "message",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "403": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Only a super-admin can reset an administrator password."
+                                        },
+                                        "errors": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "message",
+                                        "errors"
+                                    ]
+                                }
+                            }
+                        }
                     },
                     "404": {
                         "$ref": "#/components/responses/ModelNotFoundException"
@@ -2954,22 +3163,34 @@
                 }
             }
         },
-        "/v1/carts": {
+        "/v1/broadcasting/auth": {
             "get": {
-                "operationId": "cart.index",
-                "description": "Returns authenticated user's carts or guest carts by session_id.\nOnly one cart per user is typical, but multiple may exist with different currencies.",
-                "summary": "List user's carts",
+                "operationId": "broadcast.authenticate",
+                "summary": "Authenticate the request for channel access",
                 "tags": [
-                    "Cart"
+                    "Broadcast"
                 ],
-                "parameters": [
-                    {
-                        "name": "session_id",
-                        "in": "query",
-                        "schema": {
-                            "type": "string"
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
                         }
                     }
+                }
+            }
+        },
+        "/v1/cart": {
+            "get": {
+                "operationId": "cart.index",
+                "description": "Returns the authenticated user's single cart with all items.\nAutomatically creates the cart if it doesn't exist.",
+                "summary": "Get authenticated user's cart",
+                "tags": [
+                    "Cart"
                 ],
                 "responses": {
                     "200": {
@@ -2985,10 +3206,10 @@
                     }
                 }
             },
-            "post": {
+            "put": {
                 "operationId": "cart.store",
-                "description": "Creates a new cart or retrieves existing cart for authenticated user.\nFor guest checkout, use session_id.",
-                "summary": "Create or get user's cart",
+                "description": "Updates the cart settings for the authenticated user.\nCreates the cart if it doesn't exist.",
+                "summary": "Update authenticated user's cart",
                 "tags": [
                     "Cart"
                 ],
@@ -2998,16 +3219,17 @@
                             "schema": {
                                 "type": "object",
                                 "properties": {
-                                    "session_id": {
-                                        "type": [
-                                            "string",
-                                            "null"
-                                        ],
-                                        "format": "uuid"
-                                    },
                                     "currency": {
                                         "type": "string",
                                         "maxLength": 3
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "active",
+                                            "abandoned",
+                                            "converted"
+                                        ]
                                     }
                                 }
                             }
@@ -3021,7 +3243,7 @@
                             "application/json": {
                                 "schema": {
                                     "type": "integer",
-                                    "const": 201
+                                    "const": 200
                                 }
                             }
                         }
@@ -3032,61 +3254,13 @@
                 }
             }
         },
-        "/v1/carts/{cart}": {
-            "get": {
-                "operationId": "cart.show",
-                "description": "Retrieves a specific cart with all its items and calculated totals.",
-                "summary": "Get cart details",
-                "tags": [
-                    "Cart"
-                ],
-                "parameters": [
-                    {
-                        "name": "cart",
-                        "in": "path",
-                        "required": true,
-                        "description": "The cart ID",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "integer",
-                                    "const": 200
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ModelNotFoundException"
-                    }
-                }
-            }
-        },
-        "/v1/carts/{cart}/items": {
+        "/v1/cart/items": {
             "post": {
                 "operationId": "cart.addItem",
-                "description": "Adds a product (with optional variant) to the cart.\nIf the product already exists in cart, quantity is updated and item is merged.\nCart totals are automatically recalculated.",
-                "summary": "Add product to cart",
+                "description": "Adds a product (with optional variant) to the user's cart.\nIf the product already exists in cart, quantity is updated.\nCart totals are automatically recalculated.",
+                "summary": "Add product to authenticated user's cart",
                 "tags": [
                     "Cart"
-                ],
-                "parameters": [
-                    {
-                        "name": "cart",
-                        "in": "path",
-                        "required": true,
-                        "description": "The cart ID",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
                 ],
                 "requestBody": {
                     "required": true,
@@ -3110,33 +3284,21 @@
                             }
                         }
                     },
-                    "404": {
-                        "$ref": "#/components/responses/ModelNotFoundException"
-                    },
                     "422": {
                         "$ref": "#/components/responses/ValidationException"
                     }
                 }
             }
         },
-        "/v1/carts/{cart}/items/{item}": {
+        "/v1/cart/items/{item}": {
             "patch": {
                 "operationId": "cart.updateItem",
-                "description": "Updates the quantity of an item in the cart.\nCart totals are automatically recalculated.",
+                "description": "Updates the quantity of an item in the authenticated user's cart.\nCart totals are automatically recalculated.",
                 "summary": "Update cart item quantity",
                 "tags": [
                     "Cart"
                 ],
                 "parameters": [
-                    {
-                        "name": "cart",
-                        "in": "path",
-                        "required": true,
-                        "description": "The cart ID",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
                     {
                         "name": "item",
                         "in": "path",
@@ -3179,21 +3341,12 @@
             },
             "delete": {
                 "operationId": "cart.removeItem",
-                "description": "Removes a product from the cart.\nCart totals are automatically recalculated.",
-                "summary": "Remove item from cart",
+                "description": "Removes a product from the user's cart.\nCart totals are automatically recalculated.",
+                "summary": "Remove item from authenticated user's cart",
                 "tags": [
                     "Cart"
                 ],
                 "parameters": [
-                    {
-                        "name": "cart",
-                        "in": "path",
-                        "required": true,
-                        "description": "The cart ID",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
                     {
                         "name": "item",
                         "in": "path",
@@ -3222,24 +3375,13 @@
                 }
             }
         },
-        "/v1/carts/{cart}/checkout": {
+        "/v1/cart/checkout": {
             "post": {
                 "operationId": "cart.checkout",
-                "description": "Converts the cart into an order. Validates cart contents, applies shipping,\ndeducts inventory, and marks cart as converted.\nReturns the created order with all details.",
-                "summary": "Checkout cart and create order",
+                "description": "Converts the user's cart into an order. Validates cart contents, applies shipping,\ndeducts inventory, and marks cart as converted.\nReturns the created order with all details.",
+                "summary": "Checkout authenticated user's cart and create order",
                 "tags": [
                     "Cart"
-                ],
-                "parameters": [
-                    {
-                        "name": "cart",
-                        "in": "path",
-                        "required": true,
-                        "description": "The cart ID",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
                 ],
                 "requestBody": {
                     "required": true,
@@ -3262,9 +3404,6 @@
                                 }
                             }
                         }
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ModelNotFoundException"
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationException"
@@ -3640,6 +3779,13 @@
                 ],
                 "parameters": [
                     {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
                         "name": "type",
                         "in": "query",
                         "schema": {
@@ -3670,10 +3816,44 @@
                                             "type": "string"
                                         },
                                         "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/components/schemas/ContentItemResource"
-                                            }
+                                            "type": "object",
+                                            "properties": {
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {}
+                                                },
+                                                "pagination": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "total": {
+                                                            "type": "integer"
+                                                        },
+                                                        "per_page": {
+                                                            "type": "integer"
+                                                        },
+                                                        "current_page": {
+                                                            "type": "integer"
+                                                        },
+                                                        "last_page": {
+                                                            "type": "integer"
+                                                        },
+                                                        "count": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "total",
+                                                        "per_page",
+                                                        "current_page",
+                                                        "last_page",
+                                                        "count"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "items",
+                                                "pagination"
+                                            ]
                                         }
                                     },
                                     "required": [
@@ -4353,6 +4533,207 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/ModelNotFoundException"
+                    }
+                }
+            }
+        },
+        "/v1/admin/dashboard": {
+            "get": {
+                "operationId": "dashboard.index",
+                "tags": [
+                    "Dashboard"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Admin dashboard statistics retrieved."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "total_orders": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                },
+                                                "total_revenue": {},
+                                                "total_products": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                },
+                                                "total_customers": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                },
+                                                "total_promotions": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                },
+                                                "today": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "orders": {
+                                                            "type": "integer",
+                                                            "minimum": 0
+                                                        },
+                                                        "revenue": {}
+                                                    },
+                                                    "required": [
+                                                        "orders",
+                                                        "revenue"
+                                                    ]
+                                                },
+                                                "this_month": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "orders": {
+                                                            "type": "integer",
+                                                            "minimum": 0
+                                                        },
+                                                        "revenue": {}
+                                                    },
+                                                    "required": [
+                                                        "orders",
+                                                        "revenue"
+                                                    ]
+                                                },
+                                                "this_year": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "orders": {
+                                                            "type": "integer",
+                                                            "minimum": 0
+                                                        },
+                                                        "revenue": {}
+                                                    },
+                                                    "required": [
+                                                        "orders",
+                                                        "revenue"
+                                                    ]
+                                                },
+                                                "orders_per_day": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "date": {
+                                                                "type": "string"
+                                                            },
+                                                            "day": {
+                                                                "type": "string"
+                                                            },
+                                                            "orders": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "date",
+                                                            "day",
+                                                            "orders"
+                                                        ]
+                                                    }
+                                                },
+                                                "status_breakdown": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "status": {
+                                                                "type": "string"
+                                                            },
+                                                            "count": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "status",
+                                                            "count"
+                                                        ]
+                                                    }
+                                                },
+                                                "recent_orders": {
+                                                    "type": "array",
+                                                    "description": "`user` is loaded whole rather than with a column list: the customer\nname comes from a `name` accessor over first_name/last_name, so a\ncolumn list naming it would fail on Postgres.",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "order_number": {
+                                                                "type": "string"
+                                                            },
+                                                            "customer": {
+                                                                "description": "The snapshot is the name as it stood when the order was\nplaced, which survives the customer renaming or deleting\ntheir account; the relation is only the fallback.",
+                                                                "anyOf": [
+                                                                    {
+                                                                        "type": "string"
+                                                                    },
+                                                                    {
+                                                                        "type": "string",
+                                                                        "enum": [
+                                                                            "Guest"
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "item": {
+                                                                "type": "string"
+                                                            },
+                                                            "amount": {
+                                                                "type": "string"
+                                                            },
+                                                            "status": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "order_number",
+                                                            "customer",
+                                                            "item",
+                                                            "amount",
+                                                            "status"
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "total_orders",
+                                                "total_revenue",
+                                                "total_products",
+                                                "total_customers",
+                                                "total_promotions",
+                                                "today",
+                                                "this_month",
+                                                "this_year",
+                                                "orders_per_day",
+                                                "status_breakdown",
+                                                "recent_orders"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "message",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -5173,6 +5554,252 @@
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/v1/admin/notifications": {
+            "get": {
+                "operationId": "notification.index",
+                "tags": [
+                    "Notification"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "success"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": {
+                                                                "type": "string"
+                                                            },
+                                                            "category": {
+                                                                "anyOf": [
+                                                                    {
+                                                                        "type": "string"
+                                                                    },
+                                                                    {
+                                                                        "type": "string",
+                                                                        "enum": [
+                                                                            "system"
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "title": {
+                                                                "anyOf": [
+                                                                    {
+                                                                        "type": "string"
+                                                                    },
+                                                                    {
+                                                                        "type": "string",
+                                                                        "enum": [
+                                                                            "Notification"
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "message": {
+                                                                "anyOf": [
+                                                                    {
+                                                                        "type": "string"
+                                                                    },
+                                                                    {
+                                                                        "type": "string",
+                                                                        "enum": [
+                                                                            ""
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "data": {
+                                                                "anyOf": [
+                                                                    {
+                                                                        "type": "string"
+                                                                    },
+                                                                    {
+                                                                        "type": "array",
+                                                                        "items": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "minItems": 0,
+                                                                        "maxItems": 0,
+                                                                        "additionalItems": false
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "read_at": {
+                                                                "type": "string"
+                                                            },
+                                                            "created_at": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "type",
+                                                            "category",
+                                                            "title",
+                                                            "message",
+                                                            "data",
+                                                            "read_at",
+                                                            "created_at"
+                                                        ]
+                                                    }
+                                                },
+                                                "unread_count": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                },
+                                                "pagination": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "total": {
+                                                            "type": "integer"
+                                                        },
+                                                        "per_page": {
+                                                            "type": "integer"
+                                                        },
+                                                        "current_page": {
+                                                            "type": "integer"
+                                                        },
+                                                        "last_page": {
+                                                            "type": "integer"
+                                                        },
+                                                        "count": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "total",
+                                                        "per_page",
+                                                        "current_page",
+                                                        "last_page",
+                                                        "count"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "items",
+                                                "unread_count",
+                                                "pagination"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "message",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/notifications/{notification}/read": {
+            "post": {
+                "operationId": "notification.read",
+                "tags": [
+                    "Notification"
+                ],
+                "parameters": [
+                    {
+                        "name": "notification",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Notification marked as read."
+                                        },
+                                        "data": {
+                                            "type": "null"
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "message",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/notifications/read-all": {
+            "post": {
+                "operationId": "notification.readAll",
+                "tags": [
+                    "Notification"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Notifications marked as read."
+                                        },
+                                        "data": {
+                                            "type": "null"
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "message",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -6272,10 +6899,8 @@
                         "name": "id",
                         "in": "path",
                         "required": true,
-                        "description": "The product ID",
                         "schema": {
-                            "type": "string",
-                            "format": "uuid"
+                            "type": "string"
                         }
                     }
                 ],
@@ -7549,6 +8174,284 @@
                 }
             }
         },
+        "/v1/admin/reports/sales": {
+            "get": {
+                "operationId": "report.sales",
+                "tags": [
+                    "Report"
+                ],
+                "parameters": [
+                    {
+                        "name": "preset",
+                        "in": "query",
+                        "schema": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "enum": [
+                                "daily",
+                                "weekly",
+                                "monthly",
+                                "yearly",
+                                "custom"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "date_from",
+                        "in": "query",
+                        "schema": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "date_to",
+                        "in": "query",
+                        "schema": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "format": "date-time"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "success"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "summary": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "revenue": {
+                                                            "type": "number"
+                                                        },
+                                                        "cogs": {
+                                                            "type": "number"
+                                                        },
+                                                        "profit": {
+                                                            "type": "number"
+                                                        },
+                                                        "margin": {
+                                                            "type": "number"
+                                                        },
+                                                        "orders": {
+                                                            "type": "integer",
+                                                            "minimum": 0
+                                                        },
+                                                        "revenue_change": {
+                                                            "type": "number"
+                                                        },
+                                                        "cogs_change": {
+                                                            "type": "number"
+                                                        },
+                                                        "profit_change": {
+                                                            "type": "number"
+                                                        },
+                                                        "margin_change": {
+                                                            "type": "number"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "revenue",
+                                                        "cogs",
+                                                        "profit",
+                                                        "margin",
+                                                        "orders",
+                                                        "revenue_change",
+                                                        "cogs_change",
+                                                        "profit_change",
+                                                        "margin_change"
+                                                    ]
+                                                },
+                                                "chart": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "label": {
+                                                                "type": "string"
+                                                            },
+                                                            "revenue": {
+                                                                "type": "number"
+                                                            },
+                                                            "profit": {
+                                                                "type": "number"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "label",
+                                                            "revenue",
+                                                            "profit"
+                                                        ]
+                                                    }
+                                                },
+                                                "daily_breakdown": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "label": {
+                                                                "type": "string"
+                                                            },
+                                                            "revenue": {
+                                                                "type": "number"
+                                                            },
+                                                            "profit": {
+                                                                "type": "number"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "label",
+                                                            "revenue",
+                                                            "profit"
+                                                        ]
+                                                    }
+                                                },
+                                                "top_products": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "units": {
+                                                                "type": "integer"
+                                                            },
+                                                            "revenue": {
+                                                                "type": "number"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "name",
+                                                            "units",
+                                                            "revenue"
+                                                        ]
+                                                    }
+                                                },
+                                                "table": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "period": {
+                                                                "type": "string"
+                                                            },
+                                                            "date_range": {
+                                                                "type": "string"
+                                                            },
+                                                            "orders": {
+                                                                "type": "integer",
+                                                                "minimum": 0
+                                                            },
+                                                            "revenue": {
+                                                                "type": "number"
+                                                            },
+                                                            "cogs": {
+                                                                "type": "number"
+                                                            },
+                                                            "profit": {
+                                                                "type": "number"
+                                                            },
+                                                            "margin": {
+                                                                "type": "number"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "period",
+                                                            "date_range",
+                                                            "orders",
+                                                            "revenue",
+                                                            "cogs",
+                                                            "profit",
+                                                            "margin"
+                                                        ]
+                                                    }
+                                                },
+                                                "meta": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "preset": {
+                                                            "anyOf": [
+                                                                {
+                                                                    "type": "string"
+                                                                },
+                                                                {
+                                                                    "type": "string",
+                                                                    "enum": [
+                                                                        "weekly",
+                                                                        "custom"
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "date_from": {
+                                                            "type": "string"
+                                                        },
+                                                        "date_to": {
+                                                            "type": "string"
+                                                        },
+                                                        "previous_date_from": {
+                                                            "type": "string"
+                                                        },
+                                                        "previous_date_to": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "preset",
+                                                        "date_from",
+                                                        "date_to",
+                                                        "previous_date_from",
+                                                        "previous_date_to"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "summary",
+                                                "chart",
+                                                "daily_breakdown",
+                                                "top_products",
+                                                "table",
+                                                "meta"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "message",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
         "/v1/admin/roles": {
             "get": {
                 "operationId": "admin.roles.index",
@@ -8027,6 +8930,348 @@
                                             "items": {
                                                 "$ref": "#/components/schemas/SlideResource"
                                             }
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "message",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/settings/store": {
+            "get": {
+                "operationId": "storeSettings.show",
+                "tags": [
+                    "StoreSettings"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Store settings retrieved successfully."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "settings": {
+                                                    "type": "array",
+                                                    "items": {}
+                                                },
+                                                "payway": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "connected": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "connected"
+                                                    ]
+                                                },
+                                                "options": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "currencies": {
+                                                            "type": "array",
+                                                            "prefixItems": [
+                                                                {
+                                                                    "type": "string",
+                                                                    "const": "USD"
+                                                                },
+                                                                {
+                                                                    "type": "string",
+                                                                    "const": "KHR"
+                                                                }
+                                                            ],
+                                                            "minItems": 2,
+                                                            "maxItems": 2,
+                                                            "additionalItems": false
+                                                        },
+                                                        "payment_methods": {
+                                                            "type": "array",
+                                                            "prefixItems": [
+                                                                {
+                                                                    "type": "string",
+                                                                    "const": "aba_payway"
+                                                                },
+                                                                {
+                                                                    "type": "string",
+                                                                    "const": "cod"
+                                                                }
+                                                            ],
+                                                            "minItems": 2,
+                                                            "maxItems": 2,
+                                                            "additionalItems": false
+                                                        },
+                                                        "timezones": {
+                                                            "type": "array",
+                                                            "prefixItems": [
+                                                                {
+                                                                    "type": "string",
+                                                                    "const": "Asia/Phnom_Penh"
+                                                                },
+                                                                {
+                                                                    "type": "string",
+                                                                    "const": "Asia/Bangkok"
+                                                                },
+                                                                {
+                                                                    "type": "string",
+                                                                    "const": "UTC"
+                                                                }
+                                                            ],
+                                                            "minItems": 3,
+                                                            "maxItems": 3,
+                                                            "additionalItems": false
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "currencies",
+                                                        "payment_methods",
+                                                        "timezones"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "settings",
+                                                "payway",
+                                                "options"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "message",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "storeSettings.update",
+                "tags": [
+                    "StoreSettings"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "store_name": {
+                                        "type": "string",
+                                        "maxLength": 255
+                                    },
+                                    "store_url": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "uri",
+                                        "maxLength": 2048
+                                    },
+                                    "contact_email": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "format": "email",
+                                        "maxLength": 255
+                                    },
+                                    "timezone": {
+                                        "type": "string",
+                                        "enum": [
+                                            "Asia/Phnom_Penh",
+                                            "Asia/Bangkok",
+                                            "UTC"
+                                        ]
+                                    },
+                                    "currency": {
+                                        "type": "string",
+                                        "enum": [
+                                            "USD",
+                                            "KHR"
+                                        ]
+                                    },
+                                    "aba_enabled": {
+                                        "type": "boolean"
+                                    },
+                                    "cod_enabled": {
+                                        "type": "boolean"
+                                    },
+                                    "cod_instructions": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "maxLength": 1000
+                                    },
+                                    "payment_methods": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "enum": [
+                                                "aba_payway",
+                                                "cod"
+                                            ]
+                                        },
+                                        "minItems": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Store settings updated successfully."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "settings": {
+                                                    "type": "array",
+                                                    "items": {}
+                                                },
+                                                "payway": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "connected": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "connected"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "settings",
+                                                "payway"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "status",
+                                        "message",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/v1/admin/settings/store/payway/check": {
+            "post": {
+                "operationId": "storeSettings.checkPaywayConnection",
+                "tags": [
+                    "StoreSettings"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "const": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "enum": [
+                                                "ABA PayWay connection verified.",
+                                                "ABA PayWay connection check failed."
+                                            ]
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "payway": {
+                                                    "anyOf": [
+                                                        {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "connected": {
+                                                                    "type": "string"
+                                                                },
+                                                                "code": {
+                                                                    "type": "string"
+                                                                },
+                                                                "message": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "connected",
+                                                                "code",
+                                                                "message"
+                                                            ]
+                                                        },
+                                                        {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "connected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "code": {
+                                                                    "type": "string",
+                                                                    "const": "CONFIGURATION_MISSING"
+                                                                },
+                                                                "message": {
+                                                                    "type": "string",
+                                                                    "const": "ABA PayWay credentials are not configured on the server."
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "connected",
+                                                                "code",
+                                                                "message"
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "payway"
+                                            ]
                                         }
                                     },
                                     "required": [
@@ -8833,11 +10078,11 @@
                 }
             }
         },
-        "/v1/wishlists": {
+        "/v1/wishlist": {
             "get": {
                 "operationId": "wishlist.index",
-                "description": "Returns all wishlists belonging to the authenticated user, paginated.\nEach wishlist includes its items with product and variant information.",
-                "summary": "List authenticated user's wishlists",
+                "description": "Returns the authenticated user's single wishlist with all items.\nAutomatically creates the wishlist if it doesn't exist.",
+                "summary": "Get authenticated user's wishlist",
                 "tags": [
                     "Wishlist"
                 ],
@@ -8855,10 +10100,10 @@
                     }
                 }
             },
-            "post": {
+            "put": {
                 "operationId": "wishlist.store",
-                "description": "Creates a new wishlist for the authenticated user.",
-                "summary": "Create a new wishlist",
+                "description": "Updates the name, description, and visibility settings of the user's wishlist.",
+                "summary": "Update authenticated user's wishlist",
                 "tags": [
                     "Wishlist"
                 ],
@@ -8879,7 +10124,7 @@
                             "application/json": {
                                 "schema": {
                                     "type": "integer",
-                                    "const": 201
+                                    "const": 200
                                 }
                             }
                         }
@@ -8888,61 +10133,13 @@
                         "$ref": "#/components/responses/ValidationException"
                     }
                 }
-            }
-        },
-        "/v1/wishlists/{wishlist}": {
-            "get": {
-                "operationId": "wishlist.show",
-                "description": "Retrieves a specific wishlist with all its items.",
-                "summary": "Get wishlist details",
-                "tags": [
-                    "Wishlist"
-                ],
-                "parameters": [
-                    {
-                        "name": "wishlist",
-                        "in": "path",
-                        "required": true,
-                        "description": "The wishlist ID",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "integer",
-                                    "const": 200
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ModelNotFoundException"
-                    }
-                }
             },
             "delete": {
                 "operationId": "wishlist.destroy",
-                "description": "Deletes a wishlist and all its items.",
-                "summary": "Delete a wishlist",
+                "description": "Removes all items from the wishlist without deleting the wishlist itself.",
+                "summary": "Clear wishlist (kept for compatibility, doesn't actually delete)",
                 "tags": [
                     "Wishlist"
-                ],
-                "parameters": [
-                    {
-                        "name": "wishlist",
-                        "in": "path",
-                        "required": true,
-                        "description": "The wishlist ID",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
                 ],
                 "responses": {
                     "200": {
@@ -8955,37 +10152,26 @@
                                 }
                             }
                         }
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ModelNotFoundException"
                     }
                 }
             }
         },
-        "/v1/wishlists/{wishlist}/check": {
+        "/v1/wishlist/check": {
             "get": {
                 "operationId": "wishlist.checkProduct",
-                "description": "Checks whether a specific product (with optional variant) is in the wishlist.",
-                "summary": "Check if product is in wishlist",
+                "description": "Checks whether a specific product (with optional variant) is in the user's wishlist.",
+                "summary": "Check if product is in authenticated user's wishlist",
                 "tags": [
                     "Wishlist"
                 ],
                 "parameters": [
                     {
-                        "name": "wishlist",
-                        "in": "path",
-                        "required": true,
-                        "description": "The wishlist ID",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
-                    {
                         "name": "product_id",
                         "in": "query",
                         "required": true,
                         "schema": {
-                            "type": "integer"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     },
                     {
@@ -9013,31 +10199,17 @@
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationException"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ModelNotFoundException"
                     }
                 }
             }
         },
-        "/v1/wishlists/{wishlist}/items": {
+        "/v1/wishlist/items": {
             "post": {
                 "operationId": "wishlist.addItem",
-                "description": "Adds a product (with optional variant) to a wishlist.\nPrevents duplicate items from being added to the same wishlist.",
-                "summary": "Add product to wishlist",
+                "description": "Adds a product (with optional variant) to the user's wishlist.\nPrevents duplicate items from being added.",
+                "summary": "Add product to authenticated user's wishlist",
                 "tags": [
                     "Wishlist"
-                ],
-                "parameters": [
-                    {
-                        "name": "wishlist",
-                        "in": "path",
-                        "required": true,
-                        "description": "The wishlist ID",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
                 ],
                 "requestBody": {
                     "required": true,
@@ -9061,33 +10233,21 @@
                             }
                         }
                     },
-                    "404": {
-                        "$ref": "#/components/responses/ModelNotFoundException"
-                    },
                     "422": {
                         "$ref": "#/components/responses/ValidationException"
                     }
                 }
             }
         },
-        "/v1/wishlists/{wishlist}/items/{item}": {
+        "/v1/wishlist/items/{item}": {
             "delete": {
                 "operationId": "wishlist.removeItem",
-                "description": "Removes a product from a wishlist.",
-                "summary": "Remove product from wishlist",
+                "description": "Removes a product from the user's wishlist.",
+                "summary": "Remove product from authenticated user's wishlist",
                 "tags": [
                     "Wishlist"
                 ],
                 "parameters": [
-                    {
-                        "name": "wishlist",
-                        "in": "path",
-                        "required": true,
-                        "description": "The wishlist ID",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
                     {
                         "name": "item",
                         "in": "path",
@@ -9108,9 +10268,6 @@
                                 }
                             }
                         }
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ModelNotFoundException"
                     }
                 }
             }
@@ -9118,6 +10275,71 @@
     },
     "components": {
         "schemas": {
+            "AbaPayWayPurchaseRequest": {
+                "type": "object",
+                "properties": {
+                    "order_id": {
+                        "type": "integer"
+                    },
+                    "payment_option": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "enum": [
+                            "abapay_khqr",
+                            "cards"
+                        ]
+                    },
+                    "platform": {
+                        "type": "string",
+                        "enum": [
+                            "web",
+                            "mobile"
+                        ]
+                    },
+                    "view_type": {
+                        "type": "string",
+                        "enum": [
+                            "hosted_view",
+                            "popup"
+                        ]
+                    },
+                    "return_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 2048
+                    },
+                    "cancel_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "uri",
+                        "maxLength": 2048
+                    },
+                    "continue_success_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "uri",
+                        "maxLength": 2048
+                    },
+                    "return_deeplink": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 4096
+                    }
+                },
+                "required": [
+                    "order_id",
+                    "return_url"
+                ],
+                "title": "AbaPayWayPurchaseRequest"
+            },
             "ActivityLogResource": {
                 "type": "object",
                 "properties": {
@@ -9208,7 +10430,8 @@
                 "type": "object",
                 "properties": {
                     "product_id": {
-                        "type": "integer"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "product_variant_id": {
                         "type": [
@@ -9231,7 +10454,8 @@
                 "type": "object",
                 "properties": {
                     "product_id": {
-                        "type": "integer"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "product_variant_id": {
                         "type": [
@@ -9275,8 +10499,10 @@
                     },
                     "currency": {
                         "type": "string",
-                        "minLength": 3,
-                        "maxLength": 3
+                        "enum": [
+                            "USD",
+                            "KHR"
+                        ]
                     },
                     "discount_total": {
                         "type": [
@@ -9306,10 +10532,8 @@
                             "null"
                         ],
                         "enum": [
-                            "cod",
-                            "bank_transfer",
-                            "stripe",
-                            "paypal"
+                            "aba_payway",
+                            "cod"
                         ]
                     },
                     "payment_status": {
@@ -9337,7 +10561,8 @@
                             "type": "object",
                             "properties": {
                                 "product_id": {
-                                    "type": "integer"
+                                    "type": "string",
+                                    "format": "uuid"
                                 },
                                 "qty": {
                                     "type": "integer",
@@ -9529,6 +10754,17 @@
                         "type": "string",
                         "description": "Cast before formatting: Postgres returns decimal columns as\nstrings, which number_format() rejects under strict_types."
                     },
+                    "sale_price": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "The promo price this line actually charged, when the product was\non sale at checkout (null otherwise)."
+                    },
+                    "discount": {
+                        "type": "string",
+                        "description": "Per-line discount frozen at purchase time."
+                    },
                     "line_total": {
                         "type": "string"
                     },
@@ -9556,6 +10792,8 @@
                     "id",
                     "qty",
                     "unit_price",
+                    "sale_price",
+                    "discount",
                     "line_total",
                     "product"
                 ],
@@ -9592,6 +10830,43 @@
                     },
                     "discount_total": {
                         "type": "string"
+                    },
+                    "coupon": {
+                        "type": [
+                            "object",
+                            "null"
+                        ],
+                        "description": "The coupon / promotion applied at checkout. `code` is the snapshot\nand is always present when one was used; the rest is filled from\nthe live coupon while it still exists (eager-loaded by the\ncontroller, so no N+1 here).",
+                        "properties": {
+                            "code": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "name": {
+                                "type": "string"
+                            },
+                            "type": {
+                                "type": "string"
+                            },
+                            "value": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "discount_total": {
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "code",
+                            "name",
+                            "type",
+                            "value",
+                            "discount_total"
+                        ]
                     },
                     "tax_total": {
                         "type": "string"
@@ -9657,12 +10932,74 @@
                         ]
                     },
                     "shipping_address": {
-                        "type": [
-                            "array",
-                            "null"
-                        ],
-                        "description": "Snapshot taken at checkout; there is no addresses data yet, so\nthis is usually null and the UI falls back to a placeholder.",
-                        "items": {}
+                        "description": "Snapshot captured at checkout is the source of truth. Orders that\nnever captured one (legacy rows, seeded data) fall back to the\ncustomer's current default address so the panel isn't just a dash.",
+                        "anyOf": [
+                            {
+                                "type": "array",
+                                "items": {}
+                            },
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "label": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    },
+                                    "full_name": {
+                                        "type": "string"
+                                    },
+                                    "phone": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    },
+                                    "address_line_1": {
+                                        "type": "string"
+                                    },
+                                    "address_line_2": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    },
+                                    "city": {
+                                        "type": "string"
+                                    },
+                                    "state": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    },
+                                    "postal_code": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    },
+                                    "country": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "label",
+                                    "full_name",
+                                    "phone",
+                                    "address_line_1",
+                                    "address_line_2",
+                                    "city",
+                                    "state",
+                                    "postal_code",
+                                    "country"
+                                ]
+                            }
+                        ]
                     },
                     "tracking": {
                         "type": "object",
@@ -9709,6 +11046,7 @@
                     "total",
                     "subtotal",
                     "discount_total",
+                    "coupon",
                     "tax_total",
                     "shipping_total",
                     "currency",
@@ -9726,7 +11064,7 @@
                 "type": "object",
                 "properties": {
                     "id": {
-                        "type": "integer"
+                        "type": "string"
                     },
                     "category_id": {
                         "type": [
@@ -9998,6 +11336,9 @@
                     "type": {
                         "type": "string"
                     },
+                    "kind": {
+                        "type": "string"
+                    },
                     "value": {
                         "type": "string"
                     },
@@ -10043,6 +11384,7 @@
                     "name",
                     "code",
                     "type",
+                    "kind",
                     "value",
                     "min_order_amount",
                     "discount_value",
@@ -10281,7 +11623,8 @@
                                     ]
                                 },
                                 "stockable_id": {
-                                    "type": "integer"
+                                    "type": "string",
+                                    "maxLength": 36
                                 },
                                 "movement_type": {
                                     "type": "string",
@@ -10343,7 +11686,7 @@
                         "type": "integer"
                     },
                     "product_id": {
-                        "type": "integer"
+                        "type": "string"
                     },
                     "product_variant_id": {
                         "type": [
@@ -10626,6 +11969,18 @@
                             "null"
                         ]
                     },
+                    "category": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "image_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
                     "status": {
                         "type": "string"
                     },
@@ -10656,6 +12011,8 @@
                     "type",
                     "title",
                     "body",
+                    "category",
+                    "image_url",
                     "status",
                     "author",
                     "published_at",
@@ -10762,7 +12119,7 @@
                     },
                     "product_id": {
                         "type": [
-                            "integer",
+                            "string",
                             "null"
                         ]
                     },
@@ -10891,6 +12248,12 @@
                     "discount_total": {
                         "type": "string"
                     },
+                    "coupon_code": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
                     "tax_total": {
                         "type": "string"
                     },
@@ -11006,6 +12369,7 @@
                     "address_id",
                     "subtotal",
                     "discount_total",
+                    "coupon_code",
                     "tax_total",
                     "shipping_total",
                     "grand_total",
@@ -11085,9 +12449,6 @@
             "Product": {
                 "type": "object",
                 "properties": {
-                    "id": {
-                        "type": "integer"
-                    },
                     "category_id": {
                         "type": [
                             "integer",
@@ -11233,10 +12594,7 @@
                         "format": "date-time"
                     },
                     "uuid": {
-                        "type": [
-                            "string",
-                            "null"
-                        ]
+                        "type": "string"
                     },
                     "version": {
                         "type": "integer"
@@ -11249,10 +12607,24 @@
                     },
                     "reorder_point": {
                         "type": "integer"
+                    },
+                    "reserved_stock": {
+                        "type": "integer"
+                    },
+                    "damaged_stock": {
+                        "type": "integer"
+                    },
+                    "incoming_stock": {
+                        "type": "integer"
+                    },
+                    "max_stock_level": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
                     }
                 },
                 "required": [
-                    "id",
                     "category_id",
                     "brand_id",
                     "name",
@@ -11287,7 +12659,11 @@
                     "uuid",
                     "version",
                     "warehouse_location",
-                    "reorder_point"
+                    "reorder_point",
+                    "reserved_stock",
+                    "damaged_stock",
+                    "incoming_stock",
+                    "max_stock_level"
                 ],
                 "title": "Product"
             },
@@ -11298,7 +12674,7 @@
                         "type": "integer"
                     },
                     "product_id": {
-                        "type": "integer"
+                        "type": "string"
                     },
                     "image": {
                         "type": "string",
@@ -11350,7 +12726,7 @@
                 "type": "object",
                 "properties": {
                     "id": {
-                        "type": "integer"
+                        "type": "string"
                     },
                     "category_id": {
                         "type": [
@@ -11529,9 +12905,6 @@
                     "id": {
                         "type": "integer"
                     },
-                    "product_id": {
-                        "type": "integer"
-                    },
                     "name": {
                         "type": "string"
                     },
@@ -11646,11 +13019,28 @@
                     },
                     "version": {
                         "type": "integer"
+                    },
+                    "reserved_stock": {
+                        "type": "integer"
+                    },
+                    "damaged_stock": {
+                        "type": "integer"
+                    },
+                    "incoming_stock": {
+                        "type": "integer"
+                    },
+                    "max_stock_level": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "product_id": {
+                        "type": "string"
                     }
                 },
                 "required": [
                     "id",
-                    "product_id",
                     "name",
                     "slug",
                     "sku",
@@ -11674,7 +13064,12 @@
                     "deleted_at",
                     "created_at",
                     "updated_at",
-                    "version"
+                    "version",
+                    "reserved_stock",
+                    "damaged_stock",
+                    "incoming_stock",
+                    "max_stock_level",
+                    "product_id"
                 ],
                 "title": "ProductVariant"
             },
@@ -11685,7 +13080,7 @@
                         "type": "integer"
                     },
                     "product_id": {
-                        "type": "integer"
+                        "type": "string"
                     },
                     "name": {
                         "type": "string"
@@ -11940,6 +13335,24 @@
                     "password_confirmation"
                 ],
                 "title": "RegisterRequest"
+            },
+            "ResetAdministratorPasswordRequest": {
+                "type": "object",
+                "properties": {
+                    "password": {
+                        "type": "string",
+                        "minLength": 8
+                    },
+                    "password_confirmation": {
+                        "type": "string",
+                        "minLength": 8
+                    }
+                },
+                "required": [
+                    "password",
+                    "password_confirmation"
+                ],
+                "title": "ResetAdministratorPasswordRequest"
             },
             "RoleResource": {
                 "type": "object",
@@ -12200,7 +13613,8 @@
                         ]
                     },
                     "stockable_id": {
-                        "type": "integer"
+                        "type": "string",
+                        "maxLength": 36
                     },
                     "movement_type": {
                         "type": "string",
@@ -12361,7 +13775,7 @@
                         "type": "string"
                     },
                     "stockable_id": {
-                        "type": "integer"
+                        "type": "string"
                     },
                     "stockable_name": {
                         "type": "string"
@@ -12641,6 +14055,20 @@
                             "null"
                         ]
                     },
+                    "category": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 100
+                    },
+                    "image_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 2048
+                    },
                     "status": {
                         "type": "string",
                         "enum": [
@@ -12814,7 +14242,20 @@
                             "string",
                             "null"
                         ],
-                        "maxLength": 50
+                        "enum": [
+                            "aba_payway",
+                            "cod"
+                        ]
+                    },
+                    "currency": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "enum": [
+                            "USD",
+                            "KHR"
+                        ]
                     },
                     "metadata": {
                         "type": [
@@ -13305,6 +14746,20 @@
                             "fixed"
                         ]
                     },
+                    "kind": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "The campaign label. Kept off `type` on purpose \u2014 see Coupon::KINDS.",
+                        "enum": [
+                            "flash_sale",
+                            "bogo",
+                            "free_shipping",
+                            "bundle",
+                            "free_gift"
+                        ]
+                    },
                     "value": {
                         "type": "number",
                         "minimum": 0
@@ -13774,6 +15229,20 @@
                             "string",
                             "null"
                         ]
+                    },
+                    "category": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 100
+                    },
+                    "image_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 2048
                     },
                     "status": {
                         "type": "string",
@@ -14309,6 +15778,20 @@
                         "enum": [
                             "percentage",
                             "fixed"
+                        ]
+                    },
+                    "kind": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "The campaign label. Kept off `type` on purpose \u2014 see Coupon::KINDS.",
+                        "enum": [
+                            "flash_sale",
+                            "bogo",
+                            "free_shipping",
+                            "bundle",
+                            "free_gift"
                         ]
                     },
                     "value": {

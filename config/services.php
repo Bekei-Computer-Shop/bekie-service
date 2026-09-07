@@ -44,4 +44,10 @@ return [
         'check_url' => env('ABA_PAYWAY_CHECK_URL', 'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/check-transaction-2'),
     ],
 
+    'khqr' => [
+        'enabled' => (bool) env('KHQR_ENABLED', true),
+        'merchant_id' => env('KHQR_MERCHANT_ID', 'bekie'),
+        'merchant_name' => env('KHQR_MERCHANT_NAME', 'Bekie'),
+    ],
+
 ];
