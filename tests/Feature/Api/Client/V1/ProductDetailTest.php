@@ -10,14 +10,14 @@ use Illuminate\Support\Str;
 
 uses(RefreshDatabase::class);
 
-test('the product detail resolves by uuid and returns the product', function (): void {
+test('the product detail resolves by product id and omits the uuid', function (): void {
     $product = Product::factory()->create();
 
-    $this->getJson("/api/v1/products/{$product->uuid}")
+    $this->getJson("/api/v1/products/{$product->id}")
         ->assertOk()
         ->assertJsonPath('status', 'success')
-        ->assertJsonPath('data.uuid', $product->uuid)
         ->assertJsonPath('data.id', $product->id)
+        ->assertJsonMissingPath('data.uuid')
         ->assertJsonPath('data.name', $product->name);
 });
 

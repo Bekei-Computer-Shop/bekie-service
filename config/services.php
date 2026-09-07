@@ -35,4 +35,19 @@ return [
         ],
     ],
 
+    'payway' => [
+        'merchant_id' => env('ABA_PAYWAY_MERCHANT_ID'),
+        'api_key' => env('ABA_PAYWAY_API_KEY'),
+        'public_key' => env('ABA_PAYWAY_PUBLIC_KEY'),
+        'private_key' => env('ABA_PAYWAY_PRIVATE_KEY'),
+        'purchase_url' => env('ABA_PAYWAY_PURCHASE_URL', 'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/purchase'),
+        'check_url' => env('ABA_PAYWAY_CHECK_URL', 'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/check-transaction-2'),
+    ],
+
+    'khqr' => [
+        'enabled' => (bool) env('KHQR_ENABLED', true),
+        'merchant_id' => env('KHQR_MERCHANT_ID', 'bekie'),
+        'merchant_name' => env('KHQR_MERCHANT_NAME', 'Bekie'),
+    ],
+
 ];

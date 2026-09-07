@@ -449,7 +449,7 @@ This prevents data consistency issues when products/addresses change after order
   GET  /brands/{brand}
   
   GET  /products
-  GET  /products/{product}
+  GET  /products/{id}
   GET  /products/{product}/variants
   
   GET  /shipping-methods
