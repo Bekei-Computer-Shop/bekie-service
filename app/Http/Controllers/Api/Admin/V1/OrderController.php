@@ -143,65 +143,75 @@ class OrderController extends BaseAdminController
         $address = $customer->defaultAddress;
 
         // Wrapped so a bad line item cannot leave a half-built order behind.
-        $order = DB::transaction(function () use ($validated, $discount, $tax, $shipping, $customer, $address) {
-            $order = Order::create([
-                'order_number' => Str::upper(Str::random(10)),
-                'user_id' => $validated['customer_id'],
-                'address_id' => $address?->id,
-                'customer_snapshot' => [
-                    'name' => $customer->name,
-                    'email' => $customer->email,
-                    'phone' => $customer->phone,
-                ],
-                'address_snapshot' => $address ? [
-                    'label' => $address->label,
-                    'full_name' => $address->full_name,
-                    'phone' => $address->phone,
-                    'address_line_1' => $address->address_line_1,
-                    'address_line_2' => $address->address_line_2,
-                    'city' => $address->city,
-                    'state' => $address->state,
-                    'postal_code' => $address->postal_code,
-                    'country' => $address->country,
-                ] : null,
-                'status' => 'pending',
-                'notes' => $validated['notes'] ?? null,
-                'currency' => $validated['currency'] ?? 'USD',
-                'payment_method' => $validated['payment_method'] ?? null,
-                'payment_status' => $validated['payment_status'] ?? 'pending',
-                'transaction_id' => $validated['transaction_id'] ?? null,
-                'subtotal' => 0,
-                'discount_total' => $discount,
-                'tax_total' => $tax,
-                'shipping_total' => $shipping,
-                'grand_total' => 0,
-            ]);
-
-            $items = collect($validated['items'])->map(function (array $item) use ($order) {
-                $product = Product::findOrFail($item['product_id']);
-                $lineTotal = round($item['qty'] * $item['unit_price'], 2);
-
-                return $order->items()->create([
-                    'product_id' => $product->id,
-                    'quantity' => $item['qty'],
-                    'unit_price' => $item['unit_price'],
-                    'subtotal' => $lineTotal,
-                    'discount' => 0,
-                    'tax' => 0,
-                    'total' => $lineTotal,
-                    'product_name' => $product->name,
-                    'product_sku' => $product->sku,
+        // Also covers stock deduction: each item()->create() below fires
+        // OrderItem::deductStock() via its `created` model event, and a
+        // rejected stockOut() (insufficient quantity) rolls the whole order
+        // back rather than leaving a partially stocked-out order.
+        try {
+            $order = DB::transaction(function () use ($validated, $discount, $tax, $shipping, $customer, $address) {
+                $order = Order::create([
+                    'order_number' => Str::upper(Str::random(10)),
+                    'user_id' => $validated['customer_id'],
+                    'address_id' => $address?->id,
+                    'customer_snapshot' => [
+                        'name' => $customer->name,
+                        'email' => $customer->email,
+                        'phone' => $customer->phone,
+                    ],
+                    'address_snapshot' => $address ? [
+                        'label' => $address->label,
+                        'full_name' => $address->full_name,
+                        'phone' => $address->phone,
+                        'address_line_1' => $address->address_line_1,
+                        'address_line_2' => $address->address_line_2,
+                        'city' => $address->city,
+                        'state' => $address->state,
+                        'postal_code' => $address->postal_code,
+                        'country' => $address->country,
+                    ] : null,
+                    'status' => 'pending',
+                    'notes' => $validated['notes'] ?? null,
+                    'currency' => $validated['currency'] ?? 'USD',
+                    'payment_method' => $validated['payment_method'] ?? null,
+                    'payment_status' => $validated['payment_status'] ?? 'pending',
+                    'transaction_id' => $validated['transaction_id'] ?? null,
+                    'subtotal' => 0,
+                    'discount_total' => $discount,
+                    'tax_total' => $tax,
+                    'shipping_total' => $shipping,
+                    'grand_total' => 0,
                 ]);
+
+                // Product::deductStock() cuts stock for each item's product on
+                // creation (fires via the OrderItem model's `created` event).
+                $items = collect($validated['items'])->map(function (array $item) use ($order) {
+                    $product = Product::findOrFail($item['product_id']);
+                    $lineTotal = round($item['qty'] * $item['unit_price'], 2);
+
+                    return $order->items()->create([
+                        'product_id' => $product->id,
+                        'quantity' => $item['qty'],
+                        'unit_price' => $item['unit_price'],
+                        'subtotal' => $lineTotal,
+                        'discount' => 0,
+                        'tax' => 0,
+                        'total' => $lineTotal,
+                        'product_name' => $product->name,
+                        'product_sku' => $product->sku,
+                    ]);
+                });
+
+                // Line items make the subtotal; the order-level amounts adjust it.
+                $subtotal = round($items->sum(fn ($item) => (float) $item->total), 2);
+                $grandTotal = round($subtotal - $discount + $tax + $shipping, 2);
+
+                $order->update(['subtotal' => $subtotal, 'grand_total' => max(0, $grandTotal)]);
+
+                return $order;
             });
-
-            // Line items make the subtotal; the order-level amounts adjust it.
-            $subtotal = round($items->sum(fn ($item) => (float) $item->total), 2);
-            $grandTotal = round($subtotal - $discount + $tax + $shipping, 2);
-
-            $order->update(['subtotal' => $subtotal, 'grand_total' => max(0, $grandTotal)]);
-
-            return $order;
-        });
+        } catch (\InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
 
         app(AdminNotificationService::class)->newOrder($order, 'web');
 

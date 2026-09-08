@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\RoutesByUuid;
+use App\Services\StockService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -74,5 +75,37 @@ class Order extends Model
     public function couponUsages()
     {
         return $this->hasMany(CouponUsage::class);
+    }
+
+    public static function booted(): void
+    {
+        static::updated(function (self $order): void {
+            // wasChanged() only trips on the actual transition into
+            // 'cancelled', so re-saving an already-cancelled order (e.g. a
+            // payment_status tweak) never restocks twice.
+            if ($order->wasChanged('status') && $order->status === 'cancelled') {
+                $order->restockItems();
+            }
+        });
+    }
+
+    /**
+     * Return every line item's quantity to stock. Mirrors
+     * OrderItem::deductStock(), which runs on order creation.
+     */
+    public function restockItems(): void
+    {
+        $stockService = app(StockService::class);
+        $reference = "Order #{$this->order_number} cancelled";
+
+        foreach ($this->items()->with(['product', 'variant'])->get() as $item) {
+            if ($item->product?->track_inventory) {
+                $stockService->stockIn($item->product, (int) $item->quantity, 'order_cancelled', $reference, ['order_id' => $this->id]);
+            }
+
+            if ($item->variant?->track_inventory) {
+                $stockService->stockIn($item->variant, (int) $item->quantity, 'order_cancelled', $reference, ['order_id' => $this->id]);
+            }
+        }
     }
 }
