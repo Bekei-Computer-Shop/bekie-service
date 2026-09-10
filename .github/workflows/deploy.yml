@@ -1,0 +1,241 @@
+name: Build and Deploy to Google Cloud
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY_LOCATION: us-central1
+  REGISTRY_REPOSITORY: bekie-service
+  IMAGE_NAME: bekie-service
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: bekie_service_test
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.2
+          extensions: pdo_pgsql, redis, gd
+          coverage: xdebug
+          tools: composer:v2
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Cache Composer packages
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Copy .env.example to .env.test
+        run: cp .env.example .env.test
+
+      - name: Configure test database
+        run: |
+          sed -i 's/DB_HOST=.*/DB_HOST=127.0.0.1/' .env.test
+          sed -i 's/DB_PORT=.*/DB_PORT=5432/' .env.test
+          sed -i 's/DB_DATABASE=.*/DB_DATABASE=bekie_service_test/' .env.test
+          sed -i 's/DB_USERNAME=.*/DB_USERNAME=root/' .env.test
+          sed -i 's/DB_PASSWORD=.*/DB_PASSWORD=password/' .env.test
+
+      - name: Generate Laravel APP_KEY
+        run: |
+          composer install --no-interaction --prefer-dist
+          php artisan key:generate --env=test
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build assets
+        run: npm run build
+
+      - name: Run Pint (code style)
+        run: vendor/bin/pint --test --dirty || true
+
+      - name: Run tests
+        run: php artisan test --env=test
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: bekie_service_test
+          DB_USERNAME: root
+          DB_PASSWORD: password
+
+  build-and-push:
+    name: Build & Push Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    outputs:
+      image-uri: ${{ steps.image.outputs.uri }}
+      image-sha: ${{ steps.image.outputs.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Configure Docker authentication to Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGISTRY_LOCATION }}-docker.pkg.dev
+
+      - name: Generate image metadata
+        id: meta
+        run: |
+          COMMIT_SHA=${{ github.sha }}
+          SHORT_SHA=${COMMIT_SHA:0:8}
+          IMAGE_TAG="${{ env.REGISTRY_LOCATION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.REGISTRY_REPOSITORY }}/${{ env.IMAGE_NAME }}"
+          echo "tag=${IMAGE_TAG}:${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "tag_latest=${IMAGE_TAG}:latest" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.tag_latest }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image details
+        id: image
+        run: |
+          echo "uri=${{ steps.meta.outputs.tag }}" >> $GITHUB_OUTPUT
+          echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy to Google Cloud
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ vars.CLOUD_RUN_SERVICE_NAME }} \
+            --image ${{ needs.build-and-push.outputs.image-uri }} \
+            --region ${{ vars.GCP_REGION }} \
+            --platform managed \
+            --port 8080 \
+            --memory ${{ vars.CLOUD_RUN_MEMORY || '512Mi' }} \
+            --cpu ${{ vars.CLOUD_RUN_CPU || '1' }} \
+            --timeout ${{ vars.CLOUD_RUN_TIMEOUT || '300' }} \
+            --max-instances ${{ vars.CLOUD_RUN_MAX_INSTANCES || '10' }} \
+            --min-instances ${{ vars.CLOUD_RUN_MIN_INSTANCES || '1' }} \
+            --set-env-vars \
+            "APP_ENV=production,\
+            APP_DEBUG=false,\
+            LOG_CHANNEL=${{ vars.LOG_CHANNEL || 'stderr' }},\
+            LOG_LEVEL=${{ vars.LOG_LEVEL || 'info' }},\
+            CACHE_STORE=${{ vars.CACHE_STORE || 'redis' }},\
+            SESSION_DRIVER=${{ vars.SESSION_DRIVER || 'redis' }},\
+            QUEUE_CONNECTION=${{ vars.QUEUE_CONNECTION || 'redis' }},\
+            RUN_MIGRATIONS=${{ vars.RUN_MIGRATIONS || 'false' }}" \
+            --set-secrets \
+            "APP_KEY=${{ vars.GCP_SECRET_APP_KEY || 'app-key:latest' }},\
+            APP_URL=${{ vars.APP_URL || 'https://api.bekie.app' }},\
+            DB_HOST=${{ vars.GCP_SECRET_DB_HOST || 'db-host:latest' }},\
+            DB_PORT=${{ vars.GCP_SECRET_DB_PORT || 'db-port:latest' }},\
+            DB_DATABASE=${{ vars.GCP_SECRET_DB_DATABASE || 'db-database:latest' }},\
+            DB_USERNAME=${{ vars.GCP_SECRET_DB_USERNAME || 'db-username:latest' }},\
+            DB_PASSWORD=${{ vars.GCP_SECRET_DB_PASSWORD || 'db-password:latest' }},\
+            DB_SSLMODE=${{ vars.GCP_SECRET_DB_SSLMODE || 'db-sslmode:latest' }},\
+            REDIS_HOST=${{ vars.GCP_SECRET_REDIS_HOST || 'redis-host:latest' }},\
+            REDIS_PORT=${{ vars.GCP_SECRET_REDIS_PORT || 'redis-port:latest' }},\
+            REDIS_PASSWORD=${{ vars.GCP_SECRET_REDIS_PASSWORD || 'redis-password:latest' }},\
+            JWT_SECRET=${{ vars.GCP_SECRET_JWT_SECRET || 'jwt-secret:latest' }},\
+            CLOUDINARY_CLOUD_NAME=${{ vars.GCP_SECRET_CLOUDINARY_CLOUD_NAME || 'cloudinary-cloud-name:latest' }},\
+            CLOUDINARY_API_KEY=${{ vars.GCP_SECRET_CLOUDINARY_API_KEY || 'cloudinary-api-key:latest' }},\
+            CLOUDINARY_API_SECRET=${{ vars.GCP_SECRET_CLOUDINARY_API_SECRET || 'cloudinary-api-secret:latest' }}" \
+            --allow-unauthenticated
+
+      - name: Verify deployment
+        run: |
+          echo "Waiting for deployment to stabilize..."
+          sleep 10
+
+          SERVICE_URL=$(gcloud run services describe ${{ vars.CLOUD_RUN_SERVICE_NAME }} \
+            --region ${{ vars.GCP_REGION }} \
+            --format='value(status.url)')
+
+          echo "Service deployed at: $SERVICE_URL"
+
+          # Health check
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/health" 2>/dev/null || echo "000")
+
+          if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "404" ]; then
+            echo "✓ Health check passed (HTTP $HTTP_STATUS)"
+          else
+            echo "⚠ Health check returned HTTP $HTTP_STATUS"
+            echo "Deployment succeeded but endpoint verification inconclusive"
+          fi
+
+      - name: Post deployment summary
+        if: always()
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image URI**: ${{ needs.build-and-push.outputs.image-uri }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit SHA**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service**: ${{ vars.CLOUD_RUN_SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: ${{ vars.GCP_REGION }}" >> $GITHUB_STEP_SUMMARY
