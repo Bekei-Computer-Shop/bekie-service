@@ -9,7 +9,9 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\JwtService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CartTest extends TestCase
@@ -22,12 +24,27 @@ class CartTest extends TestCase
 
     private Cart $cart;
 
+    private string $jwtToken;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->user = User::factory()->create();
-        $this->token = ApiToken::factory()->for($this->user)->create(['scope' => 'client']);
+
+        $jti = Str::random(64);
+        $this->token = ApiToken::factory()->for($this->user)->create([
+            'scope' => 'client',
+            'token' => hash('sha256', $jti),
+        ]);
+
+        $jwtService = new JwtService;
+        $this->jwtToken = $jwtService->encode([
+            'sub' => (string) $this->user->id,
+            'jti' => $jti,
+            'scope' => 'client',
+        ], 60 * 24 * 60 * 60);
+
         $this->cart = Cart::factory()->for($this->user)->create();
     }
 
@@ -48,7 +65,7 @@ class CartTest extends TestCase
             'product_sku' => $product->sku,
         ]);
 
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->getJson('/api/v1/cart');
 
         $response->assertOk()
@@ -61,7 +78,7 @@ class CartTest extends TestCase
 
     public function test_create_or_update_cart(): void
     {
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->putJson('/api/v1/cart', [
                 'currency' => 'USD',
             ]);
@@ -75,7 +92,7 @@ class CartTest extends TestCase
     {
         $product = Product::factory()->create(['price' => 100]);
 
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->postJson('/api/v1/cart/items', [
                 'product_id' => $product->id,
                 'quantity' => 2,
@@ -95,7 +112,7 @@ class CartTest extends TestCase
 
     public function test_add_item_requires_valid_product(): void
     {
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->postJson('/api/v1/cart/items', [
                 'product_id' => 9999,
                 'quantity' => 1,
@@ -108,7 +125,7 @@ class CartTest extends TestCase
     {
         $product = Product::factory()->create();
 
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->postJson('/api/v1/cart/items', [
                 'product_id' => $product->id,
             ]);
@@ -133,7 +150,7 @@ class CartTest extends TestCase
             'product_sku' => $product->sku,
         ]);
 
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->patchJson("/api/v1/cart/items/{$item->id}", [
                 'quantity' => 3,
             ]);
@@ -164,7 +181,7 @@ class CartTest extends TestCase
             'product_sku' => $product->sku,
         ]);
 
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->patchJson("/api/v1/cart/items/{$item->id}", [
                 'quantity' => 0,
             ]);
@@ -189,7 +206,7 @@ class CartTest extends TestCase
             'product_sku' => $product->sku,
         ]);
 
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->deleteJson("/api/v1/cart/items/{$item->id}");
 
         $response->assertOk()
@@ -214,7 +231,7 @@ class CartTest extends TestCase
 
     public function test_remove_nonexistent_item(): void
     {
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->deleteJson('/api/v1/cart/items/9999');
 
         $response->assertNotFound();

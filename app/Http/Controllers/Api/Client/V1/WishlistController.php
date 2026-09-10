@@ -6,6 +6,7 @@ use App\Http\Requests\Api\Client\V1\AddWishlistItemRequest;
 use App\Http\Requests\Api\Client\V1\StoreWishlistRequest;
 use App\Http\Resources\Api\Client\V1\WishlistResource;
 use App\Models\Wishlist;
+use App\Models\WishlistItem;
 use Illuminate\Http\Request;
 
 /**
@@ -174,13 +175,21 @@ class WishlistController extends BaseApiController
      * @response 204 Item removed successfully
      * @response 404 Item not found
      */
-    public function removeItem(Request $request, $item)
+    public function removeItem(Request $request, WishlistItem $item)
     {
         $wishlist = Wishlist::where('user_id', $request->user()->id)->firstOrFail();
+        $this->ensureItemBelongsToWishlist($wishlist, $item);
 
-        $wishlist->items()->whereKey($item)->delete();
+        $item->delete();
 
         return $this->noContent();
+    }
+
+    protected function ensureItemBelongsToWishlist(Wishlist $wishlist, WishlistItem $item): void
+    {
+        if ((int) $item->wishlist_id !== (int) $wishlist->id) {
+            abort(404, 'Wishlist item not found.');
+        }
     }
 
     /**

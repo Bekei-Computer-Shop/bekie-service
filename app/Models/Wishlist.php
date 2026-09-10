@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
+use Database\Factories\WishlistFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Wishlist extends Model
 {
-    use SoftDeletes;
+    /** @use HasFactory<WishlistFactory> */
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'user_id',

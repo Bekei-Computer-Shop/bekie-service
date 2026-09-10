@@ -9,7 +9,9 @@ use App\Models\Product;
 use App\Models\User;
 use App\Models\Wishlist;
 use App\Models\WishlistItem;
+use App\Services\JwtService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class WishlistTest extends TestCase
@@ -22,12 +24,27 @@ class WishlistTest extends TestCase
 
     private Wishlist $wishlist;
 
+    private string $jwtToken;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->user = User::factory()->create();
-        $this->token = ApiToken::factory()->for($this->user)->create(['scope' => 'client']);
+
+        $jti = Str::random(64);
+        $this->token = ApiToken::factory()->for($this->user)->create([
+            'scope' => 'client',
+            'token' => hash('sha256', $jti),
+        ]);
+
+        $jwtService = new JwtService;
+        $this->jwtToken = $jwtService->encode([
+            'sub' => (string) $this->user->id,
+            'jti' => $jti,
+            'scope' => 'client',
+        ], 60 * 24 * 60 * 60);
+
         $this->wishlist = Wishlist::factory()->for($this->user)->create();
     }
 
@@ -39,7 +56,7 @@ class WishlistTest extends TestCase
             'product_id' => $product->id,
         ]);
 
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->getJson('/api/v1/wishlist');
 
         $response->assertOk()
@@ -50,7 +67,7 @@ class WishlistTest extends TestCase
 
     public function test_create_or_update_wishlist(): void
     {
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->putJson('/api/v1/wishlist', [
                 'name' => 'My Favorite Items',
                 'is_public' => true,
@@ -64,7 +81,7 @@ class WishlistTest extends TestCase
     {
         $product = Product::factory()->create();
 
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->postJson('/api/v1/wishlist/items', [
                 'product_id' => $product->id,
             ]);
@@ -81,7 +98,7 @@ class WishlistTest extends TestCase
 
     public function test_add_item_requires_valid_product(): void
     {
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->postJson('/api/v1/wishlist/items', [
                 'product_id' => 9999,
             ]);
@@ -97,7 +114,7 @@ class WishlistTest extends TestCase
             'product_id' => $product->id,
         ]);
 
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->deleteJson("/api/v1/wishlist/items/{$item->id}");
 
         $response->assertOk()
@@ -116,7 +133,7 @@ class WishlistTest extends TestCase
             'product_id' => $product->id,
         ]);
 
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->getJson('/api/v1/wishlist/check?product_id='.$product->id);
 
         $response->assertOk()
@@ -127,7 +144,7 @@ class WishlistTest extends TestCase
     {
         $product = Product::factory()->create();
 
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->getJson('/api/v1/wishlist/check?product_id='.$product->id);
 
         $response->assertOk()
@@ -136,7 +153,7 @@ class WishlistTest extends TestCase
 
     public function test_delete_wishlist(): void
     {
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->deleteJson('/api/v1/wishlist');
 
         $response->assertOk()
@@ -164,7 +181,7 @@ class WishlistTest extends TestCase
 
     public function test_remove_nonexistent_item(): void
     {
-        $response = $this->withHeader('Authorization', "Bearer {$this->token->token}")
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
             ->deleteJson('/api/v1/wishlist/items/9999');
 
         $response->assertNotFound();
