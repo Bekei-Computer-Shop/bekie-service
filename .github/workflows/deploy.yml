@@ -28,6 +28,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate Google Cloud secrets are configured
+        run: |
+          if [ -z "${{ secrets.WIF_PROVIDER }}" ] || [ -z "${{ secrets.WIF_SERVICE_ACCOUNT }}" ]; then
+            echo "❌ ERROR: GitHub Secrets not configured!"
+            echo ""
+            echo "Add these secrets to Repository → Settings → Secrets and variables → Actions → Secrets:"
+            echo "  1. WIF_PROVIDER (from setup-google-cloud.sh output)"
+            echo "  2. WIF_SERVICE_ACCOUNT (from setup-google-cloud.sh output)"
+            echo ""
+            echo "See SETUP_QUICK_START.md for full instructions."
+            exit 1
+          fi
+          echo "✓ GitHub Secrets configured"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
