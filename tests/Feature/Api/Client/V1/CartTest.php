@@ -236,4 +236,28 @@ class CartTest extends TestCase
 
         $response->assertNotFound();
     }
+
+    public function test_get_cart_returns_empty_array_when_no_cart_exists(): void
+    {
+        $newUser = User::factory()->create();
+        $jti = Str::random(64);
+        $token = ApiToken::factory()->for($newUser)->create([
+            'scope' => 'client',
+            'token' => hash('sha256', $jti),
+        ]);
+
+        $jwtService = new JwtService;
+        $jwtToken = $jwtService->encode([
+            'sub' => (string) $newUser->id,
+            'jti' => $jti,
+            'scope' => 'client',
+        ], 60 * 24 * 60 * 60);
+
+        $response = $this->withHeader('Authorization', "Bearer {$jwtToken}")
+            ->getJson('/api/v1/carts');
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data', []);
+    }
 }

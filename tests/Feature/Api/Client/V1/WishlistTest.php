@@ -186,4 +186,28 @@ class WishlistTest extends TestCase
 
         $response->assertNotFound();
     }
+
+    public function test_get_wishlist_returns_empty_array_when_no_wishlist_exists(): void
+    {
+        $newUser = User::factory()->create();
+        $jti = Str::random(64);
+        $token = ApiToken::factory()->for($newUser)->create([
+            'scope' => 'client',
+            'token' => hash('sha256', $jti),
+        ]);
+
+        $jwtService = new JwtService;
+        $jwtToken = $jwtService->encode([
+            'sub' => (string) $newUser->id,
+            'jti' => $jti,
+            'scope' => 'client',
+        ], 60 * 24 * 60 * 60);
+
+        $response = $this->withHeader('Authorization', "Bearer {$jwtToken}")
+            ->getJson('/api/v1/wishlists');
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data', []);
+    }
 }
