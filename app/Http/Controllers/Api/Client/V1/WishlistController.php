@@ -19,7 +19,7 @@ class WishlistController extends BaseApiController
      * Get authenticated user's wishlist
      *
      * Returns the authenticated user's single wishlist with all items.
-     * Automatically creates the wishlist if it doesn't exist.
+     * If no wishlist exists, returns an empty wishlist structure with no items.
      *
      * @response 200 {
      *   "status": "success",
@@ -30,22 +30,24 @@ class WishlistController extends BaseApiController
      *     "description": null,
      *     "is_public": false,
      *     "is_active": true,
-     *     "items": [...]
+     *     "items": []
      *   }
      * }
      */
     public function index(Request $request)
     {
-        $wishlist = Wishlist::firstOrCreate(
-            ['user_id' => $request->user()->id],
-            [
+        $wishlist = Wishlist::where('user_id', $request->user()->id)->first();
+
+        if (! $wishlist) {
+            return $this->success([
+                'user_id' => $request->user()->id,
                 'name' => 'My Wishlist',
                 'description' => null,
                 'is_public' => false,
                 'is_active' => true,
-                'session_id' => null,
-            ]
-        );
+                'items' => [],
+            ]);
+        }
 
         return $this->success(new WishlistResource($wishlist->load('items.product', 'items.variant')));
     }
@@ -106,7 +108,6 @@ class WishlistController extends BaseApiController
     public function destroy(Request $request)
     {
         $wishlist = Wishlist::where('user_id', $request->user()->id)->firstOrFail();
-
         $wishlist->items()->delete();
 
         return $this->noContent();
@@ -177,8 +178,11 @@ class WishlistController extends BaseApiController
     public function removeItem(Request $request, $item)
     {
         $wishlist = Wishlist::where('user_id', $request->user()->id)->firstOrFail();
+        $deleted = $wishlist->items()->whereKey($item)->delete();
 
-        $wishlist->items()->whereKey($item)->delete();
+        if ($deleted === 0) {
+            abort(404, 'Wishlist item not found.');
+        }
 
         return $this->noContent();
     }
