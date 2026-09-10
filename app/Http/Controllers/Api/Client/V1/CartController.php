@@ -30,7 +30,7 @@ class CartController extends BaseApiController
      * Get authenticated user's cart
      *
      * Returns the authenticated user's single cart with all items.
-     * Automatically creates the cart if it doesn't exist.
+     * If no cart exists, returns an empty cart structure with no items.
      *
      * @response 200 {
      *   "status": "success",
@@ -44,7 +44,7 @@ class CartController extends BaseApiController
      *     "shipping_total": 10.00,
      *     "grand_total": 117.99,
      *     "status": "active",
-     *     "items": [...]
+     *     "items": []
      *   }
      * }
      */
@@ -52,9 +52,11 @@ class CartController extends BaseApiController
     {
         $user = $request->user();
 
-        $cart = Cart::firstOrCreate(
-            ['user_id' => $user->id, 'session_id' => null],
-            [
+        $cart = Cart::where('user_id', $user->id)->where('session_id', null)->first();
+
+        if (! $cart) {
+            return $this->success([
+                'user_id' => $user->id,
                 'currency' => 'USD',
                 'subtotal' => 0,
                 'discount_total' => 0,
@@ -62,9 +64,9 @@ class CartController extends BaseApiController
                 'shipping_total' => 0,
                 'grand_total' => 0,
                 'status' => 'active',
-                'last_activity_at' => now(),
-            ]
-        );
+                'items' => [],
+            ]);
+        }
 
         return $this->success(new CartResource($cart->load('items.product', 'items.variant')));
     }
