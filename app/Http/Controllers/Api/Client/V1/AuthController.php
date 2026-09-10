@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Client\V1;
 
+use App\Http\Requests\Api\Client\V1\ChangePasswordRequest;
 use App\Http\Requests\Api\Client\V1\LoginRequest;
 use App\Http\Requests\Api\Client\V1\RefreshTokenRequest;
 use App\Http\Requests\Api\Client\V1\RegisterRequest;
@@ -115,5 +116,22 @@ class AuthController extends BaseApiController
             'token_type' => 'Bearer',
             'expires_at' => $token['expires_at']->toDateTimeString(),
         ], 'Token refreshed successfully.');
+    }
+
+    public function changePassword(ChangePasswordRequest $request)
+    {
+        $user = $request->attributes->get('authenticated_user');
+
+        if (! $user instanceof User) {
+            return $this->error('Unauthorized.', 401);
+        }
+
+        if (! Hash::check($request->input('current_password'), $user->password)) {
+            return $this->error('Current password is incorrect.', 422, ['current_password' => 'The current password is incorrect.']);
+        }
+
+        $user->update(['password' => $request->input('new_password')]);
+
+        return $this->success(message: 'Password changed successfully.');
     }
 }
