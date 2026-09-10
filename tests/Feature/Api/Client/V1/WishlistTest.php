@@ -57,7 +57,7 @@ class WishlistTest extends TestCase
         ]);
 
         $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
-            ->getJson('/api/v1/wishlist');
+            ->getJson('/api/v1/wishlists');
 
         $response->assertOk()
             ->assertJsonPath('status', 'success')
@@ -68,7 +68,7 @@ class WishlistTest extends TestCase
     public function test_create_or_update_wishlist(): void
     {
         $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
-            ->putJson('/api/v1/wishlist', [
+            ->putJson('/api/v1/wishlists', [
                 'name' => 'My Favorite Items',
                 'is_public' => true,
             ]);
@@ -82,7 +82,7 @@ class WishlistTest extends TestCase
         $product = Product::factory()->create();
 
         $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
-            ->postJson('/api/v1/wishlist/items', [
+            ->postJson('/api/v1/wishlists/items', [
                 'product_id' => $product->id,
             ]);
 
@@ -99,7 +99,7 @@ class WishlistTest extends TestCase
     public function test_add_item_requires_valid_product(): void
     {
         $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
-            ->postJson('/api/v1/wishlist/items', [
+            ->postJson('/api/v1/wishlists/items', [
                 'product_id' => 9999,
             ]);
 
@@ -115,7 +115,7 @@ class WishlistTest extends TestCase
         ]);
 
         $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
-            ->deleteJson("/api/v1/wishlist/items/{$item->id}");
+            ->deleteJson("/api/v1/wishlists/items/{$item->id}");
 
         $response->assertOk()
             ->assertJsonPath('status', 'success');
@@ -134,7 +134,7 @@ class WishlistTest extends TestCase
         ]);
 
         $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
-            ->getJson('/api/v1/wishlist/check?product_id='.$product->id);
+            ->getJson('/api/v1/wishlists/check?product_id='.$product->id);
 
         $response->assertOk()
             ->assertJsonPath('data.exists', true);
@@ -145,7 +145,7 @@ class WishlistTest extends TestCase
         $product = Product::factory()->create();
 
         $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
-            ->getJson('/api/v1/wishlist/check?product_id='.$product->id);
+            ->getJson('/api/v1/wishlists/check?product_id='.$product->id);
 
         $response->assertOk()
             ->assertJsonPath('data.exists', false);
@@ -154,7 +154,7 @@ class WishlistTest extends TestCase
     public function test_delete_wishlist(): void
     {
         $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
-            ->deleteJson('/api/v1/wishlist');
+            ->deleteJson('/api/v1/wishlists');
 
         $response->assertOk()
             ->assertJsonPath('status', 'success');
@@ -166,23 +166,23 @@ class WishlistTest extends TestCase
 
     public function test_wishlist_endpoints_require_authentication(): void
     {
-        $response = $this->getJson('/api/v1/wishlist');
+        $response = $this->getJson('/api/v1/wishlists');
         $response->assertUnauthorized();
 
-        $response = $this->putJson('/api/v1/wishlist');
+        $response = $this->putJson('/api/v1/wishlists');
         $response->assertUnauthorized();
 
-        $response = $this->postJson('/api/v1/wishlist/items', []);
+        $response = $this->postJson('/api/v1/wishlists/items', []);
         $response->assertUnauthorized();
 
-        $response = $this->deleteJson('/api/v1/wishlist');
+        $response = $this->deleteJson('/api/v1/wishlists');
         $response->assertUnauthorized();
     }
 
     public function test_remove_nonexistent_item(): void
     {
         $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
-            ->deleteJson('/api/v1/wishlist/items/9999');
+            ->deleteJson('/api/v1/wishlists/items/9999');
 
         $response->assertNotFound();
     }

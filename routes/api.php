@@ -76,7 +76,7 @@ Route::prefix('v1')->group(function () {
         Route::post('coupons/apply', [CouponController::class, 'apply'])
             ->middleware(['permission:client.coupons.apply', 'throttle:promo-apply']);
 
-        Route::prefix('cart')->middleware('permission:client.carts.manage')->group(function () {
+        Route::prefix('carts')->middleware('permission:client.carts.manage')->group(function () {
             Route::get('/', [CartController::class, 'index']);
             Route::put('/', [CartController::class, 'store']);
             Route::post('items', [CartController::class, 'addItem']);
@@ -85,7 +85,7 @@ Route::prefix('v1')->group(function () {
             Route::post('checkout', [CartController::class, 'checkout'])->middleware('throttle:client-checkout');
         });
 
-        Route::prefix('wishlist')->middleware('permission:client.wishlists.manage')->group(function () {
+        Route::prefix('wishlists')->middleware('permission:client.wishlists.manage')->group(function () {
             Route::get('/', [WishlistController::class, 'index']);
             Route::put('/', [WishlistController::class, 'store']);
             Route::delete('/', [WishlistController::class, 'destroy']);
