@@ -305,12 +305,12 @@ return new class extends Migration
     {
         $indexes = [];
 
-        foreach (DB::select('pragma index_list("'.str_replace('"', '""', $table).'"")') as $index) {
+        foreach (DB::select('pragma index_list("'.str_replace('"', '""', $table).'")') as $index) {
             if (str_starts_with((string) $index->name, 'sqlite_autoindex_')) {
                 continue;
             }
 
-            $columns = collect(DB::select('pragma index_info("'.str_replace('"', '""', $index->name).'"")'))
+            $columns = collect(DB::select('pragma index_info("'.str_replace('"', '""', $index->name).'")'))
                 ->sortBy('seqno')
                 ->map(fn (object $col) => '"'.$col->name.'"')
                 ->implode(', ');
@@ -397,7 +397,7 @@ return new class extends Migration
             $defs[] = 'foreign key ("product_id") references "products" ("uuid") on delete '.($cfg['on_delete'] === 'cascade' ? 'cascade' : 'set null');
 
             $columns = collect($cols)->map(fn (array $c) => '"'.$c['name'].'"')->all();
-            $selects = collect($cols)->map(fn (array $c) => $c['name'] === 'product_id' ? 'products."uuid"' : '"'.$c['name'].'"')->all();
+            $selects = collect($cols)->map(fn (array $c) => $c['name'] === 'product_id' ? 'products."uuid"' : '"'.$table.'"."'.$c['name'].'"')->all();
 
             DB::statement('create table "'.$table.'_new" ('.implode(', ', $defs).')');
             DB::statement(
