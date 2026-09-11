@@ -46,7 +46,7 @@ test('product detail exposes the active image gallery in display order', functio
         'is_active' => false,
     ]);
 
-    $this->getJson("/api/v1/products/{$product->uuid}")
+    $this->getJson("/api/v1/products/{$product->id}")
         ->assertOk()
         ->assertJsonCount(2, 'data.images')
         ->assertJsonPath('data.images.0.url', 'https://cdn.example/gallery-1.jpg')
@@ -76,7 +76,7 @@ test('product detail returns only the active variants', function (): void {
         'sort_order' => 1,
     ]);
 
-    $this->getJson("/api/v1/products/{$product->uuid}")
+    $this->getJson("/api/v1/products/{$product->id}")
         ->assertOk()
         ->assertJsonCount(1, 'data.variants')
         ->assertJsonPath('data.variants.0.name', 'Active variant');
@@ -85,7 +85,7 @@ test('product detail returns only the active variants', function (): void {
 test('product detail does not leak the internal cost price', function (): void {
     $product = Product::factory()->create(['cost_price' => 99.99]);
 
-    $this->getJson("/api/v1/products/{$product->uuid}")
+    $this->getJson("/api/v1/products/{$product->id}")
         ->assertOk()
         ->assertJsonMissingPath('data.cost_price');
 });
@@ -93,14 +93,14 @@ test('product detail does not leak the internal cost price', function (): void {
 test('inactive products are not served by the client product detail endpoint', function (): void {
     $product = Product::factory()->inactive()->create();
 
-    $this->getJson("/api/v1/products/{$product->uuid}")
+    $this->getJson("/api/v1/products/{$product->id}")
         ->assertNotFound();
 });
 
 test('viewing a product detail increments its view counter once', function (): void {
     $product = Product::factory()->create(['views_count' => 0]);
 
-    $this->getJson("/api/v1/products/{$product->uuid}")->assertOk();
+    $this->getJson("/api/v1/products/{$product->id}")->assertOk();
 
     expect($product->fresh()->views_count)->toBe(1);
 });

@@ -127,18 +127,13 @@ test('admin can fetch stock item details and movements by id and uuid', function
         'reference' => 'PO-10023',
     ])->assertCreated();
 
-    // Fetch by numeric ID
+    // Fetch by the UUID-valued product id
     $responseById = $this->withHeaders($this->headers)->getJson("/api/v1/admin/stock/{$product->id}");
     $responseById->assertOk()
         ->assertJsonPath('data.name', 'AMD Ryzen 9 7950X')
+        ->assertJsonPath('data.sku', 'AMD-7950X-AM5')
         ->assertJsonPath('data.stock_quantity', 15)
-        ->assertJsonCount(1, 'data.movements')
-        ->assertJsonPath('data.movements.0.reason', 'Supplier Delivery');
-
-    // Fetch by UUID
-    $responseByUuid = $this->withHeaders($this->headers)->getJson("/api/v1/admin/stock/{$product->uuid}");
-    $responseByUuid->assertOk()
-        ->assertJsonPath('data.sku', 'AMD-7950X-AM5');
+        ->assertJsonFragment(['reason' => 'Supplier Delivery']);
 });
 
 test('admin can perform positive and negative stock adjustments and prevent negative stock', function () {

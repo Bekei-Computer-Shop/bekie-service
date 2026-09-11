@@ -59,7 +59,7 @@ test('show returns the gallery in sort order', function (): void {
     }
 
     $response = asGalleryAdmin()
-        ->getJson('/api/v1/admin/products/'.$product->uuid)
+        ->getJson('/api/v1/admin/products/'.$product->id)
         ->assertOk();
 
     expect(array_column($response->json('data.images'), 'image'))->toBe([
@@ -77,7 +77,7 @@ test('an absolute image url is passed through rather than resolved against the d
         'image' => 'https://res.cloudinary.com/demo/image/upload/v1/products/a.jpg',
     ]);
 
-    $response = asGalleryAdmin()->getJson('/api/v1/admin/products/'.$product->uuid)->assertOk();
+    $response = asGalleryAdmin()->getJson('/api/v1/admin/products/'.$product->id)->assertOk();
 
     expect($response->json('data.images.0.url'))
         ->toBe('https://res.cloudinary.com/demo/image/upload/v1/products/a.jpg');
@@ -139,7 +139,7 @@ test('update replaces the whole gallery and leaves no orphan rows behind', funct
     $product = galleryProduct();
     ProductImage::create(['product_id' => $product->id, 'image' => 'https://cdn.example.test/old.jpg']);
 
-    $response = asGalleryAdmin()->putJson('/api/v1/admin/products/'.$product->uuid, [
+    $response = asGalleryAdmin()->putJson('/api/v1/admin/products/'.$product->id, [
         'images' => [
             ['image' => 'https://cdn.example.test/new.jpg'],
         ],
@@ -157,7 +157,7 @@ test('omitting the images key leaves the existing gallery untouched', function (
     ProductImage::create(['product_id' => $product->id, 'image' => 'https://cdn.example.test/keep.jpg']);
 
     $response = asGalleryAdmin()
-        ->putJson('/api/v1/admin/products/'.$product->uuid, ['name' => 'Renamed'])
+        ->putJson('/api/v1/admin/products/'.$product->id, ['name' => 'Renamed'])
         ->assertOk();
 
     expect($response->json('data.name'))->toBe('Renamed');
@@ -170,7 +170,7 @@ test('sending an empty images array clears the gallery', function (): void {
     ProductImage::create(['product_id' => $product->id, 'image' => 'https://cdn.example.test/gone.jpg']);
 
     $response = asGalleryAdmin()
-        ->putJson('/api/v1/admin/products/'.$product->uuid, ['images' => []])
+        ->putJson('/api/v1/admin/products/'.$product->id, ['images' => []])
         ->assertOk();
 
     expect($response->json('data.images'))->toBe([]);

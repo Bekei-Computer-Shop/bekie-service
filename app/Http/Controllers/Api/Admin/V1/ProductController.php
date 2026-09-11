@@ -210,10 +210,10 @@ class ProductController extends BaseAdminController
         return $this->noContent();
     }
 
-    public function restore(string $uuid): JsonResponse
+    public function restore(string $id): JsonResponse
     {
         /** @var Product|null $product */
-        $product = Product::onlyTrashed()->where('uuid', $uuid)->firstOrFail();
+        $product = Product::onlyTrashed()->whereKey($id)->firstOrFail();
         $product->restore();
         $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants', 'images', 'promotions']);
 

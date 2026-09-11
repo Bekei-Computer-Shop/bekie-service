@@ -26,7 +26,6 @@ class StockItemResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'uuid' => $this->when($this->resource instanceof Product, $this->uuid),
             'name' => $this->name,
             'sku' => $this->sku,
             'barcode' => $this->barcode,

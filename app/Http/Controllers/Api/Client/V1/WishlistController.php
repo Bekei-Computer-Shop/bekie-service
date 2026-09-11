@@ -220,7 +220,7 @@ class WishlistController extends BaseApiController
         }
 
         $validated = $request->validate([
-            'product_id' => 'required|uuid|exists:products,uuid',
+            'product_id' => 'required|uuid|exists:products,id',
             'product_variant_id' => 'nullable|exists:product_variants,id',
         ]);
 

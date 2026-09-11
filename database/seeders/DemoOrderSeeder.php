@@ -35,6 +35,18 @@ class DemoOrderSeeder extends Seeder
 
     private const ORDER_COUNT = 30;
 
+    /** Products supplied by ProductSeeder and used for demo order line items. */
+    private const ORDER_PRODUCT_SKUS = [
+        'DELL-XPS13-PLUS',
+        'LEN-LEGION5-PRO',
+        'ASUS-PROART-PX13',
+        'ACER-PREDATOR-HELIOS16',
+        'HP-PAVILION-GAMING',
+        'ASUS-ROG-G22CH',
+        'DELL-U2723QE',
+        'LG-ULTRAGEAR-27GN950',
+    ];
+
     /** The canonical statuses — see UpdateOrderRequest::STATUSES. */
     private const STATUSES = UpdateOrderRequest::STATUSES;
 
@@ -57,7 +69,10 @@ class DemoOrderSeeder extends Seeder
             return;
         }
 
-        $products = Product::query()->take(8)->get();
+        $products = Product::query()
+            ->whereIn('sku', self::ORDER_PRODUCT_SKUS)
+            ->orderBy('sku')
+            ->get();
         if ($products->isEmpty()) {
             $this->command->error('No products found — run ProductSeeder first.');
 

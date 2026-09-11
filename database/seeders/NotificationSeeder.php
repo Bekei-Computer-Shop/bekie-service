@@ -30,7 +30,7 @@ class NotificationSeeder extends Seeder
             return;
         }
 
-        $products = Product::query()->get(['uuid', 'name', 'sku', 'stock_quantity', 'min_stock_alert']);
+        $products = Product::query()->get(['id', 'name', 'sku', 'stock_quantity', 'min_stock_alert']);
         $orders = Order::query()->latest()->limit(self::PER_TAB)->get(['id', 'order_number', 'grand_total']);
         $customers = User::query()
             ->where('is_admin', false)
@@ -139,7 +139,7 @@ class NotificationSeeder extends Seeder
                 'title' => $outOfStock ? 'Product out of stock' : 'Product stock is low',
                 'message' => sprintf('%s (%s) now has %d unit%s remaining.', $product?->name ?? 'Demo product '.$number, $product?->sku ?? 'DEMO-'.$number, $quantity, $quantity === 1 ? '' : 's'),
                 'data' => [
-                    'product_id' => $product?->uuid,
+                    'product_id' => $product?->id,
                     'sku' => $product?->sku ?? 'DEMO-'.$number,
                     'stock_quantity' => $quantity,
                     'min_stock_alert' => (int) ($product?->min_stock_alert ?? 5),

@@ -57,7 +57,7 @@ class AdminNotificationService
             $crossedIntoOut ? 'Product out of stock' : 'Product stock is low',
             sprintf('%s (%s) now has %d unit%s remaining.', $product->name, $product->sku, $newQuantity, $newQuantity === 1 ? '' : 's'),
             [
-                'product_id' => $product->uuid,
+                'product_id' => $product->id,
                 'sku' => $product->sku,
                 'stock_quantity' => $newQuantity,
                 'min_stock_alert' => (int) $product->min_stock_alert,

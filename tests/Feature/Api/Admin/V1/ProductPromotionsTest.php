@@ -82,7 +82,7 @@ test('update replaces the applied promotions', function (): void {
     $c = promoCoupon('PROMO-C');
     $product->promotions()->sync([$a->id, $b->id]);
 
-    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->uuid, [
+    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->id, [
         'promotion_ids' => [$b->id, $c->id],
     ])->assertOk();
 
@@ -94,7 +94,7 @@ test('an empty promotion_ids array detaches every promotion', function (): void 
     $product = promoProduct();
     $product->promotions()->sync([promoCoupon('PROMO-A')->id]);
 
-    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->uuid, [
+    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->id, [
         'promotion_ids' => [],
     ])->assertOk();
 
@@ -107,7 +107,7 @@ test('omitting promotion_ids leaves the applied promotions alone', function (): 
     $product->promotions()->sync([$a->id]);
 
     // A save from a form that never touched promotions must not clear them.
-    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->uuid, [
+    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->id, [
         'name' => 'Renamed Product',
     ])->assertOk();
 
@@ -120,7 +120,7 @@ test('show returns the applied promotions with their labels', function (): void 
     $product->promotions()->sync([$a->id]);
 
     $response = asPromoAdmin()
-        ->getJson('/api/v1/admin/products/'.$product->uuid)
+        ->getJson('/api/v1/admin/products/'.$product->id)
         ->assertOk();
 
     expect($response->json('data.promotion_ids'))->toBe([$a->id]);
@@ -131,7 +131,7 @@ test('a duplicate id in the payload attaches the promotion once', function (): v
     $product = promoProduct();
     $a = promoCoupon('PROMO-A');
 
-    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->uuid, [
+    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->id, [
         'promotion_ids' => [$a->id, $a->id],
     ])->assertOk();
 
@@ -141,7 +141,7 @@ test('a duplicate id in the payload attaches the promotion once', function (): v
 test('an unknown promotion id is rejected', function (): void {
     $product = promoProduct();
 
-    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->uuid, [
+    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->id, [
         'promotion_ids' => [999999],
     ])->assertStatus(422)->assertJsonValidationErrors('promotion_ids.0');
 });
@@ -155,7 +155,7 @@ test('a soft-deleted promotion is rejected and stops being returned', function (
     // The pivot row survives the soft delete, but the relation filters it out.
     expect($product->promotions()->count())->toBe(0);
 
-    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->uuid, [
+    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->id, [
         'promotion_ids' => [$a->id],
     ])->assertStatus(422)->assertJsonValidationErrors('promotion_ids.0');
 });

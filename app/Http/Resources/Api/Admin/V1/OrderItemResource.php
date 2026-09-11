@@ -25,7 +25,7 @@ class OrderItemResource extends JsonResource
             'discount' => number_format((float) $this->discount, 2, '.', ''),
             'line_total' => number_format((float) $this->total, 2, '.', ''),
             'product' => [
-                'id' => $this->product?->uuid ?? $this->product?->id,
+                'id' => $this->product?->id,
                 'name' => $this->product?->name,
                 'sku' => $this->product?->sku,
             ],
