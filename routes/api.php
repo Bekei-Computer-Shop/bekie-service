@@ -52,7 +52,7 @@ Route::prefix('v1')->group(function () {
     Route::get('brands/{brand}', [BrandController::class, 'show']);
 
     Route::get('products', [ProductController::class, 'index']);
-    Route::get('products/{id}', [ProductController::class, 'show']);
+    Route::get('products/{product}', [ProductController::class, 'show']);
     Route::get('products/{product}/variants', [ProductController::class, 'variants']);
 
     Route::get('shipping-methods', [ShippingMethodController::class, 'index']);

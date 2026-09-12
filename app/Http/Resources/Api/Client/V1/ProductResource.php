@@ -10,8 +10,6 @@ class ProductResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'category_id' => $this->category_id,
-            'brand_id' => $this->brand_id,
             'name' => $this->name,
             'slug' => $this->slug,
             'sku' => $this->sku,
@@ -37,8 +35,6 @@ class ProductResource extends JsonResource
             'views_count' => $this->views_count,
             'sales_count' => $this->sales_count,
             'sort_order' => $this->sort_order,
-            'category' => new CategoryResource($this->whenLoaded('category')),
-            'brand' => new BrandResource($this->whenLoaded('brand')),
             'variants' => ProductVariantResource::collection($this->whenLoaded('variants')),
             'images' => $this->whenLoaded('images', fn () => ProductImageResource::collection($this->images)),
         ];

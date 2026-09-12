@@ -1995,7 +1995,7 @@
         "/v1/admin/auth/me": {
             "get": {
                 "operationId": "auth.me",
-                "summary": "GET /admin/auth/me \u2014 current admin profile",
+                "summary": "GET /admin/auth/me — current admin profile",
                 "tags": [
                     "Auth"
                 ],
@@ -2107,7 +2107,7 @@
         "/v1/admin/auth/profile": {
             "put": {
                 "operationId": "auth.updateProfile",
-                "summary": "PATCH /admin/auth/profile \u2014 update own personal information",
+                "summary": "PATCH /admin/auth/profile — update own personal information",
                 "tags": [
                     "Auth"
                 ],
@@ -2319,7 +2319,7 @@
         "/v1/admin/auth/change-password": {
             "post": {
                 "operationId": "auth.changePassword",
-                "summary": "POST /admin/auth/change-password \u2014 change own password",
+                "summary": "POST /admin/auth/change-password — change own password",
                 "tags": [
                     "Auth"
                 ],
@@ -6452,7 +6452,7 @@
         "/v1/admin/orders/{order}/reject": {
             "post": {
                 "operationId": "order.reject",
-                "summary": "Rejecting cancels the order. Previously wrote 'rejected' \u2014 see approve()",
+                "summary": "Rejecting cancels the order. Previously wrote 'rejected' — see approve()",
                 "tags": [
                     "Order"
                 ],
@@ -10803,7 +10803,7 @@
                 "type": "object",
                 "properties": {
                     "id": {
-                        "description": "`id` stays the uuid \u2014 routes bind on it (Order::getRouteKeyName).",
+                        "description": "`id` stays the uuid — routes bind on it (Order::getRouteKeyName).",
                         "anyOf": [
                             {
                                 "type": "string"
@@ -11251,7 +11251,7 @@
                         ]
                     },
                     "images": {
-                        "description": "Omitted rather than sent as [] when not loaded, so a client can\ntell \"this product has no gallery\" from \"the list endpoint didn't\n ship one\" \u2014 index() stays light and only sends `thumbnail`.",
+                        "description": "Omitted rather than sent as [] when not loaded, so a client can\ntell \"this product has no gallery\" from \"the list endpoint didn't\n ship one\" — index() stays light and only sends `thumbnail`.",
                         "anyOf": [
                             {
                                 "type": "array",
@@ -12728,18 +12728,6 @@
                     "id": {
                         "type": "string"
                     },
-                    "category_id": {
-                        "type": [
-                            "integer",
-                            "null"
-                        ]
-                    },
-                    "brand_id": {
-                        "type": [
-                            "integer",
-                            "null"
-                        ]
-                    },
                     "name": {
                         "type": "string"
                     },
@@ -12848,18 +12836,6 @@
                     "sort_order": {
                         "type": "integer"
                     },
-                    "category": {
-                        "$ref": "#/components/schemas/CategoryResource"
-                    },
-                    "brand": {
-                        "$ref": "#/components/schemas/BrandResource"
-                    },
-                    "variants": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/ProductVariantResource"
-                        }
-                    },
                     "images": {
                         "type": "array",
                         "items": {
@@ -12869,8 +12845,6 @@
                 },
                 "required": [
                     "id",
-                    "category_id",
-                    "brand_id",
                     "name",
                     "slug",
                     "sku",
@@ -14109,7 +14083,7 @@
                             "string",
                             "null"
                         ],
-                        "description": "`users.phone` is uniquely indexed, so a blank one has to arrive as\nnull rather than '' \u2014 two empty strings would collide.",
+                        "description": "`users.phone` is uniquely indexed, so a blank one has to arrive as\nnull rather than '' — two empty strings would collide.",
                         "maxLength": 50
                     },
                     "address": {
@@ -14490,7 +14464,7 @@
                             "properties": {
                                 "image": {
                                     "type": "string",
-                                    "description": "Capped at 255 to match the varchar column \u2014 a longer URL would\npass validation and then fail at the driver.",
+                                    "description": "Capped at 255 to match the varchar column — a longer URL would\npass validation and then fail at the driver.",
                                     "maxLength": 255
                                 },
                                 "disk": {
@@ -14751,7 +14725,7 @@
                             "string",
                             "null"
                         ],
-                        "description": "The campaign label. Kept off `type` on purpose \u2014 see Coupon::KINDS.",
+                        "description": "The campaign label. Kept off `type` on purpose — see Coupon::KINDS.",
                         "enum": [
                             "flash_sale",
                             "bogo",
@@ -15332,7 +15306,7 @@
                     },
                     "payment_status": {
                         "type": "string",
-                        "description": "Payment state is recorded here rather than at creation \u2014 a new\norder cannot already be paid, failed or refunded."
+                        "description": "Payment state is recorded here rather than at creation — a new\norder cannot already be paid, failed or refunded."
                     },
                     "notes": {
                         "type": "string"
@@ -15531,7 +15505,7 @@
                             "properties": {
                                 "image": {
                                     "type": "string",
-                                    "description": "Capped at 255 to match the varchar column \u2014 a longer URL would\npass validation and then fail at the driver.",
+                                    "description": "Capped at 255 to match the varchar column — a longer URL would\npass validation and then fail at the driver.",
                                     "maxLength": 255
                                 },
                                 "disk": {
@@ -15785,7 +15759,7 @@
                             "string",
                             "null"
                         ],
-                        "description": "The campaign label. Kept off `type` on purpose \u2014 see Coupon::KINDS.",
+                        "description": "The campaign label. Kept off `type` on purpose — see Coupon::KINDS.",
                         "enum": [
                             "flash_sale",
                             "bogo",
