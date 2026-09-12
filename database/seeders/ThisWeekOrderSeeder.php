@@ -15,9 +15,10 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
 
 /**
- * 15 orders dated Monday..today of the current calendar week — the seeded
- * demo data (DemoOrderSeeder) all predates the current week, which is why the
- * admin dashboard's "Orders This Week" chart shows zero for every day.
+ * 15-20 orders per day for every day of the current calendar week that has
+ * actually happened yet (Monday..today) — the seeded demo data
+ * (DemoOrderSeeder) all predates the current week, which is why the admin
+ * dashboard's "Orders This Week" chart otherwise shows zero for every day.
  *
  * Every foreign key an order (and its line items) can carry — user, address,
  * coupon, product, variant — is populated rather than left null, unlike
@@ -26,13 +27,20 @@ use Illuminate\Support\Collection;
  * Tagged the same way as DemoOrderSeeder so it can be told apart and cleaned
  * up on its own. Re-running is a no-op if a tagged batch already exists.
  *
+ * Wired into DatabaseSeeder (after ProductCatalogSeeder, CustomerSeeder and
+ * PromotionSeeder, which supply the products/addressed customers/coupons
+ * this seeder needs) so every full reseed keeps the current week populated —
+ * this class being left standalone before is exactly why the dashboard chart
+ * went back to nearly empty after any `migrate:fresh --seed`.
+ *
  * Usage: php artisan db:seed --class=ThisWeekOrderSeeder
  */
 class ThisWeekOrderSeeder extends Seeder
 {
     private const TAG = 'this-week-order-seeder';
 
-    private const ORDER_COUNT = 15;
+    /** Orders per day, Monday..Sunday. Every value is in the 15-20 range. */
+    private const DAILY_COUNTS = [18, 15, 20, 16, 19, 17, 20];
 
     /** The canonical statuses — see UpdateOrderRequest::STATUSES. */
     private const STATUSES = UpdateOrderRequest::STATUSES;
@@ -83,89 +91,94 @@ class ThisWeekOrderSeeder extends Seeder
         $maxDayOffset = min(6, (int) $weekStart->copy()->startOfDay()->diffInDays(now()->startOfDay()));
 
         $created = 0;
+        $i = 0;
 
-        for ($i = 1; $i <= self::ORDER_COUNT; $i++) {
-            $customer = $customers[($i - 1) % $customers->count()];
-            $address = $customer->addresses->first();
-            $coupon = $coupons[($i - 1) % $coupons->count()];
-            $status = self::STATUSES[$i % count(self::STATUSES)];
-            $method = self::METHODS[$i % count(self::METHODS)];
+        for ($dayOffset = 0; $dayOffset <= $maxDayOffset; $dayOffset++) {
+            $dayCount = self::DAILY_COUNTS[$dayOffset];
 
-            // Spread evenly across the days of this week that have actually
-            // happened yet, at a different time of day each time so the
-            // dashboard's per-day bars vary instead of clustering.
-            $dayOffset = ($i - 1) % ($maxDayOffset + 1);
-            $placedAt = $weekStart->copy()
-                ->addDays($dayOffset)
-                ->setTime(8 + ($i % 11), ($i * 17) % 60, ($i * 7) % 60);
+            for ($n = 1; $n <= $dayCount; $n++) {
+                $i++;
 
-            $lines = $this->lines($products, $i);
-            $subtotal = round(array_sum(array_column($lines, 'total')), 2);
-            $discount = $coupon->calculateDiscount($subtotal);
-            $tax = round(($subtotal - $discount) * 0.10, 2);
-            $shipping = $subtotal > 1000 ? 0.0 : 7.50;
-            $grandTotal = round($subtotal - $discount + $tax + $shipping, 2);
+                $customer = $customers[($i - 1) % $customers->count()];
+                $address = $customer->addresses->first();
+                $coupon = $coupons[($i - 1) % $coupons->count()];
+                $status = self::STATUSES[$i % count(self::STATUSES)];
+                $method = self::METHODS[$i % count(self::METHODS)];
 
-            $order = Order::create([
-                'order_number' => sprintf('ORD-TW-%06d', $i),
-                'user_id' => $customer->id,
-                'address_id' => $address->id,
-                'status' => $status,
-                'notes' => "Seeded this-week order #{$i} for the dashboard chart.",
-                'currency' => 'USD',
-                'payment_method' => $method,
-                'payment_status' => $this->paymentStatus($status),
-                'transaction_id' => 'txn_'.uniqid(),
-                'subtotal' => $subtotal,
-                'discount_total' => $discount,
-                'coupon_id' => $coupon->id,
-                'coupon_code' => $coupon->code,
-                'tax_total' => $tax,
-                'shipping_total' => $shipping,
-                'grand_total' => $grandTotal,
-                'shipping_status' => $this->shippingStatus($status),
-                'tracking_number' => 'TRK'.mt_rand(10000000, 99999999),
-                'shipping_provider' => self::PROVIDERS[$i % count(self::PROVIDERS)],
-                'customer_snapshot' => [
-                    'name' => $customer->name,
-                    'email' => $customer->email,
-                    'phone' => $customer->phone,
-                ],
-                'address_snapshot' => $address->only([
-                    'full_name', 'phone', 'address_line_1', 'address_line_2',
-                    'city', 'state', 'postal_code', 'country',
-                ]),
-                'metadata' => ['seeded_by' => self::TAG],
-            ]);
+                // Spread across the day at a different time each time so the
+                // dashboard's per-day bars vary instead of clustering.
+                $placedAt = $weekStart->copy()
+                    ->addDays($dayOffset)
+                    ->setTime(8 + ($n % 11), ($i * 17) % 60, ($i * 7) % 60);
 
-            // created_at is not fillable, so the placement date is forced after.
-            $order->forceFill(array_merge(
-                ['created_at' => $placedAt, 'updated_at' => $placedAt],
-                $this->lifecycleTimestamps($status, $placedAt),
-            ))->saveQuietly();
+                $lines = $this->lines($products, $i);
+                $subtotal = round(array_sum(array_column($lines, 'total')), 2);
+                $discount = $coupon->calculateDiscount($subtotal);
+                $tax = round(($subtotal - $discount) * 0.10, 2);
+                $shipping = $subtotal > 1000 ? 0.0 : 7.50;
+                $grandTotal = round($subtotal - $discount + $tax + $shipping, 2);
 
-            foreach ($lines as $line) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $line['product']->id,
-                    'product_variant_id' => $line['variant']->id,
-                    'quantity' => $line['qty'],
-                    'unit_price' => $line['unit'],
-                    'sale_price' => $line['variant']->sale_price,
-                    'cost_price' => $line['variant']->cost_price,
-                    'subtotal' => $line['total'],
-                    'discount' => 0,
-                    'tax' => 0,
-                    'total' => $line['total'],
-                    'product_name' => $line['product']->name,
-                    'product_sku' => $line['variant']->sku,
-                    'variant_name' => $line['variant']->name,
-                    'variant_attributes' => $line['variant']->attributes,
-                    'status' => $this->itemStatus($status),
+                $order = Order::create([
+                    'order_number' => sprintf('ORD-TW-%06d', $i),
+                    'user_id' => $customer->id,
+                    'address_id' => $address->id,
+                    'status' => $status,
+                    'notes' => "Seeded this-week order #{$i} for the dashboard chart.",
+                    'currency' => 'USD',
+                    'payment_method' => $method,
+                    'payment_status' => $this->paymentStatus($status),
+                    'transaction_id' => 'txn_'.uniqid(),
+                    'subtotal' => $subtotal,
+                    'discount_total' => $discount,
+                    'coupon_id' => $coupon->id,
+                    'coupon_code' => $coupon->code,
+                    'tax_total' => $tax,
+                    'shipping_total' => $shipping,
+                    'grand_total' => $grandTotal,
+                    'shipping_status' => $this->shippingStatus($status),
+                    'tracking_number' => 'TRK'.mt_rand(10000000, 99999999),
+                    'shipping_provider' => self::PROVIDERS[$i % count(self::PROVIDERS)],
+                    'customer_snapshot' => [
+                        'name' => $customer->name,
+                        'email' => $customer->email,
+                        'phone' => $customer->phone,
+                    ],
+                    'address_snapshot' => $address->only([
+                        'full_name', 'phone', 'address_line_1', 'address_line_2',
+                        'city', 'state', 'postal_code', 'country',
+                    ]),
+                    'metadata' => ['seeded_by' => self::TAG],
                 ]);
-            }
 
-            $created++;
+                // created_at is not fillable, so the placement date is forced after.
+                $order->forceFill(array_merge(
+                    ['created_at' => $placedAt, 'updated_at' => $placedAt],
+                    $this->lifecycleTimestamps($status, $placedAt),
+                ))->saveQuietly();
+
+                foreach ($lines as $line) {
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $line['product']->id,
+                        'product_variant_id' => $line['variant']->id,
+                        'quantity' => $line['qty'],
+                        'unit_price' => $line['unit'],
+                        'sale_price' => $line['variant']->sale_price,
+                        'cost_price' => $line['variant']->cost_price,
+                        'subtotal' => $line['total'],
+                        'discount' => 0,
+                        'tax' => 0,
+                        'total' => $line['total'],
+                        'product_name' => $line['product']->name,
+                        'product_sku' => $line['variant']->sku,
+                        'variant_name' => $line['variant']->name,
+                        'variant_attributes' => $line['variant']->attributes,
+                        'status' => $this->itemStatus($status),
+                    ]);
+                }
+
+                $created++;
+            }
         }
 
         $this->command->info("Created {$created} orders dated {$weekStart->toDateString()} through ".now()->toDateString().'.');

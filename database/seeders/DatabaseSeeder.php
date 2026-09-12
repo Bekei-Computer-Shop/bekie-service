@@ -29,6 +29,11 @@ class DatabaseSeeder extends Seeder
             DemoOrderSeeder::class,
             BannerSeeder::class,
             PromotionSeeder::class,
+            // Depends on ProductCatalogSeeder (products), CustomerSeeder
+            // (addressed customers) and PromotionSeeder (coupons), so it must
+            // run after all three — this is what keeps the admin dashboard's
+            // "Orders This Week" chart from showing near-zero every day.
+            ThisWeekOrderSeeder::class,
             ContentSeeder::class,
             NotificationSeeder::class,
         ]);
