@@ -20,7 +20,9 @@ use Illuminate\Support\Str;
 class PreProductionSeeder extends Seeder
 {
     private array $categories = [];
+
     private array $products = [];
+
     private array $users = [];
 
     public function run(): void
@@ -196,31 +198,31 @@ class PreProductionSeeder extends Seeder
 
         if (str_contains($product->slug, 'macbook')) {
             $variants = [
-                ['name' => '16" - 36GB Memory - 1TB SSD', 'sku' => $product->sku . '-36GB-1TB', 'price' => 3499.00, 'stock_quantity' => 8],
-                ['name' => '16" - 36GB Memory - 2TB SSD', 'sku' => $product->sku . '-36GB-2TB', 'price' => 3899.00, 'stock_quantity' => 5],
-                ['name' => '16" - 48GB Memory - 2TB SSD', 'sku' => $product->sku . '-48GB-2TB', 'price' => 4399.00, 'stock_quantity' => 2],
+                ['name' => '16" - 36GB Memory - 1TB SSD', 'sku' => $product->sku.'-36GB-1TB', 'price' => 3499.00, 'stock_quantity' => 8],
+                ['name' => '16" - 36GB Memory - 2TB SSD', 'sku' => $product->sku.'-36GB-2TB', 'price' => 3899.00, 'stock_quantity' => 5],
+                ['name' => '16" - 48GB Memory - 2TB SSD', 'sku' => $product->sku.'-48GB-2TB', 'price' => 4399.00, 'stock_quantity' => 2],
             ];
         } elseif (str_contains($product->slug, 'iphone')) {
             $variants = [
-                ['name' => 'Black - 256GB', 'sku' => $product->sku . '-BLK-256', 'price' => 1199.00, 'stock_quantity' => 15],
-                ['name' => 'Black - 512GB', 'sku' => $product->sku . '-BLK-512', 'price' => 1299.00, 'stock_quantity' => 12],
-                ['name' => 'Silver - 256GB', 'sku' => $product->sku . '-SLV-256', 'price' => 1199.00, 'stock_quantity' => 10],
-                ['name' => 'Titanium Blue - 256GB', 'sku' => $product->sku . '-TIB-256', 'price' => 1199.00, 'stock_quantity' => 8],
+                ['name' => 'Black - 256GB', 'sku' => $product->sku.'-BLK-256', 'price' => 1199.00, 'stock_quantity' => 15],
+                ['name' => 'Black - 512GB', 'sku' => $product->sku.'-BLK-512', 'price' => 1299.00, 'stock_quantity' => 12],
+                ['name' => 'Silver - 256GB', 'sku' => $product->sku.'-SLV-256', 'price' => 1199.00, 'stock_quantity' => 10],
+                ['name' => 'Titanium Blue - 256GB', 'sku' => $product->sku.'-TIB-256', 'price' => 1199.00, 'stock_quantity' => 8],
             ];
         } elseif (str_contains($product->slug, 'tshirt')) {
             $variants = [
-                ['name' => 'Small - White', 'sku' => $product->sku . '-S-WHT', 'price' => 49.99, 'stock_quantity' => 30],
-                ['name' => 'Medium - White', 'sku' => $product->sku . '-M-WHT', 'price' => 49.99, 'stock_quantity' => 40],
-                ['name' => 'Large - White', 'sku' => $product->sku . '-L-WHT', 'price' => 49.99, 'stock_quantity' => 35],
-                ['name' => 'Small - Black', 'sku' => $product->sku . '-S-BLK', 'price' => 49.99, 'stock_quantity' => 25],
-                ['name' => 'Medium - Black', 'sku' => $product->sku . '-M-BLK', 'price' => 49.99, 'stock_quantity' => 35],
+                ['name' => 'Small - White', 'sku' => $product->sku.'-S-WHT', 'price' => 49.99, 'stock_quantity' => 30],
+                ['name' => 'Medium - White', 'sku' => $product->sku.'-M-WHT', 'price' => 49.99, 'stock_quantity' => 40],
+                ['name' => 'Large - White', 'sku' => $product->sku.'-L-WHT', 'price' => 49.99, 'stock_quantity' => 35],
+                ['name' => 'Small - Black', 'sku' => $product->sku.'-S-BLK', 'price' => 49.99, 'stock_quantity' => 25],
+                ['name' => 'Medium - Black', 'sku' => $product->sku.'-M-BLK', 'price' => 49.99, 'stock_quantity' => 35],
             ];
         } elseif (str_contains($product->slug, 'blazer')) {
             $variants = [
-                ['name' => 'Small - Navy', 'sku' => $product->sku . '-S-NVY', 'price' => 129.99, 'stock_quantity' => 12],
-                ['name' => 'Medium - Navy', 'sku' => $product->sku . '-M-NVY', 'price' => 129.99, 'stock_quantity' => 15],
-                ['name' => 'Large - Navy', 'sku' => $product->sku . '-L-NVY', 'price' => 129.99, 'stock_quantity' => 10],
-                ['name' => 'Small - Black', 'sku' => $product->sku . '-S-BLK', 'price' => 129.99, 'stock_quantity' => 8],
+                ['name' => 'Small - Navy', 'sku' => $product->sku.'-S-NVY', 'price' => 129.99, 'stock_quantity' => 12],
+                ['name' => 'Medium - Navy', 'sku' => $product->sku.'-M-NVY', 'price' => 129.99, 'stock_quantity' => 15],
+                ['name' => 'Large - Navy', 'sku' => $product->sku.'-L-NVY', 'price' => 129.99, 'stock_quantity' => 10],
+                ['name' => 'Small - Black', 'sku' => $product->sku.'-S-BLK', 'price' => 129.99, 'stock_quantity' => 8],
             ];
         }
 
@@ -230,7 +232,7 @@ class PreProductionSeeder extends Seeder
                 [
                     'product_id' => $product->id,
                     'name' => $variantData['name'],
-                    'slug' => Str::slug($variantData['name']) . '-' . Str::random(4),
+                    'slug' => Str::slug($variantData['name']).'-'.Str::random(4),
                     'price' => $variantData['price'],
                     'stock_quantity' => $variantData['stock_quantity'],
                     'min_stock_alert' => 2,
@@ -303,6 +305,12 @@ class PreProductionSeeder extends Seeder
 
     private function seedOrders(): void
     {
+        if (Order::query()->exists()) {
+            $this->command->info('📦 Orders already seeded, skipping.');
+
+            return;
+        }
+
         $this->command->info('📦 Seeding orders...');
 
         $statuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
@@ -326,7 +334,7 @@ class PreProductionSeeder extends Seeder
             $order = Order::create([
                 'user_id' => $user->id,
                 'address_id' => $defaultAddress->id,
-                'order_number' => 'ORD-' . strtoupper(Str::random(8)),
+                'order_number' => 'ORD-'.strtoupper(Str::random(8)),
                 'customer_snapshot' => [
                     'name' => $user->name,
                     'email' => $user->email,
@@ -416,11 +424,17 @@ class PreProductionSeeder extends Seeder
         $this->command->info('❤️  Seeding wishlists...');
 
         foreach ($this->users as $user) {
-            $wishlist = Wishlist::create([
-                'user_id' => $user->id,
-                'name' => $user->first_name . '\'s Wishlist',
-                'is_public' => rand(0, 1),
-            ]);
+            $wishlist = Wishlist::firstOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'name' => $user->first_name.'\'s Wishlist',
+                    'is_public' => rand(0, 1),
+                ]
+            );
+
+            if (! $wishlist->wasRecentlyCreated) {
+                continue;
+            }
 
             $itemCount = rand(3, 7);
             $selectedProducts = array_rand($this->products, min($itemCount, count($this->products)));
