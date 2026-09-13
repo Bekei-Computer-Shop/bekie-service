@@ -53,7 +53,6 @@ class Product extends Model
         'reorder_point',
         'track_inventory',
         'in_stock',
-        'warehouse_location',
         'weight',
         'length',
         'width',

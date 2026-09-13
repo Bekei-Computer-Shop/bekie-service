@@ -24,6 +24,8 @@ class DatabaseSeeder extends Seeder
             AdminUserSeeder::class,
             CategorySeeder::class,
             ProductCatalogSeeder::class,
+            // Demo data for the admin Stock Management screens' low/out-of-stock filters.
+            StockAlertSeeder::class,
             CustomerSeeder::class,
             CartWishlistSeeder::class,
             DemoOrderSeeder::class,

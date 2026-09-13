@@ -62,7 +62,7 @@ class PreProductionSeeder extends Seeder
     }
 
     /**
-     * Delegates to ProductCatalogSeeder for the full 50-product catalog
+     * Delegates to ProductCatalogSeeder for the full computer-shop catalog
      * (thumbnails, gallery images, 3+ variants per product, every field
      * populated). $this->products then feeds seedOrders/seedCarts/
      * seedWishlists below.
@@ -234,6 +234,10 @@ class PreProductionSeeder extends Seeder
 
         foreach ($this->users as $user) {
             $cart = Cart::firstOrCreate(['user_id' => $user->id]);
+
+            if ($cart->items()->exists()) {
+                continue;
+            }
 
             $itemCount = rand(2, 5);
             for ($i = 0; $i < $itemCount; $i++) {

@@ -86,3 +86,16 @@ test('news rows carry the category and cover image through the API', function ()
         ->assertOk()
         ->assertJsonPath('data.category', 'Product News');
 });
+
+test('the categories endpoint returns distinct, non-empty categories in use', function (): void {
+    ContentItem::factory()->news()->create(['category' => 'Guides']);
+    ContentItem::factory()->news()->create(['category' => 'Guides']);
+    ContentItem::factory()->news()->create(['category' => 'Promotions']);
+    ContentItem::factory()->news()->create(['category' => null]);
+    ContentItem::factory()->page()->create(['category' => 'Should Not Appear']);
+
+    $this->withHeaders(['Authorization' => 'Bearer '.contentToken()])
+        ->getJson('/api/v1/admin/content/categories?type=news')
+        ->assertOk()
+        ->assertJson(['data' => ['Guides', 'Promotions']]);
+});

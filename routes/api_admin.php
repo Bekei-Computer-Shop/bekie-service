@@ -104,6 +104,7 @@ Route::prefix('admin')->group(function () {
         });
 
         Route::middleware('permission:content.view')->group(function () {
+            Route::get('content/categories', [ContentController::class, 'categories']);
             Route::get('content', [ContentController::class, 'index']);
             Route::get('content/{item}', [ContentController::class, 'show']);
         });

@@ -102,13 +102,13 @@ class CategorySeeder extends Seeder
                 [
                     'name' => 'Internal SSDs',
                     'description' => 'NVMe and SATA solid-state drives for fast boot times and application loading.',
-                    'image' => '1604590003050-14c5b8521015',
+                    'image' => '1757083840018-cd665233a112',
                     'icon' => 'ssd',
                 ],
                 [
                     'name' => 'Hard Drives',
                     'description' => 'High-capacity HDDs for bulk storage, backups, and NAS setups.',
-                    'image' => '1593448848024-77a27f0690b1',
+                    'image' => '1581725645226-92ad3b4c16d8',
                     'icon' => 'hard-drive',
                 ],
                 [
@@ -148,7 +148,7 @@ class CategorySeeder extends Seeder
         [
             'name' => 'Networking',
             'description' => 'Routers, switches, and networking gear for reliable home and office connectivity.',
-            'image' => '1544197150-b99a580bb7a8',
+            'image' => '1750710583720-8b3bdd0f658a',
             'icon' => 'wifi',
         ],
         [
@@ -180,13 +180,13 @@ class CategorySeeder extends Seeder
         [
             'name' => 'Accessories',
             'description' => 'Cables, laptop bags, power banks, and everyday essentials that complete your setup.',
-            'image' => '1758640920659-0bb864175983',
+            'image' => '1644463589256-02679b9c0767',
             'icon' => 'tool',
             'children' => [
                 [
                     'name' => 'Cables & Adapters',
                     'description' => 'USB, HDMI, and power cables and adapters for connecting every device.',
-                    'image' => '1473831818960-c89731aabc3e',
+                    'image' => '1492107376256-4026437926cd',
                     'icon' => 'cable',
                 ],
                 [

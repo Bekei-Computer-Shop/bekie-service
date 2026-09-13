@@ -183,7 +183,6 @@ class StockController extends BaseAdminController
             'reorder_point' => (int) $product->reorder_point,
             'track_inventory' => (bool) $product->track_inventory,
             'in_stock' => (bool) $product->in_stock,
-            'warehouse_location' => $product->warehouse_location,
             'thumbnail' => $product->thumbnail,
             'category' => $product->category ? [
                 'id' => $product->category->id,
@@ -361,7 +360,7 @@ class StockController extends BaseAdminController
     {
         $query = Product::query()
             ->with(['category:id,name', 'brand:id,name'])
-            ->select(['id', 'name', 'sku', 'barcode', 'stock_quantity', 'min_stock_alert', 'cost_price', 'price', 'in_stock', 'warehouse_location', 'category_id', 'brand_id', 'updated_at'])
+            ->select(['id', 'name', 'sku', 'barcode', 'stock_quantity', 'min_stock_alert', 'cost_price', 'price', 'in_stock', 'category_id', 'brand_id', 'updated_at'])
             ->where('track_inventory', true);
 
         if ($request->filled('q')) {
@@ -392,7 +391,7 @@ class StockController extends BaseAdminController
 
         return response()->streamDownload(function () use ($query) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['ID', 'Name', 'SKU', 'Barcode', 'Category', 'Brand', 'Stock Qty', 'Min Alert', 'Cost Price', 'Sale Price', 'In Stock', 'Warehouse', 'Last Updated']);
+            fputcsv($handle, ['ID', 'Name', 'SKU', 'Barcode', 'Category', 'Brand', 'Stock Qty', 'Min Alert', 'Cost Price', 'Sale Price', 'In Stock', 'Last Updated']);
             $query->orderBy('name')->chunk(500, function ($products) use ($handle) {
                 foreach ($products as $p) {
                     fputcsv($handle, [
@@ -401,7 +400,6 @@ class StockController extends BaseAdminController
                         $p->stock_quantity, $p->min_stock_alert,
                         $p->cost_price, $p->price,
                         $p->in_stock ? 'Yes' : 'No',
-                        $p->warehouse_location ?? 'Main Warehouse',
                         $p->updated_at?->toDateTimeString(),
                     ]);
                 }

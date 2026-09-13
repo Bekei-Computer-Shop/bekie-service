@@ -13,12 +13,17 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 /**
- * The full storefront catalog: 50 products spanning computer components,
- * mobile devices, audio, photography, smart home, fashion and outdoor gear.
- * Every product populates every catalog-facing column on `products` (pricing,
- * inventory, physical dimensions, SEO, warehouse location, ...), ships a
- * thumbnail plus a two-image gallery, and carries at least three fully
- * specified variants.
+ * The full storefront catalog: 30 products, all genuinely computer-shop
+ * merchandise (laptops, PC components, storage, peripherals, networking,
+ * audio, printers and computer accessories — no phones, wearables, cameras,
+ * smart home, fashion or appliances). Every product populates every
+ * catalog-facing column on `products` (pricing, inventory, physical
+ * dimensions, SEO, warehouse location, ...), ships a thumbnail plus a
+ * two-image gallery, and carries at least three fully specified variants.
+ *
+ * Each product's `category` is the exact name of a leaf category already
+ * seeded by CategorySeeder (a top-level department or one of its children),
+ * so both seeders share one taxonomy instead of maintaining parallel trees.
  *
  * Upserts by SKU (products) and by SKU (variants), so it is safe to run
  * repeatedly — including on every deploy. PreProductionSeeder calls this
@@ -29,57 +34,17 @@ use Illuminate\Support\Str;
  */
 class ProductCatalogSeeder extends Seeder
 {
-    /** Rotated across products so stock isn't all parked in one place. */
-    private const WAREHOUSES = ['PP-WH-A', 'PP-WH-B', 'SR-WH-1'];
-
-    /** Sub-category => root category. */
-    private const CATEGORY_TREE = [
-        'Graphics Cards' => 'Computer Components',
-        'Processors' => 'Computer Components',
-        'Motherboards' => 'Computer Components',
-        'Memory' => 'Computer Components',
-        'Power Supply' => 'Computer Components',
-        'CPU Cooler' => 'Computer Components',
-        'PC Case' => 'Computer Components',
-        'NVMe SSD' => 'Storage',
-        'Hard Drives' => 'Storage',
-        'External Storage' => 'Storage',
-        'Gaming Laptop' => 'Laptop',
-        'Office Monitor' => 'Monitor',
-        'Gaming Monitor' => 'Monitor',
-        'Keyboard' => 'Accessories',
-        'Mouse' => 'Accessories',
-        'Streaming Gear' => 'Accessories',
-        'Computer Accessories' => 'Accessories',
-        'Power Bank' => 'Accessories',
-        'Router' => 'Networking',
-        'Smartphone' => 'Mobile Devices',
-        'Tablet' => 'Mobile Devices',
-        'Smartwatch' => 'Wearables',
-        'Fitness Tracker' => 'Wearables',
-        'Headphones' => 'Audio',
-        'Speakers' => 'Audio',
-        'Camera' => 'Photography',
-        'Webcam' => 'Photography',
-        'Printer' => 'Office Supplies',
-        'Smart Home' => 'Smart Living',
-        "Men's Clothing" => 'Fashion',
-        "Women's Clothing" => 'Fashion',
-        'Footwear' => 'Fashion',
-        'Kitchen & Cleaning' => 'Home Appliances',
-        'Outdoor Gear' => 'Outdoors',
-    ];
-
     /**
-     * 50 products. Every entry carries pricing, physical dimensions and at
+     * 30 products. Every entry carries pricing, physical dimensions and at
      * least 3 variants; variant `attributes` hold the axis values the admin
-     * variant editor reads back (color / storage / size / ...).
+     * variant editor reads back (color / storage / size / ...). `category`
+     * must match the name of a category CategorySeeder already created.
      */
     private const PRODUCTS = [
         [
             'name' => 'ASUS ROG Zephyrus G16 Gaming Laptop',
             'sku' => 'AS-ZEPH-G16',
-            'category' => 'Gaming Laptop',
+            'category' => 'Laptops',
             'brand' => 'ASUS',
             'price' => 2199.00,
             'sale_price' => null,
@@ -96,7 +61,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Samsung 990 PRO NVMe SSD',
             'sku' => 'SAM-990PRO',
-            'category' => 'NVMe SSD',
+            'category' => 'Internal SSDs',
             'brand' => 'Samsung',
             'price' => 169.99,
             'sale_price' => null,
@@ -113,7 +78,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Kingston FURY Beast DDR5 Memory Kit',
             'sku' => 'KIN-FURY-DDR5',
-            'category' => 'Memory',
+            'category' => 'Memory (RAM)',
             'brand' => 'Kingston',
             'price' => 129.99,
             'sale_price' => null,
@@ -130,7 +95,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Logitech MX Master 3S Wireless Mouse',
             'sku' => 'LOG-MXM3S',
-            'category' => 'Mouse',
+            'category' => 'Mice',
             'brand' => 'Logitech',
             'price' => 99.99,
             'sale_price' => null,
@@ -147,7 +112,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Razer BlackWidow V4 Pro Mechanical Keyboard',
             'sku' => 'RAZ-BWV4PRO',
-            'category' => 'Keyboard',
+            'category' => 'Keyboards',
             'brand' => 'Razer',
             'price' => 229.99,
             'sale_price' => null,
@@ -164,7 +129,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Dell UltraSharp 4K USB-C Hub Monitor',
             'sku' => 'DEL-ULTRA-4K',
-            'category' => 'Office Monitor',
+            'category' => 'Monitors',
             'brand' => 'Dell',
             'price' => 579.99,
             'sale_price' => null,
@@ -198,7 +163,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Corsair RM Series 80+ Gold Power Supply',
             'sku' => 'COR-RM-GOLD',
-            'category' => 'Power Supply',
+            'category' => 'Power Supplies',
             'brand' => 'Corsair',
             'price' => 149.99,
             'sale_price' => null,
@@ -232,7 +197,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'ASUS RT-AX86U Pro WiFi 6 Router',
             'sku' => 'AS-RTAX86U-PRO',
-            'category' => 'Router',
+            'category' => 'Networking',
             'brand' => 'ASUS',
             'price' => 249.99,
             'sale_price' => null,
@@ -283,7 +248,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Corsair Dominator Platinum RGB DDR5',
             'sku' => 'COR-DOM-DDR5',
-            'category' => 'Memory',
+            'category' => 'Memory (RAM)',
             'brand' => 'Corsair',
             'price' => 299.00,
             'sale_price' => null,
@@ -334,7 +299,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Samsung Odyssey OLED G9 Gaming Monitor',
             'sku' => 'SAM-ODY-G9',
-            'category' => 'Gaming Monitor',
+            'category' => 'Monitors',
             'brand' => 'Samsung',
             'price' => 1299.00,
             'sale_price' => null,
@@ -351,7 +316,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'WD Black SN850X NVMe SSD',
             'sku' => 'WD-SN850X',
-            'category' => 'NVMe SSD',
+            'category' => 'Internal SSDs',
             'brand' => 'Western Digital',
             'price' => 179.99,
             'sale_price' => null,
@@ -368,7 +333,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'NZXT Kraken Elite 360 AIO Cooler',
             'sku' => 'NZXT-KRAKEN-360',
-            'category' => 'CPU Cooler',
+            'category' => 'CPU Coolers',
             'brand' => 'NZXT',
             'price' => 279.99,
             'sale_price' => null,
@@ -385,7 +350,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Lian Li O11 Dynamic EVO PC Case',
             'sku' => 'LIAN-O11-EVO',
-            'category' => 'PC Case',
+            'category' => 'PC Cases',
             'brand' => 'Lian Li',
             'price' => 169.99,
             'sale_price' => null,
@@ -402,7 +367,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Elgato Stream Deck MK.2',
             'sku' => 'ELG-SD-MK2',
-            'category' => 'Streaming Gear',
+            'category' => 'Accessories',
             'brand' => 'Elgato',
             'price' => 149.99,
             'sale_price' => null,
@@ -417,145 +382,9 @@ class ProductCatalogSeeder extends Seeder
             ],
         ],
         [
-            'name' => 'Apple iPhone 15 Pro Max',
-            'sku' => 'APL-IP15PM',
-            'category' => 'Smartphone',
-            'brand' => 'Apple',
-            'price' => 1199.00,
-            'sale_price' => null,
-            'short_description' => 'Titanium-framed flagship with the A17 Pro chip and 5x telephoto zoom.',
-            'description' => 'A titanium unibody, the A17 Pro chip and a 5x periscope telephoto camera. USB-C at up to 10Gb/s and an Action Button replace the mute switch.',
-            'is_featured' => true,
-            'weight' => 0.221, 'length' => 15.99, 'width' => 7.69, 'height' => 0.83,
-            'variants' => [
-                ['label' => '256GB Natural Titanium', 'suffix' => '256-NAT', 'price' => 1199.00, 'sale_price' => null, 'stock' => 22, 'attributes' => ['storage' => '256GB', 'color' => 'Natural Titanium']],
-                ['label' => '512GB Blue Titanium', 'suffix' => '512-BLU', 'price' => 1399.00, 'sale_price' => null, 'stock' => 14, 'attributes' => ['storage' => '512GB', 'color' => 'Blue Titanium']],
-                ['label' => '1TB Black Titanium', 'suffix' => '1TB-BLK', 'price' => 1599.00, 'sale_price' => null, 'stock' => 6, 'attributes' => ['storage' => '1TB', 'color' => 'Black Titanium']],
-            ],
-        ],
-        [
-            'name' => 'Samsung Galaxy S24 Ultra',
-            'sku' => 'SAM-GS24U',
-            'category' => 'Smartphone',
-            'brand' => 'Samsung',
-            'price' => 1299.00,
-            'sale_price' => null,
-            'short_description' => 'Snapdragon 8 Gen 3 flagship with a built-in S Pen and 200MP camera.',
-            'description' => 'A titanium frame, a 200MP main sensor and Galaxy AI features like Circle to Search, all driven by a Snapdragon 8 Gen 3 for Galaxy chip.',
-            'is_featured' => true,
-            'weight' => 0.232, 'length' => 16.24, 'width' => 7.90, 'height' => 0.86,
-            'variants' => [
-                ['label' => '256GB Titanium Gray', 'suffix' => '256-GRY', 'price' => 1299.00, 'sale_price' => null, 'stock' => 18, 'attributes' => ['storage' => '256GB', 'color' => 'Titanium Gray']],
-                ['label' => '512GB Titanium Black', 'suffix' => '512-BLK', 'price' => 1419.00, 'sale_price' => null, 'stock' => 10, 'attributes' => ['storage' => '512GB', 'color' => 'Titanium Black']],
-                ['label' => '1TB Titanium Violet', 'suffix' => '1TB-VIO', 'price' => 1659.00, 'sale_price' => null, 'stock' => 4, 'attributes' => ['storage' => '1TB', 'color' => 'Titanium Violet']],
-            ],
-        ],
-        [
-            'name' => 'Google Pixel 8 Pro',
-            'sku' => 'GOO-PIX8PRO',
-            'category' => 'Smartphone',
-            'brand' => 'Google',
-            'price' => 999.00,
-            'sale_price' => 899.00,
-            'short_description' => 'Tensor G3 flagship with Magic Editor and 7 years of OS updates.',
-            'description' => 'A Tensor G3 chip built for on-device AI, a temperature sensor on the back bar, and Google\'s longest-ever software support commitment.',
-            'is_featured' => false,
-            'weight' => 0.213, 'length' => 16.25, 'width' => 7.65, 'height' => 0.89,
-            'variants' => [
-                ['label' => '128GB Obsidian', 'suffix' => '128-OBS', 'price' => 999.00, 'sale_price' => 899.00, 'stock' => 16, 'attributes' => ['storage' => '128GB', 'color' => 'Obsidian']],
-                ['label' => '256GB Porcelain', 'suffix' => '256-POR', 'price' => 1059.00, 'sale_price' => 949.00, 'stock' => 11, 'attributes' => ['storage' => '256GB', 'color' => 'Porcelain']],
-                ['label' => '512GB Bay', 'suffix' => '512-BAY', 'price' => 1179.00, 'sale_price' => null, 'stock' => 5, 'attributes' => ['storage' => '512GB', 'color' => 'Bay']],
-            ],
-        ],
-        [
-            'name' => 'OnePlus 12',
-            'sku' => 'ONP-12',
-            'category' => 'Smartphone',
-            'brand' => 'OnePlus',
-            'price' => 799.00,
-            'sale_price' => null,
-            'short_description' => 'Snapdragon 8 Gen 3 flyer with 100W SUPERVOOC fast charging.',
-            'description' => 'A Hasselblad-tuned triple camera, a 120Hz LTPO AMOLED display, and 100W wired charging that refills the battery in about 26 minutes.',
-            'is_featured' => false,
-            'weight' => 0.220, 'length' => 16.44, 'width' => 7.58, 'height' => 0.94,
-            'variants' => [
-                ['label' => '256GB Silky Black', 'suffix' => '256-BLK', 'price' => 799.00, 'sale_price' => null, 'stock' => 20, 'attributes' => ['storage' => '256GB', 'color' => 'Silky Black']],
-                ['label' => '512GB Flowy Emerald', 'suffix' => '512-GRN', 'price' => 899.00, 'sale_price' => null, 'stock' => 12, 'attributes' => ['storage' => '512GB', 'color' => 'Flowy Emerald']],
-                ['label' => '512GB Flowy White', 'suffix' => '512-WHT', 'price' => 899.00, 'sale_price' => null, 'stock' => 7, 'attributes' => ['storage' => '512GB', 'color' => 'Flowy White']],
-            ],
-        ],
-        [
-            'name' => 'Apple iPad Pro 12.9" M4',
-            'sku' => 'APL-IPADPRO-M4',
-            'category' => 'Tablet',
-            'brand' => 'Apple',
-            'price' => 1299.00,
-            'sale_price' => null,
-            'short_description' => 'Tandem OLED display driven by the Apple M4 chip.',
-            'description' => 'A Tandem OLED "Ultra Retina XDR" display, the Apple M4 chip, and a Thunderbolt / USB 4 port in the thinnest iPad ever built.',
-            'is_featured' => true,
-            'weight' => 0.579, 'length' => 28.06, 'width' => 21.49, 'height' => 0.51,
-            'variants' => [
-                ['label' => '256GB WiFi Space Black', 'suffix' => '256-WIFI-BLK', 'price' => 1299.00, 'sale_price' => null, 'stock' => 9, 'attributes' => ['storage' => '256GB', 'connectivity' => 'WiFi', 'color' => 'Space Black']],
-                ['label' => '512GB WiFi Silver', 'suffix' => '512-WIFI-SLV', 'price' => 1499.00, 'sale_price' => null, 'stock' => 6, 'attributes' => ['storage' => '512GB', 'connectivity' => 'WiFi', 'color' => 'Silver']],
-                ['label' => '1TB WiFi + Cellular Space Black', 'suffix' => '1TB-CELL-BLK', 'price' => 1899.00, 'sale_price' => null, 'stock' => 3, 'attributes' => ['storage' => '1TB', 'connectivity' => 'WiFi + Cellular', 'color' => 'Space Black']],
-            ],
-        ],
-        [
-            'name' => 'Samsung Galaxy Tab S9 Ultra',
-            'sku' => 'SAM-TABS9U',
-            'category' => 'Tablet',
-            'brand' => 'Samsung',
-            'price' => 1199.00,
-            'sale_price' => null,
-            'short_description' => '14.6-inch Dynamic AMOLED slate with a bundled S Pen.',
-            'description' => 'A 14.6-inch Dynamic AMOLED 2X display, IP68 water resistance and a Snapdragon 8 Gen 2 for Galaxy chip, with the S Pen included in the box.',
-            'is_featured' => false,
-            'weight' => 0.732, 'length' => 32.62, 'width' => 20.86, 'height' => 0.55,
-            'variants' => [
-                ['label' => '256GB Graphite', 'suffix' => '256-GPH', 'price' => 1199.00, 'sale_price' => null, 'stock' => 8, 'attributes' => ['storage' => '256GB', 'color' => 'Graphite']],
-                ['label' => '512GB Beige', 'suffix' => '512-BGE', 'price' => 1329.00, 'sale_price' => null, 'stock' => 5, 'attributes' => ['storage' => '512GB', 'color' => 'Beige']],
-                ['label' => '1TB Graphite', 'suffix' => '1TB-GPH', 'price' => 1589.00, 'sale_price' => null, 'stock' => 2, 'attributes' => ['storage' => '1TB', 'color' => 'Graphite']],
-            ],
-        ],
-        [
-            'name' => 'Apple Watch Ultra 2',
-            'sku' => 'APL-WATCHU2',
-            'category' => 'Smartwatch',
-            'brand' => 'Apple',
-            'price' => 799.00,
-            'sale_price' => null,
-            'short_description' => 'Titanium dive-rated watch with a brighter always-on display.',
-            'description' => 'A 49mm titanium case, a 3,000-nit always-on display and up to 36 hours of battery, rated to 100m of water resistance.',
-            'is_featured' => true,
-            'weight' => 0.061, 'length' => 4.9, 'width' => 4.4, 'height' => 1.44,
-            'variants' => [
-                ['label' => 'Ocean Band Blue', 'suffix' => 'OCEAN-BLU', 'price' => 799.00, 'sale_price' => null, 'stock' => 12, 'attributes' => ['band' => 'Ocean Band', 'color' => 'Blue']],
-                ['label' => 'Trail Loop Orange/Beige', 'suffix' => 'TRAIL-ORG', 'price' => 799.00, 'sale_price' => null, 'stock' => 9, 'attributes' => ['band' => 'Trail Loop', 'color' => 'Orange/Beige']],
-                ['label' => 'Alpine Loop Green', 'suffix' => 'ALPINE-GRN', 'price' => 829.00, 'sale_price' => null, 'stock' => 5, 'attributes' => ['band' => 'Alpine Loop', 'color' => 'Green']],
-            ],
-        ],
-        [
-            'name' => 'Samsung Galaxy Watch 6 Classic',
-            'sku' => 'SAM-GW6C',
-            'category' => 'Smartwatch',
-            'brand' => 'Samsung',
-            'price' => 399.99,
-            'sale_price' => 349.99,
-            'short_description' => 'Rotating bezel smartwatch with body composition tracking.',
-            'description' => 'The physical rotating bezel returns on a stainless steel case, alongside body composition analysis and improved sleep coaching.',
-            'is_featured' => false,
-            'weight' => 0.059, 'length' => 4.63, 'width' => 4.63, 'height' => 1.09,
-            'variants' => [
-                ['label' => '43mm Black', 'suffix' => '43-BLK', 'price' => 399.99, 'sale_price' => 349.99, 'stock' => 14, 'attributes' => ['size' => '43mm', 'color' => 'Black']],
-                ['label' => '47mm Silver', 'suffix' => '47-SLV', 'price' => 429.99, 'sale_price' => 379.99, 'stock' => 10, 'attributes' => ['size' => '47mm', 'color' => 'Silver']],
-                ['label' => '47mm Black LTE', 'suffix' => '47-BLK-LTE', 'price' => 479.99, 'sale_price' => null, 'stock' => 6, 'attributes' => ['size' => '47mm', 'color' => 'Black', 'connectivity' => 'LTE']],
-            ],
-        ],
-        [
             'name' => 'Sony WH-1000XM5 Headphones',
             'sku' => 'SNY-WH1000XM5',
-            'category' => 'Headphones',
+            'category' => 'Headphones & Headsets',
             'brand' => 'Sony',
             'price' => 399.99,
             'sale_price' => null,
@@ -572,7 +401,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Bose QuietComfort Ultra Headphones',
             'sku' => 'BOS-QCULTRA',
-            'category' => 'Headphones',
+            'category' => 'Headphones & Headsets',
             'brand' => 'Bose',
             'price' => 429.00,
             'sale_price' => null,
@@ -589,7 +418,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Apple AirPods Pro 2',
             'sku' => 'APL-APP2',
-            'category' => 'Headphones',
+            'category' => 'Headphones & Headsets',
             'brand' => 'Apple',
             'price' => 249.00,
             'sale_price' => null,
@@ -638,43 +467,9 @@ class ProductCatalogSeeder extends Seeder
             ],
         ],
         [
-            'name' => 'Canon EOS R6 Mark II Mirrorless Camera',
-            'sku' => 'CAN-EOSR6M2',
-            'category' => 'Camera',
-            'brand' => 'Canon',
-            'price' => 2499.00,
-            'sale_price' => null,
-            'short_description' => 'Full-frame hybrid camera shooting 40fps stills and 6K RAW video.',
-            'description' => 'A 24.2MP full-frame sensor, in-body stabilisation rated to 8 stops, and 6K oversampled 4K video for hybrid shooters.',
-            'is_featured' => true,
-            'weight' => 0.67, 'length' => 13.8, 'width' => 9.8, 'height' => 8.8,
-            'variants' => [
-                ['label' => 'Body Only', 'suffix' => 'BODY', 'price' => 2499.00, 'sale_price' => null, 'stock' => 6, 'attributes' => ['kit' => 'Body only']],
-                ['label' => '24-105mm Kit', 'suffix' => '24-105', 'price' => 3199.00, 'sale_price' => null, 'stock' => 4, 'attributes' => ['kit' => 'RF 24-105mm f/4L IS USM']],
-                ['label' => '24-105mm STM Kit', 'suffix' => '24-105-STM', 'price' => 2799.00, 'sale_price' => 2649.00, 'stock' => 5, 'attributes' => ['kit' => 'RF 24-105mm f/4-7.1 STM']],
-            ],
-        ],
-        [
-            'name' => 'GoPro HERO12 Black',
-            'sku' => 'GOP-HERO12',
-            'category' => 'Camera',
-            'brand' => 'GoPro',
-            'price' => 399.99,
-            'sale_price' => null,
-            'short_description' => 'Waterproof action camera shooting 5.3K60 HDR video.',
-            'description' => 'Waterproof to 10m without a housing, HyperSmooth 6.0 stabilisation, and native Bluetooth audio for pairing earbuds directly.',
-            'is_featured' => false,
-            'weight' => 0.154, 'length' => 7.1, 'width' => 5.0, 'height' => 3.3,
-            'variants' => [
-                ['label' => 'Standalone Camera', 'suffix' => 'STD', 'price' => 399.99, 'sale_price' => null, 'stock' => 18, 'attributes' => ['kit' => 'Camera only']],
-                ['label' => 'Creator Edition', 'suffix' => 'CREATOR', 'price' => 599.99, 'sale_price' => null, 'stock' => 7, 'attributes' => ['kit' => 'Media Mod + Light Mod + tripod']],
-                ['label' => 'Adventure Bundle', 'suffix' => 'ADV', 'price' => 479.99, 'sale_price' => 429.99, 'stock' => 9, 'attributes' => ['kit' => 'Extra battery + head strap + case']],
-            ],
-        ],
-        [
             'name' => 'Logitech Brio 4K Webcam',
             'sku' => 'LOG-BRIO4K',
-            'category' => 'Webcam',
+            'category' => 'Webcams',
             'brand' => 'Logitech',
             'price' => 199.99,
             'sale_price' => null,
@@ -691,7 +486,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'HP OfficeJet Pro 9015e Printer',
             'sku' => 'HP-OJPRO9015E',
-            'category' => 'Printer',
+            'category' => 'Printers & Scanners',
             'brand' => 'HP',
             'price' => 229.99,
             'sale_price' => null,
@@ -708,7 +503,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Anker 737 Power Bank',
             'sku' => 'ANK-737PWR',
-            'category' => 'Power Bank',
+            'category' => 'Power Banks & Chargers',
             'brand' => 'Anker',
             'price' => 149.99,
             'sale_price' => null,
@@ -725,7 +520,7 @@ class ProductCatalogSeeder extends Seeder
         [
             'name' => 'Anker PowerExpand 8-in-1 USB-C Hub',
             'sku' => 'ANK-PWREXP8',
-            'category' => 'Computer Accessories',
+            'category' => 'Cables & Adapters',
             'brand' => 'Anker',
             'price' => 69.99,
             'sale_price' => null,
@@ -754,177 +549,6 @@ class ProductCatalogSeeder extends Seeder
                 ['label' => '1TB', 'suffix' => '1TB', 'price' => 129.99, 'sale_price' => null, 'stock' => 24, 'attributes' => ['capacity' => '1TB']],
                 ['label' => '2TB', 'suffix' => '2TB', 'price' => 199.99, 'sale_price' => null, 'stock' => 16, 'attributes' => ['capacity' => '2TB']],
                 ['label' => '4TB', 'suffix' => '4TB', 'price' => 359.99, 'sale_price' => 329.99, 'stock' => 6, 'attributes' => ['capacity' => '4TB']],
-            ],
-        ],
-        [
-            'name' => 'Philips Hue Smart Bulb Starter Kit',
-            'sku' => 'PHI-HUESTART',
-            'category' => 'Smart Home',
-            'brand' => 'Philips',
-            'price' => 199.99,
-            'sale_price' => null,
-            'short_description' => 'Four color-changing smart bulbs with the Hue Bridge.',
-            'description' => 'Four A19 color bulbs, the Hue Bridge for reliable Zigbee control, and compatibility with Alexa, Google Assistant and Apple Home.',
-            'is_featured' => false,
-            'weight' => 0.68, 'length' => 22.0, 'width' => 16.0, 'height' => 8.0,
-            'variants' => [
-                ['label' => '4-Bulb Starter Kit', 'suffix' => '4PACK', 'price' => 199.99, 'sale_price' => null, 'stock' => 17, 'attributes' => ['pack' => '4 bulbs', 'bridge' => 'Included']],
-                ['label' => '2-Bulb Starter Kit', 'suffix' => '2PACK', 'price' => 129.99, 'sale_price' => null, 'stock' => 14, 'attributes' => ['pack' => '2 bulbs', 'bridge' => 'Included']],
-                ['label' => '4-Bulb Kit + Smart Plug', 'suffix' => '4PACK-PLUG', 'price' => 229.99, 'sale_price' => 209.99, 'stock' => 6, 'attributes' => ['pack' => '4 bulbs', 'bridge' => 'Included', 'bundle' => 'Smart plug']],
-            ],
-        ],
-        [
-            'name' => 'Ring Video Doorbell Pro 2',
-            'sku' => 'RIN-DOORBELLP2',
-            'category' => 'Smart Home',
-            'brand' => 'Ring',
-            'price' => 249.99,
-            'sale_price' => null,
-            'short_description' => '3D motion detection doorbell with a head-to-toe view.',
-            'description' => '1536p HDR video, 3D motion detection that maps a package zone, and dual-band WiFi for a more reliable connection.',
-            'is_featured' => false,
-            'weight' => 0.182, 'length' => 12.9, 'width' => 5.3, 'height' => 2.5,
-            'variants' => [
-                ['label' => 'Wired', 'suffix' => 'WIRED', 'price' => 249.99, 'sale_price' => null, 'stock' => 12, 'attributes' => ['power' => 'Hardwired']],
-                ['label' => 'Battery-Powered', 'suffix' => 'BATTERY', 'price' => 229.99, 'sale_price' => null, 'stock' => 15, 'attributes' => ['power' => 'Battery pack']],
-                ['label' => 'Wired + Chime Bundle', 'suffix' => 'WIRED-CHIME', 'price' => 279.99, 'sale_price' => 259.99, 'stock' => 5, 'attributes' => ['power' => 'Hardwired', 'bundle' => 'Chime Pro']],
-            ],
-        ],
-        [
-            'name' => 'TP-Link Kasa Smart Plug 4-Pack',
-            'sku' => 'TPL-KASA4PK',
-            'category' => 'Smart Home',
-            'brand' => 'TP-Link',
-            'price' => 39.99,
-            'sale_price' => null,
-            'short_description' => 'Compact WiFi smart plugs with energy monitoring.',
-            'description' => 'Schedule, group and voice-control any outlet, with per-plug energy usage tracking in the Kasa app.',
-            'is_featured' => false,
-            'weight' => 0.3, 'length' => 15.0, 'width' => 9.0, 'height' => 5.0,
-            'variants' => [
-                ['label' => '4-Pack', 'suffix' => '4PACK', 'price' => 39.99, 'sale_price' => null, 'stock' => 40, 'attributes' => ['pack' => '4 plugs']],
-                ['label' => '2-Pack', 'suffix' => '2PACK', 'price' => 22.99, 'sale_price' => null, 'stock' => 28, 'attributes' => ['pack' => '2 plugs']],
-                ['label' => '8-Pack', 'suffix' => '8PACK', 'price' => 74.99, 'sale_price' => 64.99, 'stock' => 10, 'attributes' => ['pack' => '8 plugs']],
-            ],
-        ],
-        [
-            'name' => 'Nike Dri-FIT Performance T-Shirt',
-            'sku' => 'NIK-DRIFIT-TEE',
-            'category' => "Men's Clothing",
-            'brand' => 'Nike',
-            'price' => 34.99,
-            'sale_price' => null,
-            'short_description' => 'Moisture-wicking training tee in a relaxed athletic fit.',
-            'description' => 'Dri-FIT technology pulls sweat away from the skin, on a lightweight knit built for high-output training.',
-            'is_featured' => false,
-            'weight' => 0.16, 'length' => 30.0, 'width' => 25.0, 'height' => 1.5,
-            'variants' => [
-                ['label' => 'Small - Black', 'suffix' => 'S-BLK', 'price' => 34.99, 'sale_price' => null, 'stock' => 35, 'attributes' => ['size' => 'S', 'color' => 'Black']],
-                ['label' => 'Medium - Black', 'suffix' => 'M-BLK', 'price' => 34.99, 'sale_price' => null, 'stock' => 42, 'attributes' => ['size' => 'M', 'color' => 'Black']],
-                ['label' => 'Large - Black', 'suffix' => 'L-BLK', 'price' => 34.99, 'sale_price' => null, 'stock' => 38, 'attributes' => ['size' => 'L', 'color' => 'Black']],
-                ['label' => 'Medium - Navy', 'suffix' => 'M-NVY', 'price' => 34.99, 'sale_price' => 27.99, 'stock' => 22, 'attributes' => ['size' => 'M', 'color' => 'Navy']],
-            ],
-        ],
-        [
-            'name' => 'Adidas Ultraboost 22 Running Shoes',
-            'sku' => 'ADI-ULTRABOOST',
-            'category' => 'Footwear',
-            'brand' => 'Adidas',
-            'price' => 189.99,
-            'sale_price' => null,
-            'short_description' => 'Energy-returning running shoe with a Primeknit upper.',
-            'description' => 'A full-length Boost midsole pairs with a Primeknit upper and the Linear Energy Push system for a responsive, adaptive ride.',
-            'is_featured' => true,
-            'weight' => 0.9, 'length' => 33.0, 'width' => 20.0, 'height' => 12.0,
-            'variants' => [
-                ['label' => "Men's US 9 - Core Black", 'suffix' => 'M9-BLK', 'price' => 189.99, 'sale_price' => null, 'stock' => 16, 'attributes' => ['size' => 'US 9', 'color' => 'Core Black']],
-                ['label' => "Men's US 10 - Core Black", 'suffix' => 'M10-BLK', 'price' => 189.99, 'sale_price' => null, 'stock' => 14, 'attributes' => ['size' => 'US 10', 'color' => 'Core Black']],
-                ['label' => "Women's US 8 - Cloud White", 'suffix' => 'W8-WHT', 'price' => 189.99, 'sale_price' => 159.99, 'stock' => 11, 'attributes' => ['size' => 'US 8', 'color' => 'Cloud White']],
-            ],
-        ],
-        [
-            'name' => 'Lululemon Align High-Rise Leggings',
-            'sku' => 'LUL-ALIGN-LEG',
-            'category' => "Women's Clothing",
-            'brand' => 'Lululemon',
-            'price' => 98.00,
-            'sale_price' => null,
-            'short_description' => 'Buttery-soft Nulu fabric leggings for studio to street.',
-            'description' => 'Four-way stretch Nulu fabric feels weightless against the skin, with a high rise and a hidden waistband pocket.',
-            'is_featured' => false,
-            'weight' => 0.22, 'length' => 28.0, 'width' => 22.0, 'height' => 3.0,
-            'variants' => [
-                ['label' => 'Size 4 - Black', 'suffix' => '4-BLK', 'price' => 98.00, 'sale_price' => null, 'stock' => 18, 'attributes' => ['size' => '4', 'color' => 'Black']],
-                ['label' => 'Size 6 - Black', 'suffix' => '6-BLK', 'price' => 98.00, 'sale_price' => null, 'stock' => 21, 'attributes' => ['size' => '6', 'color' => 'Black']],
-                ['label' => 'Size 8 - True Navy', 'suffix' => '8-NVY', 'price' => 98.00, 'sale_price' => null, 'stock' => 13, 'attributes' => ['size' => '8', 'color' => 'True Navy']],
-            ],
-        ],
-        [
-            'name' => 'Dyson V15 Detect Cordless Vacuum',
-            'sku' => 'DYS-V15DETECT',
-            'category' => 'Kitchen & Cleaning',
-            'brand' => 'Dyson',
-            'price' => 749.99,
-            'sale_price' => null,
-            'short_description' => 'Laser dust-detection vacuum with a piezo sensor dust counter.',
-            'description' => 'A green laser reveals microscopic dust on hard floors, while a piezo sensor counts and sizes particles by size on the LCD screen.',
-            'is_featured' => true,
-            'weight' => 3.0, 'length' => 25.0, 'width' => 25.0, 'height' => 126.0,
-            'variants' => [
-                ['label' => 'Standard', 'suffix' => 'STD', 'price' => 749.99, 'sale_price' => null, 'stock' => 8, 'attributes' => ['kit' => 'Standard']],
-                ['label' => 'Absolute (extra tools)', 'suffix' => 'ABS', 'price' => 849.99, 'sale_price' => null, 'stock' => 5, 'attributes' => ['kit' => 'Absolute — extra tool bundle']],
-                ['label' => 'Submarine (wet mop head)', 'suffix' => 'SUB', 'price' => 949.99, 'sale_price' => 899.99, 'stock' => 3, 'attributes' => ['kit' => 'Submarine wet-mop attachment']],
-            ],
-        ],
-        [
-            'name' => 'Ninja Foodi 9-in-1 Air Fryer',
-            'sku' => 'NIN-FOODI9',
-            'category' => 'Kitchen & Cleaning',
-            'brand' => 'Ninja',
-            'price' => 199.99,
-            'sale_price' => null,
-            'short_description' => '9-in-1 pressure cooker and air fryer combo.',
-            'description' => 'TenderCrisp technology pressure cooks then air fries in the same pot, covering nine cooking functions in one countertop appliance.',
-            'is_featured' => false,
-            'weight' => 5.4, 'length' => 33.0, 'width' => 33.0, 'height' => 35.0,
-            'variants' => [
-                ['label' => '6.5qt', 'suffix' => '6.5QT', 'price' => 199.99, 'sale_price' => null, 'stock' => 14, 'attributes' => ['capacity' => '6.5 quart']],
-                ['label' => '8qt', 'suffix' => '8QT', 'price' => 229.99, 'sale_price' => null, 'stock' => 10, 'attributes' => ['capacity' => '8 quart']],
-                ['label' => '8qt + Extra Crisper Bundle', 'suffix' => '8QT-BUNDLE', 'price' => 259.99, 'sale_price' => 239.99, 'stock' => 4, 'attributes' => ['capacity' => '8 quart', 'bundle' => 'Extra crisper basket']],
-            ],
-        ],
-        [
-            'name' => 'Coleman Sundome 6-Person Tent',
-            'sku' => 'COL-SUNDOME6',
-            'category' => 'Outdoor Gear',
-            'brand' => 'Coleman',
-            'price' => 129.99,
-            'sale_price' => null,
-            'short_description' => 'Weatherproof dome tent that sleeps up to six.',
-            'description' => 'A WeatherTec system with welded floors and inverted seams keeps water out, and the dome frame pitches in about 10 minutes.',
-            'is_featured' => false,
-            'weight' => 6.85, 'length' => 60.0, 'width' => 23.0, 'height' => 23.0,
-            'variants' => [
-                ['label' => '6-Person Green', 'suffix' => '6P-GRN', 'price' => 129.99, 'sale_price' => null, 'stock' => 12, 'attributes' => ['capacity' => '6-person', 'color' => 'Green']],
-                ['label' => '4-Person Green', 'suffix' => '4P-GRN', 'price' => 99.99, 'sale_price' => null, 'stock' => 16, 'attributes' => ['capacity' => '4-person', 'color' => 'Green']],
-                ['label' => '6-Person + Footprint Bundle', 'suffix' => '6P-FOOT', 'price' => 159.99, 'sale_price' => 144.99, 'stock' => 5, 'attributes' => ['capacity' => '6-person', 'color' => 'Green', 'bundle' => 'Ground footprint']],
-            ],
-        ],
-        [
-            'name' => 'Fitbit Charge 6 Fitness Tracker',
-            'sku' => 'FIT-CHARGE6',
-            'category' => 'Fitness Tracker',
-            'brand' => 'Fitbit',
-            'price' => 159.95,
-            'sale_price' => null,
-            'short_description' => 'Slim fitness band with built-in GPS and Google apps.',
-            'description' => 'Built-in GPS, an ECG app, and native Google Maps and YouTube Music controls, with up to 7 days of battery life.',
-            'is_featured' => false,
-            'weight' => 0.029, 'length' => 3.6, 'width' => 2.29, 'height' => 1.24,
-            'variants' => [
-                ['label' => 'Obsidian / Black Aluminum', 'suffix' => 'OBS-BLK', 'price' => 159.95, 'sale_price' => null, 'stock' => 25, 'attributes' => ['color' => 'Obsidian', 'case' => 'Black Aluminum']],
-                ['label' => 'Porcelain / Silver Aluminum', 'suffix' => 'POR-SLV', 'price' => 159.95, 'sale_price' => null, 'stock' => 19, 'attributes' => ['color' => 'Porcelain', 'case' => 'Silver Aluminum']],
-                ['label' => 'Coral / Rose Gold Aluminum', 'suffix' => 'COR-ROS', 'price' => 159.95, 'sale_price' => 139.95, 'stock' => 11, 'attributes' => ['color' => 'Coral', 'case' => 'Rose Gold Aluminum']],
             ],
         ],
     ];
@@ -957,23 +581,21 @@ class ProductCatalogSeeder extends Seeder
     |--------------------------------------------------------------------------
     */
 
-    /** @return array<string, Category> */
+    /**
+     * Resolves each product's `category` name against the taxonomy
+     * CategorySeeder already created, rather than maintaining a second,
+     * parallel category tree. CategorySeeder is idempotent (firstOrCreate on
+     * slug), so calling it here keeps this seeder runnable standalone.
+     *
+     * @return array<string, Category>
+     */
     private function categories(): array
     {
-        $roots = [];
-        foreach (array_unique(array_values(self::CATEGORY_TREE)) as $name) {
-            $roots[$name] = Category::firstOrCreate(
-                ['slug' => Str::slug($name)],
-                ['name' => $name, 'is_active' => true]
-            );
-        }
+        $this->call(CategorySeeder::class);
 
         $categories = [];
-        foreach (self::CATEGORY_TREE as $name => $parent) {
-            $categories[$name] = Category::firstOrCreate(
-                ['slug' => Str::slug($name)],
-                ['name' => $name, 'parent_id' => $roots[$parent]->id, 'is_active' => true]
-            );
+        foreach (array_unique(array_column(self::PRODUCTS, 'category')) as $name) {
+            $categories[$name] = Category::where('slug', Str::slug($name))->firstOrFail();
         }
 
         return $categories;
@@ -1029,7 +651,6 @@ class ProductCatalogSeeder extends Seeder
                 'reorder_point' => 10,
                 'track_inventory' => true,
                 'in_stock' => $stock > 0,
-                'warehouse_location' => self::WAREHOUSES[$index % count(self::WAREHOUSES)],
                 'weight' => $definition['weight'],
                 'length' => $definition['length'],
                 'width' => $definition['width'],
@@ -1054,39 +675,82 @@ class ProductCatalogSeeder extends Seeder
     */
 
     /**
-     * A stable, absolute image URL.
+     * One real Unsplash photo id per SKU, hand-picked and verified (fetched
+     * and visually checked) to depict that kind of product, instead of a
+     * random unrelated picsum.photos placeholder. Same format CategorySeeder
+     * uses: the id is whatever follows "photo-" in an
+     * images.unsplash.com/photo-<id> URL.
+     */
+    private const PRODUCT_IMAGES = [
+        'AS-ZEPH-G16' => '1771014817844-327a14245bd1',
+        'SAM-990PRO' => '1669480380758-4b163a33f6f9',
+        'KIN-FURY-DDR5' => '1672923491001-3e58a608e418',
+        'LOG-MXM3S' => '1527864550417-7fd91fc51a46',
+        'RAZ-BWV4PRO' => '1756694938594-e760b4bd3bfb',
+        'DEL-ULTRA-4K' => '1628358011846-80e98db9e925',
+        'AS-TUF-4070S' => '1591488320449-011701bb6704',
+        'COR-RM-GOLD' => '1716062890647-60feae0609d0',
+        'SEA-IRONWOLF' => '1593448848024-77a27f0690b1',
+        'AS-RTAX86U-PRO' => '1745847768408-b7b83796cae6',
+        'INT-I9-14900K' => '1686195165991-74af7c2918d5',
+        'NV-RTX4090-FE' => '1752179634046-5159d1b13f6f',
+        'COR-DOM-DDR5' => '1541029071515-84cc54f84dc5',
+        'AS-MAX-Z790' => '1518770660439-4636190af475',
+        'AMD-R9-7950X3D' => '1591799264318-7e6ef8ddb7ea',
+        'SAM-ODY-G9' => '1762096070873-63e82ab143ca',
+        'WD-SN850X' => '1604590003050-14c5b8521015',
+        'NZXT-KRAKEN-360' => '1765824142326-8e9046b1f935',
+        'LIAN-O11-EVO' => '1587202372775-e229f172b9d7',
+        'ELG-SD-MK2' => '1642784353476-d226d8d617b3',
+        'SNY-WH1000XM5' => '1505740420928-5e560c06d30e',
+        'BOS-QCULTRA' => '1559743345-24713f59f5e3',
+        'APL-APP2' => '1624258919367-5dc28f5dc293',
+        'JBL-CHARGE5' => '1589273705736-1bd0a0bcf116',
+        'SON-ERA300' => '1549199224-29cf2f784cd0',
+        'LOG-BRIO4K' => '1750975314977-374f2290db53',
+        'HP-OJPRO9015E' => '1612815154858-60aa4c59eaa6',
+        'ANK-737PWR' => '1564286027179-588f75ac4ef2',
+        'ANK-PWREXP8' => '1616578273518-450dd375759b',
+        'SAN-EXTPORT' => '1756142752564-586c77618757',
+    ];
+
+    /**
+     * A stable, absolute image URL for a product's curated Unsplash photo.
      *
      * The admin list only renders absolute URLs (product thumbnails are
      * normally Cloudinary secure_url values), so seed data has to be absolute
-     * too or it falls back to the initials tile. picsum.photos is deterministic
-     * per seed, which keeps a given product or variant on the same photo
-     * across re-seeds.
+     * too or it falls back to the initials tile.
      */
-    private function imageUrl(string $seed, int $size = 800): string
+    private function imageUrl(string $sku, int $size = 800): string
     {
-        return 'https://picsum.photos/seed/'.Str::slug($seed).'/'.$size.'/'.$size;
+        $photoId = self::PRODUCT_IMAGES[$sku];
+
+        return "https://images.unsplash.com/photo-{$photoId}?auto=format&fit=crop&w={$size}&h={$size}&q=80";
     }
 
     /**
-     * One primary thumbnail row plus two gallery rows per product.
+     * One primary thumbnail row plus two gallery rows per product. All three
+     * point at the same curated photo (there's only one real photo per SKU,
+     * not multiple angles of the literal product) at slightly different crop
+     * sizes.
      */
     private function seedImages(Product $product, array $definition): void
     {
         $images = [
-            ['suffix' => '', 'type' => 'thumbnail', 'primary' => true, 'alt' => $definition['name']],
-            ['suffix' => '-gallery-1', 'type' => 'gallery', 'primary' => false, 'alt' => $definition['name'].' front view'],
-            ['suffix' => '-gallery-2', 'type' => 'gallery', 'primary' => false, 'alt' => $definition['name'].' detail view'],
+            ['size' => 800, 'type' => 'thumbnail', 'primary' => true],
+            ['size' => 1000, 'type' => 'gallery', 'primary' => false],
+            ['size' => 1200, 'type' => 'gallery', 'primary' => false],
         ];
 
         foreach ($images as $sortOrder => $image) {
             ProductImage::updateOrCreate(
                 ['product_id' => $product->id, 'type' => $image['type'], 'sort_order' => $sortOrder],
                 [
-                    'image' => $this->imageUrl($definition['sku'].$image['suffix']),
+                    'image' => $this->imageUrl($definition['sku'], $image['size']),
                     'disk' => 'public',
                     'mime_type' => 'image/jpeg',
                     'file_size' => 245_760,
-                    'alt_text' => $image['alt'],
+                    'alt_text' => $definition['name'],
                     'title' => $definition['name'],
                     'is_primary' => $image['primary'],
                     'is_active' => true,
@@ -1104,7 +768,9 @@ class ProductCatalogSeeder extends Seeder
     /**
      * Variant slug and sku are seeded with the parent SKU on purpose: both
      * columns carry GLOBAL unique indexes, so two products that each have a
-     * variant called e.g. "1TB" would otherwise collide.
+     * variant called e.g. "1TB" would otherwise collide. Variants share the
+     * parent product's curated photo — they differ by color/capacity/etc,
+     * not by a distinct real-world product photo.
      */
     private function seedVariants(Product $product, array $definition): void
     {
@@ -1133,7 +799,7 @@ class ProductCatalogSeeder extends Seeder
                     'length' => $definition['length'],
                     'width' => $definition['width'],
                     'height' => $definition['height'],
-                    'image' => $this->imageUrl($sku),
+                    'image' => $this->imageUrl($definition['sku']),
                     'attributes' => $variant['attributes'],
                     'is_default' => $sortOrder === 0,
                     'is_active' => true,
