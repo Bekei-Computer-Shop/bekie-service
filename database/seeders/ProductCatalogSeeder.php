@@ -628,14 +628,30 @@ class ProductCatalogSeeder extends Seeder
     private function seedProduct(array $definition, array $categories, array $brands, int $index): Product
     {
         $stock = array_sum(array_column($definition['variants'], 'stock'));
+        $slug = Str::slug($definition['name']);
 
-        return Product::updateOrCreate(
-            ['sku' => $definition['sku']],
+        // updateOrCreate(['sku' => ...]) only searches non-trashed rows
+        // (Product uses SoftDeletes), so a soft-deleted row from an earlier
+        // run — or one seeded under a different sku for the same name —
+        // is invisible to it and it tries to INSERT a fresh row, which then
+        // collides with products_slug_unique. Matching on sku OR slug across
+        // trashed rows too, and restoring instead of inserting, keeps this
+        // seeder re-runnable no matter how the row got there.
+        $product = Product::withTrashed()->where('sku', $definition['sku'])->first()
+            ?? Product::withTrashed()->where('slug', $slug)->first()
+            ?? new Product;
+
+        if ($product->trashed()) {
+            $product->restore();
+        }
+
+        $product->fill(
             [
+                'sku' => $definition['sku'],
                 'category_id' => $categories[$definition['category']]->id,
                 'brand_id' => $brands[$definition['brand']]->id,
                 'name' => $definition['name'],
-                'slug' => Str::slug($definition['name']),
+                'slug' => $slug,
                 'barcode' => $this->nextBarcode(),
                 'short_description' => $definition['short_description'],
                 'description' => $definition['description'],
@@ -665,7 +681,9 @@ class ProductCatalogSeeder extends Seeder
                 'sales_count' => 0,
                 'sort_order' => $index,
             ]
-        );
+        )->save();
+
+        return $product;
     }
 
     /*
