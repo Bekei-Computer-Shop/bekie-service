@@ -9,6 +9,7 @@ use App\Http\Requests\Api\Admin\V1\StoreAdministratorRequest;
 use App\Http\Requests\Api\Admin\V1\UpdateAdministratorRequest;
 use App\Http\Resources\Api\Admin\V1\UserResource;
 use App\Models\ApiToken;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
@@ -43,7 +44,8 @@ class AdministratorController extends BaseAdminController
             'is_active' => true,
         ]);
 
-        $administrator->assignRole($data['role']);
+        $role = Role::findById($data['role_id']);
+        $administrator->assignRole($role);
 
         return $this->created(new UserResource($administrator));
     }
@@ -59,8 +61,9 @@ class AdministratorController extends BaseAdminController
             'password' => $data['password'] ? Hash::make($data['password']) : $user->password,
         ]);
 
-        if (! $user->hasRole($data['role'])) {
-            $user->syncRoles([$data['role']]);
+        $role = Role::findById($data['role_id']);
+        if (! $user->hasRole($role)) {
+            $user->syncRoles([$role]);
         }
 
         return $this->success(new UserResource($user));

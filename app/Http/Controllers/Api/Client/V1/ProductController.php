@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Client\V1;
 
 use App\Http\Requests\Api\Client\V1\ListProductsRequest;
+use App\Http\Resources\Api\Client\V1\ProductListResource;
 use App\Http\Resources\Api\Client\V1\ProductResource;
 use App\Http\Resources\Api\Client\V1\ProductVariantResource;
 use App\Models\Product;
@@ -78,7 +79,7 @@ class ProductController extends BaseApiController
             page: (int) $request->query('page', 1)
         );
 
-        return $this->success(ProductResource::collection($products));
+        return $this->success(ProductListResource::collection($products));
     }
 
     public function show(Product $product)
@@ -86,6 +87,8 @@ class ProductController extends BaseApiController
         abort_unless($product->is_active, 404);
 
         $product->load([
+            'category',
+            'brand',
             'images' => fn ($query) => $query->where('is_active', true),
             'variants' => fn ($query) => $query->where('is_active', true),
         ]);

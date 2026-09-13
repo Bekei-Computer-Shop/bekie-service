@@ -20,7 +20,7 @@ class StoreAdministratorRequest extends FormRequest
             'last_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8'],
-            'role' => ['required', 'exists:roles,name'],
+            'role_id' => ['required', 'integer', 'exists:roles,id'],
         ];
     }
 }

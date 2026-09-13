@@ -254,9 +254,6 @@
                                                     "id": {
                                                         "type": "string"
                                                     },
-                                                    "numeric_id": {
-                                                        "type": "string"
-                                                    },
                                                     "name": {
                                                         "type": "string"
                                                     },
@@ -272,7 +269,6 @@
                                                 },
                                                 "required": [
                                                     "id",
-                                                    "numeric_id",
                                                     "name",
                                                     "sku",
                                                     "stock_quantity",
@@ -497,9 +493,6 @@
                                                 "id": {
                                                     "type": "string"
                                                 },
-                                                "uuid": {
-                                                    "type": "string"
-                                                },
                                                 "name": {
                                                     "type": "string"
                                                 },
@@ -642,7 +635,6 @@
                                             },
                                             "required": [
                                                 "id",
-                                                "uuid",
                                                 "name",
                                                 "sku",
                                                 "barcode",
@@ -797,7 +789,7 @@
         "/v1/payments/options": {
             "get": {
                 "operationId": "abaPayWay.options",
-                "description": "Use `platform=web` for a PayWay popup checkout. Use `platform=mobile`\nfor hosted checkout and provide `return_deeplink` when starting payment.\nCredentials are never returned by this endpoint.",
+                "description": "Returns all available payment methods for the specified platform. Use `platform=web` for\na PayWay popup checkout that opens in a modal. Use `platform=mobile` for hosted checkout\nand provide `return_deeplink` when starting payment for native app handling.\n\nCredentials are never returned by this endpoint. The `enabled` field indicates whether\na payment method is configured on the server.",
                 "summary": "List payment methods available to the web or mobile client",
                 "tags": [
                     "AbaPayWay"
@@ -836,8 +828,8 @@
         "/v1/payments/aba/callback": {
             "post": {
                 "operationId": "abaPayWay.callback",
-                "description": "PayWay sends JSON and the `X-PayWay-Hmac-Sha512` header. This endpoint is\npublic because PayWay calls it directly; the signature is verified before\nthe related order is updated.",
-                "summary": "Receive and verify the PayWay payment callback",
+                "description": "**Public endpoint** \u2014 PayWay calls this directly after payment completion or cancellation.\nThe signature in the `X-PayWay-Hmac-Sha512` header is verified using HMAC-SHA512 before\nthe order status is updated. The request body contains the transaction result and metadata.\n\nWhen `status=0` (approved), the order payment status is set to `paid` with a timestamp.\nWhen `status=200` or `201` (canceled/declined), the order payment status is set to `failed`.\nOther statuses are logged but do not update the order.",
+                "summary": "Receive and verify the PayWay payment callback (webhook)",
                 "tags": [
                     "AbaPayWay"
                 ],
@@ -859,7 +851,7 @@
         "/v1/payments/aba/purchase": {
             "post": {
                 "operationId": "abaPayWay.purchase",
-                "description": "For web clients, omit `view_type` to use the popup checkout. For mobile\nclients, send `platform=mobile` and a `return_deeplink`; the request then\ndefaults to hosted checkout.",
+                "description": "Initiates a payment checkout with ABA PayWay for the customer's order. The response includes\na `transaction_id` that should be stored and used for status checks. The `gateway` field\ncontains the PayWay response with checkout details (e.g., QR code URL for hosted view).\n\nFor **web clients**: Omit `platform` or send `platform=web` to use popup checkout (the PayWay\niframe opens in a modal). Do not send `return_deeplink`.\n\nFor **mobile clients**: Send `platform=mobile` and a base64-encoded `return_deeplink` payload.\nThe request defaults to `view_type=hosted_view` for mobile. The deeplink enables native app\nreturn handling instead of browser fallback.",
                 "summary": "Create an ABA PayWay checkout for an authenticated customer's order",
                 "tags": [
                     "AbaPayWay"
@@ -895,6 +887,7 @@
         "/v1/payments/aba/{transactionId}": {
             "get": {
                 "operationId": "abaPayWay.check",
+                "description": "Queries ABA PayWay's servers for the current status of a checkout. The transaction must belong\nto the authenticated customer's order (verified by looking up the transaction_id in the customer's\norders). Returns PayWay's status response including payment status code and currency.\n\n**Note**: The response includes nested `data.data` structure because the outer `data` is our API wrapper\nand the inner `data` comes from PayWay's response. This mirrors PayWay's API contract exactly.",
                 "summary": "Check the payment status of an ABA PayWay transaction belonging to the customer",
                 "tags": [
                     "AbaPayWay"
@@ -1995,7 +1988,7 @@
         "/v1/admin/auth/me": {
             "get": {
                 "operationId": "auth.me",
-                "summary": "GET /admin/auth/me — current admin profile",
+                "summary": "GET /admin/auth/me \u2014 current admin profile",
                 "tags": [
                     "Auth"
                 ],
@@ -2107,7 +2100,7 @@
         "/v1/admin/auth/profile": {
             "put": {
                 "operationId": "auth.updateProfile",
-                "summary": "PATCH /admin/auth/profile — update own personal information",
+                "summary": "PATCH /admin/auth/profile \u2014 update own personal information",
                 "tags": [
                     "Auth"
                 ],
@@ -2319,7 +2312,7 @@
         "/v1/admin/auth/change-password": {
             "post": {
                 "operationId": "auth.changePassword",
-                "summary": "POST /admin/auth/change-password — change own password",
+                "summary": "POST /admin/auth/change-password \u2014 change own password",
                 "tags": [
                     "Auth"
                 ],
@@ -3187,7 +3180,7 @@
         "/v1/cart": {
             "get": {
                 "operationId": "cart.index",
-                "description": "Returns the authenticated user's single cart with all items.\nAutomatically creates the cart if it doesn't exist.",
+                "description": "Returns the authenticated user's single cart with all items.\nIf no cart exists, returns an empty cart structure with no items.",
                 "summary": "Get authenticated user's cart",
                 "tags": [
                     "Cart"
@@ -4771,6 +4764,205 @@
                                 }
                             }
                         }
+                    }
+                }
+            }
+        },
+        "/v1/payments/khqr/options": {
+            "get": {
+                "operationId": "khqr.options",
+                "description": "Returns payment options and configuration for KHQR QR code payments.\nKHQR (Khmer Quick Response Code) is a QR-based payment standard used for\nABA bank transfers in Cambodia.",
+                "summary": "List available KHQR payment options",
+                "tags": [
+                    "Khqr"
+                ],
+                "parameters": [
+                    {
+                        "name": "platform",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "web",
+                                "mobile"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "integer",
+                                    "const": 200
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/v1/payments/khqr/generate": {
+            "post": {
+                "operationId": "khqr.generate",
+                "description": "Generates a QR code for the customer to scan and pay via ABA bank using KHQR standard.\nThe QR code contains the order amount, currency, and merchant information.\n\n**Web Client Flow**:\n- Request KHQR generation for the order\n- Display QR code image to customer\n- Customer scans with mobile banking app\n- API polls `/payments/khqr/{transactionId}` to check status\n- Or receives webhook callback when payment completes\n\n**Mobile Client Flow**:\n- Request KHQR generation\n- Display QR code or show payment details\n- Customer enters amount in their banking app and completes payment\n- App polls for payment confirmation",
+                "summary": "Generate KHQR QR code for payment",
+                "tags": [
+                    "Khqr"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/KhqrGenerateRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "integer",
+                                    "const": 200
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/v1/payments/khqr/{transactionId}": {
+            "get": {
+                "operationId": "khqr.check",
+                "description": "Checks the current payment status for a KHQR transaction. The transaction must belong\nto the authenticated customer's order.\n\nUse this endpoint to poll for payment completion on web clients. Mobile clients can\nalso poll or wait for webhook notification.",
+                "summary": "Check KHQR payment status",
+                "tags": [
+                    "Khqr"
+                ],
+                "parameters": [
+                    {
+                        "name": "transactionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "integer",
+                                    "const": 200
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "khqr.cancel",
+                "description": "Cancels a KHQR QR code payment request. Use this if the customer wants to choose\na different payment method before completing the payment.",
+                "summary": "Cancel KHQR payment request",
+                "tags": [
+                    "Khqr"
+                ],
+                "parameters": [
+                    {
+                        "name": "transactionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "integer",
+                                    "const": 200
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/payments/khqr/{transactionId}/confirm": {
+            "post": {
+                "operationId": "khqr.confirm",
+                "description": "**Internal/Admin Use**: Confirms a KHQR payment when verified by the system.\nThis endpoint is called when payment is confirmed via webhook or manual verification.\n\nFor customer-facing endpoints, use the `check` endpoint to query payment status.",
+                "summary": "Confirm KHQR payment (webhook or manual)",
+                "tags": [
+                    "Khqr"
+                ],
+                "parameters": [
+                    {
+                        "name": "transactionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "transaction_id": {
+                                        "type": "string"
+                                    },
+                                    "payment_reference": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "transaction_id"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "integer",
+                                    "const": 200
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
                     }
                 }
             }
@@ -6452,7 +6644,7 @@
         "/v1/admin/orders/{order}/reject": {
             "post": {
                 "operationId": "order.reject",
-                "summary": "Rejecting cancels the order. Previously wrote 'rejected' — see approve()",
+                "summary": "Rejecting cancels the order. Previously wrote 'rejected' \u2014 see approve()",
                 "tags": [
                     "Order"
                 ],
@@ -6833,24 +7025,82 @@
                 ],
                 "parameters": [
                     {
-                        "name": "category_id",
-                        "in": "query",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "brand_id",
-                        "in": "query",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
                         "name": "search",
                         "in": "query",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 255
+                        }
+                    },
+                    {
+                        "name": "category_id[]",
+                        "in": "query",
+                        "schema": {
+                            "type": "array",
+                            "format": "uuid",
+                            "items": {
+                                "type": "string",
+                                "format": "uuid"
+                            }
+                        }
+                    },
+                    {
+                        "name": "brand_id[]",
+                        "in": "query",
+                        "schema": {
+                            "type": "array",
+                            "format": "uuid",
+                            "items": {
+                                "type": "string",
+                                "format": "uuid"
+                            }
+                        }
+                    },
+                    {
+                        "name": "min_price",
+                        "in": "query",
+                        "schema": {
+                            "type": "number",
+                            "minimum": 0
+                        }
+                    },
+                    {
+                        "name": "max_price",
+                        "in": "query",
+                        "schema": {
+                            "type": "number",
+                            "minimum": 0
+                        }
+                    },
+                    {
+                        "name": "sort_by",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "featured",
+                                "price_asc",
+                                "price_desc",
+                                "newest",
+                                "popular"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
                         }
                     }
                 ],
@@ -6872,7 +7122,7 @@
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/components/schemas/ProductResource"
+                                                "$ref": "#/components/schemas/ProductListResource"
                                             }
                                         }
                                     },
@@ -6884,11 +7134,14 @@
                                 }
                             }
                         }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
                     }
                 }
             }
         },
-        "/v1/products/{id}": {
+        "/v1/products/{product}": {
             "get": {
                 "operationId": "client.v1.product.show",
                 "tags": [
@@ -6896,11 +7149,13 @@
                 ],
                 "parameters": [
                     {
-                        "name": "id",
+                        "name": "product",
                         "in": "path",
                         "required": true,
+                        "description": "The product ID",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     }
                 ],
@@ -6949,7 +7204,7 @@
                         "name": "product",
                         "in": "path",
                         "required": true,
-                        "description": "The product UUID",
+                        "description": "The product ID",
                         "schema": {
                             "type": "string",
                             "format": "uuid"
@@ -7268,7 +7523,7 @@
                         "name": "product",
                         "in": "path",
                         "required": true,
-                        "description": "The product UUID",
+                        "description": "The product ID",
                         "schema": {
                             "type": "string",
                             "format": "uuid"
@@ -7318,7 +7573,7 @@
                         "name": "product",
                         "in": "path",
                         "required": true,
-                        "description": "The product UUID",
+                        "description": "The product ID",
                         "schema": {
                             "type": "string",
                             "format": "uuid"
@@ -7380,7 +7635,7 @@
                         "name": "product",
                         "in": "path",
                         "required": true,
-                        "description": "The product UUID",
+                        "description": "The product ID",
                         "schema": {
                             "type": "string",
                             "format": "uuid"
@@ -7408,7 +7663,7 @@
                         "name": "product",
                         "in": "path",
                         "required": true,
-                        "description": "The product UUID",
+                        "description": "The product ID",
                         "schema": {
                             "type": "string",
                             "format": "uuid"
@@ -10081,7 +10336,7 @@
         "/v1/wishlist": {
             "get": {
                 "operationId": "wishlist.index",
-                "description": "Returns the authenticated user's single wishlist with all items.\nAutomatically creates the wishlist if it doesn't exist.",
+                "description": "Returns the authenticated user's single wishlist with all items.\nIf no wishlist exists, returns an empty wishlist structure with no items.",
                 "summary": "Get authenticated user's wishlist",
                 "tags": [
                     "Wishlist"
@@ -10268,6 +10523,9 @@
                                 }
                             }
                         }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
                     }
                 }
             }
@@ -10803,7 +11061,7 @@
                 "type": "object",
                 "properties": {
                     "id": {
-                        "description": "`id` stays the uuid — routes bind on it (Order::getRouteKeyName).",
+                        "description": "`id` stays the uuid \u2014 routes bind on it (Order::getRouteKeyName).",
                         "anyOf": [
                             {
                                 "type": "string"
@@ -11066,18 +11324,6 @@
                     "id": {
                         "type": "string"
                     },
-                    "category_id": {
-                        "type": [
-                            "integer",
-                            "null"
-                        ]
-                    },
-                    "brand_id": {
-                        "type": [
-                            "integer",
-                            "null"
-                        ]
-                    },
                     "name": {
                         "type": "string"
                     },
@@ -11195,50 +11441,6 @@
                     "sales_count": {
                         "type": "integer"
                     },
-                    "category": {
-                        "type": [
-                            "object",
-                            "null"
-                        ],
-                        "properties": {
-                            "id": {
-                                "type": "integer"
-                            },
-                            "name": {
-                                "type": "string"
-                            },
-                            "slug": {
-                                "type": "string"
-                            }
-                        },
-                        "required": [
-                            "id",
-                            "name",
-                            "slug"
-                        ]
-                    },
-                    "brand": {
-                        "type": [
-                            "object",
-                            "null"
-                        ],
-                        "properties": {
-                            "id": {
-                                "type": "integer"
-                            },
-                            "name": {
-                                "type": "string"
-                            },
-                            "slug": {
-                                "type": "string"
-                            }
-                        },
-                        "required": [
-                            "id",
-                            "name",
-                            "slug"
-                        ]
-                    },
                     "variants": {
                         "anyOf": [
                             {
@@ -11251,7 +11453,6 @@
                         ]
                     },
                     "images": {
-                        "description": "Omitted rather than sent as [] when not loaded, so a client can\ntell \"this product has no gallery\" from \"the list endpoint didn't\n ship one\" — index() stays light and only sends `thumbnail`.",
                         "anyOf": [
                             {
                                 "type": "array",
@@ -11264,7 +11465,6 @@
                     },
                     "promotion_ids": {
                         "type": "object",
-                        "description": "Ids drive the product form's promotion checkboxes; the nested\nobjects save it a second request for the labels. Both omitted\nwhen the relation is not loaded, so the light index() payload\ndoes not imply \"this product has no promotions\".",
                         "additionalProperties": {
                             "type": "integer"
                         }
@@ -11285,8 +11485,6 @@
                 },
                 "required": [
                     "id",
-                    "category_id",
-                    "brand_id",
                     "name",
                     "slug",
                     "sku",
@@ -11313,8 +11511,6 @@
                     "sort_order",
                     "views_count",
                     "sales_count",
-                    "category",
-                    "brand",
                     "created_at",
                     "updated_at",
                     "deleted_at"
@@ -12094,6 +12290,25 @@
                 ],
                 "title": "CustomerResource"
             },
+            "KhqrGenerateRequest": {
+                "type": "object",
+                "properties": {
+                    "order_id": {
+                        "type": "integer"
+                    },
+                    "platform": {
+                        "type": "string",
+                        "enum": [
+                            "web",
+                            "mobile"
+                        ]
+                    }
+                },
+                "required": [
+                    "order_id"
+                ],
+                "title": "KhqrGenerateRequest"
+            },
             "LoginRequest": {
                 "type": "object",
                 "properties": {
@@ -12593,7 +12808,7 @@
                         ],
                         "format": "date-time"
                     },
-                    "uuid": {
+                    "id": {
                         "type": "string"
                     },
                     "version": {
@@ -12656,7 +12871,7 @@
                     "deleted_at",
                     "created_at",
                     "updated_at",
-                    "uuid",
+                    "id",
                     "version",
                     "warehouse_location",
                     "reorder_point",
@@ -12721,6 +12936,118 @@
                     "sort_order"
                 ],
                 "title": "ProductImageResource"
+            },
+            "ProductListResource": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "slug": {
+                        "type": "string"
+                    },
+                    "sku": {
+                        "type": "string"
+                    },
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "short_description": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "price": {
+                        "type": "string"
+                    },
+                    "sale_price": {
+                        "type": "string"
+                    },
+                    "stock_quantity": {
+                        "type": "string"
+                    },
+                    "min_stock_alert": {
+                        "type": "string"
+                    },
+                    "track_inventory": {
+                        "type": "string"
+                    },
+                    "in_stock": {
+                        "type": "string"
+                    },
+                    "weight": {
+                        "type": "string"
+                    },
+                    "length": {
+                        "type": "string"
+                    },
+                    "width": {
+                        "type": "string"
+                    },
+                    "height": {
+                        "type": "string"
+                    },
+                    "thumbnail": {
+                        "type": "string"
+                    },
+                    "meta_title": {
+                        "type": "string"
+                    },
+                    "meta_description": {
+                        "type": "string"
+                    },
+                    "is_active": {
+                        "type": "string"
+                    },
+                    "is_featured": {
+                        "type": "string"
+                    },
+                    "is_digital": {
+                        "type": "string"
+                    },
+                    "views_count": {
+                        "type": "string"
+                    },
+                    "sales_count": {
+                        "type": "string"
+                    },
+                    "sort_order": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "slug",
+                    "sku",
+                    "barcode",
+                    "short_description",
+                    "description",
+                    "price",
+                    "sale_price",
+                    "stock_quantity",
+                    "min_stock_alert",
+                    "track_inventory",
+                    "in_stock",
+                    "weight",
+                    "length",
+                    "width",
+                    "height",
+                    "thumbnail",
+                    "meta_title",
+                    "meta_description",
+                    "is_active",
+                    "is_featured",
+                    "is_digital",
+                    "views_count",
+                    "sales_count",
+                    "sort_order"
+                ],
+                "title": "ProductListResource"
             },
             "ProductResource": {
                 "type": "object",
@@ -12835,6 +13162,18 @@
                     },
                     "sort_order": {
                         "type": "integer"
+                    },
+                    "category": {
+                        "$ref": "#/components/schemas/CategoryResource"
+                    },
+                    "brand": {
+                        "$ref": "#/components/schemas/BrandResource"
+                    },
+                    "variants": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProductVariantResource"
+                        }
                     },
                     "images": {
                         "type": "array",
@@ -14083,7 +14422,7 @@
                             "string",
                             "null"
                         ],
-                        "description": "`users.phone` is uniquely indexed, so a blank one has to arrive as\nnull rather than '' — two empty strings would collide.",
+                        "description": "`users.phone` is uniquely indexed, so a blank one has to arrive as\nnull rather than '' \u2014 two empty strings would collide.",
                         "maxLength": 50
                     },
                     "address": {
@@ -14464,7 +14803,7 @@
                             "properties": {
                                 "image": {
                                     "type": "string",
-                                    "description": "Capped at 255 to match the varchar column — a longer URL would\npass validation and then fail at the driver.",
+                                    "description": "Capped at 255 to match the varchar column \u2014 a longer URL would\npass validation and then fail at the driver.",
                                     "maxLength": 255
                                 },
                                 "disk": {
@@ -14725,7 +15064,7 @@
                             "string",
                             "null"
                         ],
-                        "description": "The campaign label. Kept off `type` on purpose — see Coupon::KINDS.",
+                        "description": "The campaign label. Kept off `type` on purpose \u2014 see Coupon::KINDS.",
                         "enum": [
                             "flash_sale",
                             "bogo",
@@ -15306,7 +15645,7 @@
                     },
                     "payment_status": {
                         "type": "string",
-                        "description": "Payment state is recorded here rather than at creation — a new\norder cannot already be paid, failed or refunded."
+                        "description": "Payment state is recorded here rather than at creation \u2014 a new\norder cannot already be paid, failed or refunded."
                     },
                     "notes": {
                         "type": "string"
@@ -15505,7 +15844,7 @@
                             "properties": {
                                 "image": {
                                     "type": "string",
-                                    "description": "Capped at 255 to match the varchar column — a longer URL would\npass validation and then fail at the driver.",
+                                    "description": "Capped at 255 to match the varchar column \u2014 a longer URL would\npass validation and then fail at the driver.",
                                     "maxLength": 255
                                 },
                                 "disk": {
@@ -15759,7 +16098,7 @@
                             "string",
                             "null"
                         ],
-                        "description": "The campaign label. Kept off `type` on purpose — see Coupon::KINDS.",
+                        "description": "The campaign label. Kept off `type` on purpose \u2014 see Coupon::KINDS.",
                         "enum": [
                             "flash_sale",
                             "bogo",
