@@ -14,13 +14,23 @@ use Illuminate\Database\Seeder;
  *
  *  - type `page` : the website's standing pages (About, Warranty, Shipping…)
  *                  managed on the "Content: Pages" screen.
- *  - type `news` : the mini-blog — launches, guides, promos and events —
- *                  managed on the "Content: News" screen. News rows also carry
- *                  a `category` and a cover `image_url`.
+ *  - type `news` : the mini-blog — launches, guides, promos and, especially,
+ *                  the store's ongoing sales and clearance events — managed
+ *                  on the "Content: News" screen. News rows also carry a
+ *                  `category` and a cover `image_url`.
  *
- * 20 of each. Statuses are spread across draft / published / archived so both
- * list screens have something to show under every filter. Idempotent:
- * re-running updates the row for a (type, title) pair instead of duplicating.
+ * Content leans into an active "computer shop sale" storyline (anniversary
+ * sale, clearance, trade-in bonuses, Black Friday preview) so the two screens
+ * read as a real, cohesive storefront rather than generic filler. Cover images
+ * are hand-picked Wikimedia Commons photos matched to each article's topic
+ * (GPU news gets a real graphics card photo, keyboard news gets a real
+ * keyboard photo, etc.) rather than a keyword-matching image service, which
+ * turned out to fall back to unrelated stock photos when a tag didn't match.
+ *
+ * ~21 pages and ~23 news articles. Statuses are spread across draft /
+ * published / archived so both list screens have something to show under
+ * every filter. Idempotent: re-running updates the row for a (type, title)
+ * pair instead of duplicating.
  */
 class ContentSeeder extends Seeder
 {
@@ -59,7 +69,7 @@ class ContentSeeder extends Seeder
                 [
                     'body' => $article['body'],
                     'category' => $article['category'],
-                    'image_url' => $this->cover($article['seed']),
+                    'image_url' => $this->cover($article['topic']),
                     'status' => $article['status'],
                     'author_id' => $author->id,
                     'published_at' => $article['status'] === 'published'
@@ -69,16 +79,47 @@ class ContentSeeder extends Seeder
             );
         }
 
-        $this->command?->info('Seeded 20 pages and 20 news articles for the computer shop.');
+        $this->command?->info(sprintf(
+            'Seeded %d pages and %d news articles for the computer shop.',
+            count($this->pages()),
+            count($this->news())
+        ));
     }
 
     /**
-     * Deterministic 1200x630 cover placeholder — the size the news form
-     * recommends. Seeded by name so an article keeps its image across re-runs.
+     * Real, on-topic cover photo for a news article, keyed by topic (e.g.
+     * "gpu" for a graphics card launch, "keyboard" for a keyboard promo).
+     * Every URL below was individually viewed and confirmed to show what its
+     * key claims — these are real Wikimedia Commons product/scene photos, not
+     * an auto-matched stock-photo feed (which previously fell back to
+     * unrelated images, including cats, whenever a keyword didn't match).
+     *
+     * @return array<string, string>
      */
-    private function cover(string $seed): string
+    private function covers(): array
     {
-        return "https://picsum.photos/seed/{$seed}/1200/630";
+        return [
+            'gpu' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/ATI_Radeon_HD_5970_Graphics_Card-oblique_view.jpg/1280px-ATI_Radeon_HD_5970_Graphics_Card-oblique_view.jpg',
+            'motherboard' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d4/Gigabyte_GA-H87M-D3H_motherboard_%C2%B5ATX_with_Intel_Socket_1150.jpg/1280px-Gigabyte_GA-H87M-D3H_motherboard_%C2%B5ATX_with_Intel_Socket_1150.jpg',
+            'laptop' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/3/37/Schenker_VIA14_Laptop_asv2021-01.jpg/1280px-Schenker_VIA14_Laptop_asv2021-01.jpg',
+            'ram' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/8/85/16_GiB-DDR4-RAM-Riegel_RAM019FIX_Small_Crop_90_PCNT.png/1280px-16_GiB-DDR4-RAM-Riegel_RAM019FIX_Small_Crop_90_PCNT.png',
+            'cpu-cooler' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bf/CPU-cooler-14_hg.jpg/1280px-CPU-cooler-14_hg.jpg',
+            'shipping' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bf/Cardboard_boxes_in_different_sizes_for_sale_-_Thailand_Post.JPG/1280px-Cardboard_boxes_in_different_sizes_for_sale_-_Thailand_Post.JPG',
+            'ssd' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/7/75/Samsung_980_PRO_PCIe_4.0_NVMe_SSD_1TB-top_PNr%C2%B00915.jpg/1280px-Samsung_980_PRO_PCIe_4.0_NVMe_SSD_1TB-top_PNr%C2%B00915.jpg',
+            'keyboard' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5a/Mechanical_Keyboard.jpg/1280px-Mechanical_Keyboard.jpg',
+            'psu' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e5/Full_modular_ATX_power_supply_unit.jpg/1280px-Full_modular_ATX_power_supply_unit.jpg',
+            'monitor' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ea/ASUS_PB278Q_%28PXL_20250914_223256075%29.jpg/1280px-ASUS_PB278Q_%28PXL_20250914_223256075%29.jpg',
+            'sale-tag' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/47/Sale_sign_in_the_shopping_mall._Discount_tag._Bangkok._%2848087867208%29.jpg/1280px-Sale_sign_in_the_shopping_mall._Discount_tag._Bangkok._%2848087867208%29.jpg',
+            'sale-storefront' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/7/75/SALE_SALE_%282434614821%29.jpg/1280px-SALE_SALE_%282434614821%29.jpg',
+            'laptop-office' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5f/Man_at_a_laptop_in_an_office_%28Unsplash%29.jpg/1280px-Man_at_a_laptop_in_an_office_%28Unsplash%29.jpg',
+            'black-friday' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c2/Black_Friday_shopping_2022_in_Indooroopilly_Shopping_Centre%2C_Australia%2C_06.jpg/1280px-Black_Friday_shopping_2022_in_Indooroopilly_Shopping_Centre%2C_Australia%2C_06.jpg',
+            'christmas' => 'https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b5/Christmas_window_display%2C_Cameron_Beaumont%2C_North_Street%2C_Wetherby_%285th_December_2022%29.jpg/1280px-Christmas_window_display%2C_Cameron_Beaumont%2C_North_Street%2C_Wetherby_%285th_December_2022%29.jpg',
+        ];
+    }
+
+    private function cover(string $topic): string
+    {
+        return $this->covers()[$topic];
     }
 
     /**
@@ -170,6 +211,14 @@ class ContentSeeder extends Seeder
                 ),
             ],
             [
+                'title' => 'Current Sale & Clearance Terms',
+                'status' => 'published',
+                'body' => $p(
+                    'Our Store Anniversary Sale and ongoing clearance markdowns are shown on the News page as they go live. Sale pricing is automatically applied at checkout on qualifying items — no coupon code needed unless a specific promotion says otherwise.',
+                    'Clearance and open-box items are sold as-is at their listed condition and are final sale. Sale pricing cannot be combined with the Loyalty Rewards Club discount or the Price Match Promise, and does not apply retroactively to orders placed before a sale started.'
+                ),
+            ],
+            [
                 'title' => 'Price Match Promise',
                 'status' => 'published',
                 'body' => $p(
@@ -253,7 +302,7 @@ class ContentSeeder extends Seeder
     }
 
     /**
-     * @return array<int, array{title: string, category: string, seed: string, status: string, body: string}>
+     * @return array<int, array{title: string, category: string, topic: string, status: string, body: string}>
      */
     private function news(): array
     {
@@ -263,7 +312,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'RTX 50-Series Graphics Cards Now In Stock',
                 'category' => 'Product News',
-                'seed' => 'backiedeal-rtx50',
+                'topic' => 'gpu',
                 'status' => 'published',
                 'body' => $p(
                     'The next generation of NVIDIA GeForce RTX cards has landed at BackieDeal. We have launch stock of the 5070, 5080 and 5090 across Founders Edition and partner models from ASUS, MSI and Gigabyte.',
@@ -273,7 +322,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'How to Build Your First Gaming PC in 2026',
                 'category' => 'Guides',
-                'seed' => 'backiedeal-first-build',
+                'topic' => 'motherboard',
                 'status' => 'published',
                 'body' => $p(
                     'A start-to-finish walkthrough: choosing a balanced parts list, preparing the case, seating the CPU and cooler, installing memory and storage, cable management, first boot and BIOS setup.',
@@ -283,7 +332,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Back-to-School Laptop Buying Guide',
                 'category' => 'Guides',
-                'seed' => 'backiedeal-school-laptops',
+                'topic' => 'laptop',
                 'status' => 'published',
                 'body' => $p(
                     'How much laptop does a student actually need? We break it down by course: general study, engineering and CAD, design and video, and computer science.',
@@ -293,7 +342,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'DDR5 Prices Drop Again — Time to Upgrade',
                 'category' => 'Product News',
-                'seed' => 'backiedeal-ddr5',
+                'topic' => 'ram',
                 'status' => 'published',
                 'body' => $p(
                     'DDR5 kits have fallen roughly 30% since the start of the year. A 32GB 6000MT/s kit that was $180 in January is now under $120.',
@@ -303,7 +352,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Summer Cooling Clinic: Keep Your PC Quiet and Cool',
                 'category' => 'Guides',
-                'seed' => 'backiedeal-cooling',
+                'topic' => 'cpu-cooler',
                 'status' => 'published',
                 'body' => $p(
                     'Ambient temperatures climb in summer and so do component temperatures. This guide covers fan curves, case airflow layout, dust filtering, repasting intervals and when an AIO or air cooler upgrade is worth it.',
@@ -313,7 +362,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'New Assembly Workshop Now Open',
                 'category' => 'Company',
-                'seed' => 'backiedeal-workshop',
+                'topic' => 'motherboard',
                 'status' => 'published',
                 'body' => $p(
                     'Our expanded workshop doubles bench capacity and adds a dedicated photo and testing area, so custom build turnaround is now 2 to 3 days instead of a week.',
@@ -323,7 +372,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Free Shipping on All Orders Over $99',
                 'category' => 'Promotions',
-                'seed' => 'backiedeal-free-shipping',
+                'topic' => 'shipping',
                 'status' => 'published',
                 'body' => $p(
                     'For a limited time, every order over $99 ships free nationwide with no coupon needed — the discount is applied automatically at checkout.',
@@ -333,7 +382,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'PCIe 5.0 SSDs: Do You Actually Need One?',
                 'category' => 'Reviews',
-                'seed' => 'backiedeal-pcie5-ssd',
+                'topic' => 'ssd',
                 'status' => 'published',
                 'body' => $p(
                     'We tested three PCIe 5.0 drives against a fast Gen4 drive in game load times, project builds and large file copies.',
@@ -343,7 +392,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Mechanical Keyboard Week — Switch Sampler In Store',
                 'category' => 'Promotions',
-                'seed' => 'backiedeal-keyboard-week',
+                'topic' => 'keyboard',
                 'status' => 'published',
                 'body' => $p(
                     'Try before you buy: our switch-tester board is loaded with 18 different linear, tactile and clicky switches so you can feel the difference before committing.',
@@ -353,7 +402,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Customer Build Spotlight: A Silent 4K Editing Rig',
                 'category' => 'Company',
-                'seed' => 'backiedeal-build-spotlight',
+                'topic' => 'psu',
                 'status' => 'published',
                 'body' => $p(
                     'A local videographer came to us wanting a machine that could scrub 4K timelines without sounding like a hairdryer. The result: a Ryzen 9 with 96GB of RAM, a large air cooler and noise-optimised fan curves.',
@@ -363,7 +412,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Windows 11 24H2: What Changed and Should You Update',
                 'category' => 'Guides',
-                'seed' => 'backiedeal-win11-24h2',
+                'topic' => 'monitor',
                 'status' => 'published',
                 'body' => $p(
                     'The latest feature update brings a revised File Explorer, faster search and some driver-model changes that affect older peripherals.',
@@ -373,7 +422,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Trade In Your Old GPU for Store Credit',
                 'category' => 'Promotions',
-                'seed' => 'backiedeal-gpu-tradein',
+                'topic' => 'gpu',
                 'status' => 'published',
                 'body' => $p(
                     'Upgrading to a 50-series card? Bring your current GPU in for a valuation. This month we are adding a 10% bonus on trade-in credit toward any new graphics card.',
@@ -383,7 +432,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Understanding PC Power Supplies and 80 PLUS Ratings',
                 'category' => 'Guides',
-                'seed' => 'backiedeal-psu-guide',
+                'topic' => 'psu',
                 'status' => 'published',
                 'body' => $p(
                     'Wattage is only part of the story. This guide explains rails, efficiency ratings, the new ATX 3.1 spec and the 12V-2x6 connector, and how to size a PSU for a modern high-power GPU.',
@@ -393,7 +442,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Store Anniversary Sale — Three Days Only',
                 'category' => 'Promotions',
-                'seed' => 'backiedeal-anniversary',
+                'topic' => 'sale-tag',
                 'status' => 'published',
                 'body' => $p(
                     'We are turning twelve. To celebrate, everything in store is discounted for three days, with doorbuster pricing on select monitors, SSDs and pre-built systems while stock lasts.',
@@ -403,7 +452,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Laptop vs Desktop for Programming Students',
                 'category' => 'Guides',
-                'seed' => 'backiedeal-laptop-vs-desktop',
+                'topic' => 'laptop-office',
                 'status' => 'published',
                 'body' => $p(
                     'Portability versus power and value. We look at what a computer-science workload really demands, when a laptop alone is enough, and when a cheap desktop plus a modest laptop beats one expensive machine.',
@@ -413,7 +462,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Now an Authorised Service Centre for Three More Brands',
                 'category' => 'Announcements',
-                'seed' => 'backiedeal-service-centre',
+                'topic' => 'cpu-cooler',
                 'status' => 'published',
                 'body' => $p(
                     'BackieDeal is now an authorised warranty service partner for three additional laptop and peripheral brands, which means in-warranty repairs can be handled here instead of shipping your device away.',
@@ -423,7 +472,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Black Friday 2026: Early Deal Preview',
                 'category' => 'Promotions',
-                'seed' => 'backiedeal-black-friday',
+                'topic' => 'black-friday',
                 'status' => 'draft',
                 'body' => $p(
                     'A preview of the doorbusters we are lining up for Black Friday week: GPU bundles, monitor markdowns, storage multi-buys and discounted assembly on custom builds.',
@@ -433,7 +482,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Hands-On: Next-Gen CPU Coolers Compared',
                 'category' => 'Reviews',
-                'seed' => 'backiedeal-cooler-roundup',
+                'topic' => 'cpu-cooler',
                 'status' => 'draft',
                 'body' => $p(
                     'We are testing six new air and liquid coolers on a high-wattage CPU, measuring noise, thermals and installation friction.',
@@ -443,7 +492,7 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'Holiday Opening Hours 2026',
                 'category' => 'Announcements',
-                'seed' => 'backiedeal-holiday-hours',
+                'topic' => 'christmas',
                 'status' => 'draft',
                 'body' => $p(
                     'Our planned store and workshop hours over the December holiday period, including the last order dates for guaranteed pre-holiday delivery and custom-build completion.',
@@ -453,11 +502,41 @@ class ContentSeeder extends Seeder
             [
                 'title' => 'RTX 40-Series Pre-Order Announcement (2022)',
                 'category' => 'Product News',
-                'seed' => 'backiedeal-rtx40-archive',
+                'topic' => 'gpu',
                 'status' => 'archived',
                 'body' => $p(
                     'This post announced pre-orders for the RTX 40-series when it launched in 2022.',
                     'Kept for reference. For current graphics card stock see the latest product news.'
+                ),
+            ],
+            [
+                'title' => 'Mega Computer Sale: Up to 40% Off Store-Wide',
+                'category' => 'Promotions',
+                'topic' => 'sale-storefront',
+                'status' => 'published',
+                'body' => $p(
+                    'Our biggest computer sale of the season is live now: up to 40% off laptops, graphics cards, monitors and pre-built desktops, plus extra markdowns on accessories at the counter.',
+                    'Stock is limited on doorbuster items — check the in-store sale board each morning for what has just been added, and ask staff to hold an item while you finish browsing.'
+                ),
+            ],
+            [
+                'title' => 'Clearance Sale: Last-Gen Laptops While Stocks Last',
+                'category' => 'Promotions',
+                'topic' => 'laptop',
+                'status' => 'published',
+                'body' => $p(
+                    'We are clearing out last-generation laptop models to make room for the new lineup — prices are cut by 25-35% on open-box and display units, all fully tested and covered by the remaining manufacturer warranty.',
+                    'Once a model sells out at clearance pricing it will not be restocked, so this is a one-time chance to grab it at these prices.'
+                ),
+            ],
+            [
+                'title' => 'Flash Sale Friday: Doorbuster Deals on PC Parts',
+                'category' => 'Promotions',
+                'topic' => 'sale-tag',
+                'status' => 'draft',
+                'body' => $p(
+                    'Planning a one-day flash sale on CPUs, RAM, SSDs and cases, with hourly doorbuster drops announced in store and on our socials.',
+                    'This post is a draft — the date and exact doorbuster list are still being finalised with suppliers.'
                 ),
             ],
         ];

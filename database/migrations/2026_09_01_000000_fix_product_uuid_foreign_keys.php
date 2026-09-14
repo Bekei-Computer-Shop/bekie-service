@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 return new class extends Migration
 {
@@ -25,6 +26,16 @@ return new class extends Migration
         if (DB::connection()->getDriverName() !== 'pgsql') {
             return;
         }
+
+        // Rows inserted via db:seed (which disables model events) never get a
+        // uuid assigned, since nothing backfills it except this one-time
+        // migration from 2026-08-31. Re-backfill any stragglers here so the
+        // child-table copy below never propagates a null product_uuid.
+        DB::table('products')->whereNull('uuid')->orderBy('id')->cursor()->each(
+            fn ($row) => DB::table('products')
+                ->where('id', $row->id)
+                ->update(['uuid' => (string) Str::uuid()])
+        );
 
         $productsHasId = DB::selectOne(
             "select exists (

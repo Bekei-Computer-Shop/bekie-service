@@ -30,16 +30,16 @@ class CustomerSeeder extends Seeder
 {
     private const TAG = 'customer-seeder';
 
-    /** Products supplied by ProductSeeder and used for customer order history. */
+    /** Products supplied by ProductCatalogSeeder and used for customer order history. */
     private const ORDER_PRODUCT_SKUS = [
-        'DELL-XPS13-PLUS',
-        'LEN-LEGION5-PRO',
-        'ASUS-PROART-PX13',
-        'ACER-PREDATOR-HELIOS16',
-        'HP-PAVILION-GAMING',
-        'ASUS-ROG-G22CH',
-        'DELL-U2723QE',
-        'LG-ULTRAGEAR-27GN950',
+        'AS-ZEPH-G16',
+        'SAM-990PRO',
+        'KIN-FURY-DDR5',
+        'LOG-MXM3S',
+        'DEL-ULTRA-4K',
+        'SNY-WH1000XM5',
+        'APL-IP15PM',
+        'ANK-PWREXP8',
     ];
 
     /**
@@ -120,7 +120,7 @@ class CustomerSeeder extends Seeder
             ->orderBy('sku')
             ->get();
         if ($products->isEmpty()) {
-            $this->command->warn('No products found — customers will be created without orders. Run ProductSeeder first for spend totals.');
+            $this->command->warn('No products found — customers will be created without orders. Run ProductCatalogSeeder first for spend totals.');
         }
 
         $vipGroup = CustomerGroup::firstOrCreate(

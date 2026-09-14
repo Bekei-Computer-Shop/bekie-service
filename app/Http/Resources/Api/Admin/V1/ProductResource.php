@@ -24,6 +24,17 @@ class ProductResource extends JsonResource
             'slug' => $product->slug,
             'sku' => $product->sku,
             'barcode' => $product->barcode,
+            // The controller already eager-loads both relations (`category:id,name,slug`,
+            // `brand:id,name,slug`) for index/show; this resource just wasn't reading
+            // them back out, so every admin screen saw an uncategorized/unbranded product.
+            'category_id' => $product->category_id,
+            'category' => $product->relationLoaded('category') && $product->category
+                ? ['id' => $product->category->id, 'name' => $product->category->name, 'slug' => $product->category->slug]
+                : null,
+            'brand_id' => $product->brand_id,
+            'brand' => $product->relationLoaded('brand') && $product->brand
+                ? ['id' => $product->brand->id, 'name' => $product->brand->name, 'slug' => $product->brand->slug]
+                : null,
             'short_description' => $product->short_description,
             'description' => $product->description,
             'price' => $product->price !== null ? (float) $product->price : null,

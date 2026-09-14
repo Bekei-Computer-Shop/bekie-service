@@ -18,6 +18,9 @@ class BannerSeeder extends Seeder
      * slides, and one slide with no image at all so the gradient fallback has
      * something to show.
      *
+     * All frames are curated Unsplash photos matching each slide's topic
+     * (laptops, cooling, monitors, keyboards, etc.), not random placeholders.
+     *
      * Frames beyond the first live in `meta`, matching how the admin UI splits
      * a slide: `image_desktop` is the cover the storefront reads, and
      * `meta.frames` carries the rest of the sequence along with its playback
@@ -60,15 +63,6 @@ class BannerSeeder extends Seeder
     }
 
     /**
-     * Deterministic 1600x700 placeholders — the size the admin form recommends.
-     * Seeded by name so a given slide keeps the same photo across re-runs.
-     */
-    private function frame(string $seed): string
-    {
-        return "https://picsum.photos/seed/{$seed}/1600/700";
-    }
-
-    /**
      * @return array<int, array<string, mixed>>
      */
     private function slides(): array
@@ -77,7 +71,11 @@ class BannerSeeder extends Seeder
             [
                 'title' => 'Ultimate Gaming Setup 2026',
                 'subtitle' => 'Build your dream PC with the RTX 50-series',
-                'frames' => [$this->frame('bekie-gaming-1'), $this->frame('bekie-gaming-2'), $this->frame('bekie-gaming-3')],
+                'frames' => [
+                    'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?w=1600&h=700&fit=crop',
+                    'https://images.unsplash.com/photo-1591370874773-6702e8f12fd8?w=1600&h=700&fit=crop',
+                    'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?w=1600&h=700&fit=crop',
+                ],
                 'button_text' => 'Shop Now',
                 'button_url' => '/categories/graphics-cards',
                 'is_active' => true,
@@ -90,7 +88,9 @@ class BannerSeeder extends Seeder
             [
                 'title' => 'Student Laptop Deals',
                 'subtitle' => 'Up to 20% off MacBooks and ThinkPads',
-                'frames' => [$this->frame('bekie-laptop-1')],
+                'frames' => [
+                    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=1600&h=700&fit=crop',
+                ],
                 'button_text' => 'View Deals',
                 'button_url' => '/categories/laptop',
                 'is_active' => true,
@@ -103,7 +103,10 @@ class BannerSeeder extends Seeder
             [
                 'title' => 'Custom Water Cooling Kits',
                 'subtitle' => 'Take your thermal performance to the next level',
-                'frames' => [$this->frame('bekie-cooling-1'), $this->frame('bekie-cooling-2')],
+                'frames' => [
+                    'https://images.unsplash.com/photo-1513366884929-f0b3bedfb653?w=1600&h=700&fit=crop',
+                    'https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?w=1600&h=700&fit=crop',
+                ],
                 'button_text' => 'Learn More',
                 'button_url' => '/categories/cpu-cooler',
                 'is_active' => true,
@@ -116,7 +119,9 @@ class BannerSeeder extends Seeder
             [
                 'title' => 'Ultrawide Monitor Upgrade',
                 'subtitle' => '49-inch curved panels now in stock',
-                'frames' => [$this->frame('bekie-monitor-1')],
+                'frames' => [
+                    'https://images.unsplash.com/photo-1547658718-1cdaa0852790?w=1600&h=700&fit=crop',
+                ],
                 'button_text' => 'Browse Monitors',
                 'button_url' => '/categories/gaming-monitor',
                 'is_active' => true,
@@ -130,10 +135,10 @@ class BannerSeeder extends Seeder
                 'title' => 'Build Your Own PC',
                 'subtitle' => 'Pick every part, we assemble and test it free',
                 'frames' => [
-                    $this->frame('bekie-build-1'),
-                    $this->frame('bekie-build-2'),
-                    $this->frame('bekie-build-3'),
-                    $this->frame('bekie-build-4'),
+                    'https://images.unsplash.com/photo-1495627009230-9e30e647c7cc?w=1600&h=700&fit=crop',
+                    'https://images.unsplash.com/photo-1632749042303-7f7a18ed6ff0?w=1600&h=700&fit=crop',
+                    'https://images.unsplash.com/photo-1512756290469-ec264b7fbf87?w=1600&h=700&fit=crop',
+                    'https://images.unsplash.com/photo-1555617778-02518510b9fa?w=1600&h=700&fit=crop',
                 ],
                 'button_text' => 'Start Building',
                 'button_url' => '/build',
@@ -163,7 +168,10 @@ class BannerSeeder extends Seeder
                 // Scheduled: active, but its window has not opened yet.
                 'title' => 'Back to School Bundle',
                 'subtitle' => 'Laptop, mouse and backpack from $699',
-                'frames' => [$this->frame('bekie-school-1'), $this->frame('bekie-school-2')],
+                'frames' => [
+                    'https://images.unsplash.com/photo-1541240290619-3f2fad86473d?w=1600&h=700&fit=crop',
+                    'https://images.unsplash.com/photo-1535982330050-f1c2fb79ff78?w=1600&h=700&fit=crop',
+                ],
                 'button_text' => 'Get the Bundle',
                 'button_url' => '/promotions/back-to-school',
                 'is_active' => true,
@@ -177,7 +185,11 @@ class BannerSeeder extends Seeder
                 // Scheduled, further out.
                 'title' => 'Black Friday Mega Sale',
                 'subtitle' => 'Doorbusters on GPUs, SSDs and monitors',
-                'frames' => [$this->frame('bekie-blackfriday-1'), $this->frame('bekie-blackfriday-2'), $this->frame('bekie-blackfriday-3')],
+                'frames' => [
+                    'https://images.unsplash.com/photo-1555618254-84e2cf498b01?w=1600&h=700&fit=crop',
+                    'https://images.unsplash.com/photo-1555618565-9f2b0323a10d?w=1600&h=700&fit=crop',
+                    'https://images.unsplash.com/photo-1534972195531-d756b9bfa9f2?w=1600&h=700&fit=crop',
+                ],
                 'button_text' => 'Preview Deals',
                 'button_url' => '/promotions/black-friday',
                 'is_active' => true,
@@ -191,7 +203,9 @@ class BannerSeeder extends Seeder
                 // Expired: active, but its window has already closed.
                 'title' => 'Summer Clearance',
                 'subtitle' => 'Everything must go - 50% off last-gen parts',
-                'frames' => [$this->frame('bekie-clearance-1')],
+                'frames' => [
+                    'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1600&h=700&fit=crop',
+                ],
                 'button_text' => 'Clearance',
                 'button_url' => '/promotions/summer-clearance',
                 'is_active' => true,
@@ -205,7 +219,10 @@ class BannerSeeder extends Seeder
                 // Draft: switched off entirely, dates irrelevant.
                 'title' => 'Mechanical Keyboard Week',
                 'subtitle' => 'Hot-swappable switches and custom keycaps',
-                'frames' => [$this->frame('bekie-keyboard-1'), $this->frame('bekie-keyboard-2')],
+                'frames' => [
+                    'https://images.unsplash.com/photo-1635987391914-cb84b567e68f?w=1600&h=700&fit=crop',
+                    'https://images.unsplash.com/photo-1626958390943-a70309376444?w=1600&h=700&fit=crop',
+                ],
                 'button_text' => 'Shop Keyboards',
                 'button_url' => '/categories/keyboard',
                 'is_active' => false,

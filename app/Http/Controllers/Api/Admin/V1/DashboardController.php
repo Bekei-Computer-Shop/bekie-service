@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
+use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\Promotion;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -32,7 +32,10 @@ class DashboardController extends BaseAdminController
             'total_revenue' => Order::sum('grand_total'),
             'total_products' => Product::count(),
             'total_customers' => User::where('is_admin', false)->count(),
-            'total_promotions' => Promotion::count(),
+            // The admin "Promotions & Campaigns" screen is Coupon-backed (see
+            // PromotionController / PromotionSeeder) — the older Promotion
+            // model isn't wired to any admin route and its table stays empty.
+            'total_promotions' => Coupon::count(),
             'today' => [
                 'orders' => Order::whereDate('created_at', $today)->count(),
                 'revenue' => Order::whereDate('created_at', $today)->sum('grand_total'),

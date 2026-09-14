@@ -91,5 +91,27 @@ class AdminUserSeeder extends Seeder
                 $staff->assignRole($staffRole);
             }
         }
+
+        // A manager-role login for the portal, same shape as staff above.
+        $manager = User::updateOrCreate(
+            ['email' => 'manager@example.com'],
+            [
+                'first_name' => 'Manager',
+                'last_name' => 'User',
+                'password' => Hash::make('password'),
+                'role' => 'manager',
+                'is_admin' => true,
+                'is_active' => true,
+                'is_banned' => false,
+            ]
+        );
+
+        if (Schema::hasTable('roles')) {
+            $managerRole = Role::firstOrCreate(['name' => 'manager', 'guard_name' => 'api']);
+
+            if (! $manager->hasRole('manager')) {
+                $manager->assignRole($managerRole);
+            }
+        }
     }
 }
