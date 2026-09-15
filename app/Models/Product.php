@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
@@ -126,6 +127,18 @@ class Product extends Model
         // Explicit pivot keys use the product id column.
         return $this->belongsToMany(Coupon::class, 'coupon_product', 'product_id', 'coupon_id')
             ->whereNull('coupons.deleted_at');
+    }
+
+    public function reviews()
+    {
+        return $this->hasMany(Review::class, 'product_id');
+    }
+
+    public function approvedReviews(): HasMany
+    {
+        return $this->reviews()
+            ->where('status', 'approved')
+            ->orderByDesc('created_at');
     }
 
     public static function booted(): void

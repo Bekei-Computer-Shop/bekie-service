@@ -7,12 +7,20 @@ use App\Http\Resources\Api\Client\V1\ProductListResource;
 use App\Http\Resources\Api\Client\V1\ProductResource;
 use App\Http\Resources\Api\Client\V1\ProductVariantResource;
 use App\Models\Product;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends BaseApiController
 {
     public function index(ListProductsRequest $request)
     {
-        $query = Product::where('is_active', true);
+        $query = Product::where('is_active', true)
+            ->addSelect([
+                'average_rating' => DB::table('reviews')
+                    ->select(DB::raw('COALESCE(ROUND(AVG(rating), 1), 0)'))
+                    ->whereColumn('product_id', 'products.id')
+                    ->where('status', 'approved')
+                    ->whereNull('deleted_at'),
+            ]);
 
         // Filter by category (supports single or multiple)
         if ($request->filled('category_id')) {
@@ -91,7 +99,15 @@ class ProductController extends BaseApiController
             'brand',
             'images' => fn ($query) => $query->where('is_active', true),
             'variants' => fn ($query) => $query->where('is_active', true),
+            'approvedReviews',
         ]);
+
+        // Calculate average rating from approved reviews
+        if ($product->approvedReviews->isNotEmpty()) {
+            $product->average_rating = round($product->approvedReviews->avg('rating'), 1);
+        } else {
+            $product->average_rating = 0;
+        }
 
         $product->increment('views_count');
 

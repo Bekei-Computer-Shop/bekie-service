@@ -35,6 +35,8 @@ class ProductResource extends JsonResource
             'views_count' => $this->views_count,
             'sales_count' => $this->sales_count,
             'sort_order' => $this->sort_order,
+            'average_rating' => $this->average_rating ?? 0,
+            'reviews' => ReviewResponseResource::collection($this->whenLoaded('approvedReviews')),
             'category' => $this->whenLoaded('category', fn () => new CategoryResource($this->category)),
             'brand' => $this->whenLoaded('brand', fn () => new BrandResource($this->brand)),
             'variants' => ProductVariantResource::collection($this->whenLoaded('variants')),

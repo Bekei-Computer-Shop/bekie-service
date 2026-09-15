@@ -35,6 +35,7 @@ class ProductListResource extends JsonResource
             'views_count' => $this->views_count,
             'sales_count' => $this->sales_count,
             'sort_order' => $this->sort_order,
+            'average_rating' => $this->average_rating ?? 0,
         ];
     }
 }
