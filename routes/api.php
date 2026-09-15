@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\Client\V1\KhqrController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
 use App\Http\Controllers\Api\Client\V1\OrderController;
 use App\Http\Controllers\Api\Client\V1\ProductController;
+use App\Http\Controllers\Api\Client\V1\ProfileController;
 use App\Http\Controllers\Api\Client\V1\PromotionController;
 use App\Http\Controllers\Api\Client\V1\ShippingMethodController;
 use App\Http\Controllers\Api\Client\V1\SlideController;
@@ -69,6 +70,13 @@ Route::prefix('v1')->group(function () {
     Route::middleware(AuthenticateApiToken::class)->group(function () {
         Route::post('coupons/apply', [CouponController::class, 'apply'])
             ->middleware(['permission:client.coupons.apply', 'throttle:promo-apply']);
+
+        Route::prefix('profile')->group(function () {
+            Route::get('/', [ProfileController::class, 'show']);
+            Route::patch('/', [ProfileController::class, 'update'])->middleware('permission:client.profile.update');
+            Route::post('change-password', [ProfileController::class, 'changePassword'])->middleware('permission:client.profile.change-password');
+            Route::post('image', [ProfileController::class, 'updateProfileImage'])->middleware('permission:client.profile.update-image');
+        });
 
         Route::prefix('cart')->middleware('permission:client.carts.manage')->group(function () {
             Route::get('/', [CartController::class, 'index']);
