@@ -56,7 +56,10 @@ class PreProductionSeeder extends Seeder
         ];
 
         foreach ($categoryData as $data) {
-            $category = Category::firstOrCreate(['slug' => $data['slug']], $data);
+            // withTrashed(): slug has a global unique index, so a category
+            // soft-deleted since the last seed run would otherwise be
+            // invisible to firstOrCreate() and collide on insert.
+            $category = Category::withTrashed()->firstOrCreate(['slug' => $data['slug']], $data);
             $this->categories[] = $category;
         }
     }
