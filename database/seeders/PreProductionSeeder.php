@@ -58,8 +58,13 @@ class PreProductionSeeder extends Seeder
         foreach ($categoryData as $data) {
             // withTrashed(): slug has a global unique index, so a category
             // soft-deleted since the last seed run would otherwise be
-            // invisible to firstOrCreate() and collide on insert.
+            // invisible to firstOrCreate() and collide on insert. restore()
+            // it too — left trashed, it would still block CategorySeeder's
+            // own lookup on the same slug right after this runs.
             $category = Category::withTrashed()->firstOrCreate(['slug' => $data['slug']], $data);
+            if ($category->trashed()) {
+                $category->restore();
+            }
             $this->categories[] = $category;
         }
     }

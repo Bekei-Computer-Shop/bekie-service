@@ -225,7 +225,10 @@ class CategorySeeder extends Seeder
     {
         $slug = Str::slug($data['name']);
 
-        return Category::firstOrCreate(
+        // withTrashed() + restore(): slug has a global unique index, so a
+        // category soft-deleted since the last seed run is otherwise
+        // invisible to firstOrCreate() and collides with itself on insert.
+        $category = Category::withTrashed()->firstOrCreate(
             ['slug' => $slug],
             [
                 'parent_id' => $parent?->id,
@@ -240,6 +243,12 @@ class CategorySeeder extends Seeder
                 'sort_order' => $sortOrder,
             ]
         );
+
+        if ($category->trashed()) {
+            $category->restore();
+        }
+
+        return $category;
     }
 
     /**
