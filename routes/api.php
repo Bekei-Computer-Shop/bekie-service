@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Client\V1\CategoryController;
 use App\Http\Controllers\Api\Client\V1\CouponController;
 use App\Http\Controllers\Api\Client\V1\KhqrController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
+use App\Http\Controllers\Api\Client\V1\NotificationController;
 use App\Http\Controllers\Api\Client\V1\OrderController;
 use App\Http\Controllers\Api\Client\V1\ProductController;
 use App\Http\Controllers\Api\Client\V1\ProfileController;
@@ -18,14 +19,14 @@ use App\Http\Controllers\Api\Client\V1\SlideController;
 use App\Http\Controllers\Api\Client\V1\UserProfileController;
 use App\Http\Controllers\Api\Client\V1\WishlistController;
 use App\Http\Controllers\HealthController;
-use App\Http\Middleware\AuthenticateAdminApiToken;
 use App\Http\Middleware\AuthenticateApiToken;
+use App\Http\Middleware\AuthenticateBroadcastToken;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 Broadcast::routes([
     'prefix' => 'v1',
-    'middleware' => [AuthenticateAdminApiToken::class],
+    'middleware' => [AuthenticateBroadcastToken::class],
 ]);
 
 // Public health check. Lives outside the /v1 surface so external monitors
@@ -72,6 +73,10 @@ Route::prefix('v1')->group(function () {
     Route::get('promotions', [PromotionController::class, 'index']);
 
     Route::middleware(AuthenticateApiToken::class)->group(function () {
+        Route::get('notifications', [NotificationController::class, 'index']);
+        Route::post('notifications/{notification}/read', [NotificationController::class, 'read']);
+        Route::post('notifications/read-all', [NotificationController::class, 'readAll']);
+
         Route::get('profile', [UserProfileController::class, 'show']);
         Route::post('profile/avatar', [UserProfileController::class, 'updateAvatar']);
 

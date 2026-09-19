@@ -8,11 +8,13 @@ class JwtService
 
     public function __construct()
     {
-        $appKey = env('APP_KEY');
-        if (! $appKey) {
-            throw new \RuntimeException('APP_KEY environment variable must be set');
+        $secret = config('app.key') ?: env('JWT_SECRET') ?: env('APP_KEY');
+
+        if (! is_string($secret) || trim($secret) === '') {
+            throw new \RuntimeException('JWT_SECRET or APP_KEY must be configured.');
         }
-        $this->secret = $appKey;
+
+        $this->secret = $secret;
     }
 
     protected function base64UrlEncode(string $data): string

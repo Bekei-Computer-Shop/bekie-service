@@ -13,6 +13,8 @@ use App\Models\Role;
 use App\Models\TeamActivityLog;
 use App\Models\User;
 use App\Models\VisitorLog;
+use App\Observers\ContentItemObserver;
+use App\Observers\OrderObserver;
 use App\Policies\AdminResourcePolicy;
 use App\Policies\PermissionPolicy;
 use App\Policies\RolePolicy;
@@ -93,6 +95,9 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->configureRateLimiters();
+
+        Order::observe(OrderObserver::class);
+        ContentItem::observe(ContentItemObserver::class);
     }
 
     /**

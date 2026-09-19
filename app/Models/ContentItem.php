@@ -34,10 +34,12 @@ class ContentItem extends Model
         'status',
         'author_id',
         'published_at',
+        'audience',
     ];
 
     protected $casts = [
         'published_at' => 'datetime',
+        'audience' => 'array',
     ];
 
     public function author(): BelongsTo

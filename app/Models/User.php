@@ -138,6 +138,11 @@ class User extends Authenticatable
         return $this->hasMany(ApiToken::class)->where('scope', 'admin');
     }
 
+    public function receivesBroadcastNotificationsOn(): string
+    {
+        return 'user.'.$this->getKey();
+    }
+
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);

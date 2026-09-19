@@ -23,6 +23,7 @@ class ContentItemResource extends JsonResource
                 'name' => $this->author?->name,
             ],
             'published_at' => $this->published_at?->toIso8601String(),
+            'audience' => $this->audience ?? ['type' => 'all'],
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }
