@@ -35,6 +35,18 @@ class DemoOrderSeeder extends Seeder
 
     private const ORDER_COUNT = 30;
 
+    /** Products supplied by ProductCatalogSeeder and used for demo order line items. */
+    private const ORDER_PRODUCT_SKUS = [
+        'AS-ZEPH-G16',
+        'SAM-990PRO',
+        'KIN-FURY-DDR5',
+        'LOG-MXM3S',
+        'DEL-ULTRA-4K',
+        'SNY-WH1000XM5',
+        'APL-IP15PM',
+        'ANK-PWREXP8',
+    ];
+
     /** The canonical statuses — see UpdateOrderRequest::STATUSES. */
     private const STATUSES = UpdateOrderRequest::STATUSES;
 
@@ -57,9 +69,12 @@ class DemoOrderSeeder extends Seeder
             return;
         }
 
-        $products = Product::query()->take(8)->get();
+        $products = Product::query()
+            ->whereIn('sku', self::ORDER_PRODUCT_SKUS)
+            ->orderBy('sku')
+            ->get();
         if ($products->isEmpty()) {
-            $this->command->error('No products found — run ProductSeeder first.');
+            $this->command->error('No products found — run ProductCatalogSeeder first.');
 
             return;
         }

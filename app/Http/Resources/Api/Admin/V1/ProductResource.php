@@ -20,12 +20,21 @@ class ProductResource extends JsonResource
 
         return [
             'id' => $product->id,
-            'category_id' => $product->category_id,
-            'brand_id' => $product->brand_id,
             'name' => $product->name,
             'slug' => $product->slug,
             'sku' => $product->sku,
             'barcode' => $product->barcode,
+            // The controller already eager-loads both relations (`category:id,name,slug`,
+            // `brand:id,name,slug`) for index/show; this resource just wasn't reading
+            // them back out, so every admin screen saw an uncategorized/unbranded product.
+            'category_id' => $product->category_id,
+            'category' => $product->relationLoaded('category') && $product->category
+                ? ['id' => $product->category->id, 'name' => $product->category->name, 'slug' => $product->category->slug]
+                : null,
+            'brand_id' => $product->brand_id,
+            'brand' => $product->relationLoaded('brand') && $product->brand
+                ? ['id' => $product->brand->id, 'name' => $product->brand->name, 'slug' => $product->brand->slug]
+                : null,
             'short_description' => $product->short_description,
             'description' => $product->description,
             'price' => $product->price !== null ? (float) $product->price : null,
@@ -48,25 +57,12 @@ class ProductResource extends JsonResource
             'sort_order' => (int) $product->sort_order,
             'views_count' => (int) $product->views_count,
             'sales_count' => (int) $product->sales_count,
-            'category' => $product->relationLoaded('category') && $product->category
-                ? ['id' => $product->category->id, 'name' => $product->category->name, 'slug' => $product->category->slug]
-                : null,
-            'brand' => $product->relationLoaded('brand') && $product->brand
-                ? ['id' => $product->brand->id, 'name' => $product->brand->name, 'slug' => $product->brand->slug]
-                : null,
             'variants' => $product->relationLoaded('variants')
                 ? ProductVariantResource::collection($product->variants)->resolve($request)
                 : $this->whenCounted('variants'),
-            // Omitted rather than sent as [] when not loaded, so a client can
-            // tell "this product has no gallery" from "the list endpoint didn't
-            // ship one" — index() stays light and only sends `thumbnail`.
             'images' => $product->relationLoaded('images')
                 ? ProductImageResource::collection($product->images)->resolve($request)
                 : $this->whenCounted('images'),
-            // Ids drive the product form's promotion checkboxes; the nested
-            // objects save it a second request for the labels. Both omitted
-            // when the relation is not loaded, so the light index() payload
-            // does not imply "this product has no promotions".
             'promotion_ids' => $this->when(
                 $product->relationLoaded('promotions'),
                 fn () => $product->promotions->pluck('id')->map(fn ($id) => (int) $id)->all(),

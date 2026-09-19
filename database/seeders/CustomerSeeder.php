@@ -30,6 +30,18 @@ class CustomerSeeder extends Seeder
 {
     private const TAG = 'customer-seeder';
 
+    /** Products supplied by ProductCatalogSeeder and used for customer order history. */
+    private const ORDER_PRODUCT_SKUS = [
+        'AS-ZEPH-G16',
+        'SAM-990PRO',
+        'KIN-FURY-DDR5',
+        'LOG-MXM3S',
+        'DEL-ULTRA-4K',
+        'SNY-WH1000XM5',
+        'APL-IP15PM',
+        'ANK-PWREXP8',
+    ];
+
     /**
      * first, last, phone suffix, status, [line 1, district, city, postcode],
      * and how many completed orders to build for them.
@@ -103,9 +115,12 @@ class CustomerSeeder extends Seeder
 
     public function run(): void
     {
-        $products = Product::query()->take(8)->get();
+        $products = Product::query()
+            ->whereIn('sku', self::ORDER_PRODUCT_SKUS)
+            ->orderBy('sku')
+            ->get();
         if ($products->isEmpty()) {
-            $this->command->warn('No products found — customers will be created without orders. Run ProductSeeder first for spend totals.');
+            $this->command->warn('No products found — customers will be created without orders. Run ProductCatalogSeeder first for spend totals.');
         }
 
         $vipGroup = CustomerGroup::firstOrCreate(

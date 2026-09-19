@@ -36,7 +36,7 @@ class StockController extends BaseAdminController
 
         $query = Product::query()->with(['category:id,name,slug', 'brand:id,name,slug'])
             ->select([
-                'uuid',
+                'id',
                 'name',
                 'sku',
                 'price',
@@ -130,8 +130,7 @@ class StockController extends BaseAdminController
             ->get();
 
         return $this->success($products->map(fn (Product $product) => [
-            'id' => $product->uuid,
-            'numeric_id' => $product->id,
+            'id' => $product->id,
             'name' => $product->name,
             'sku' => $product->sku,
             'stock_quantity' => (int) $product->stock_quantity,
@@ -152,7 +151,7 @@ class StockController extends BaseAdminController
             ]);
 
         if (Str::isUuid($id)) {
-            $product = $query->where('uuid', $id)->firstOrFail();
+            $product = $query->whereKey($id)->firstOrFail();
         } else {
             $product = $query->where('sku', $id)->firstOrFail();
         }
@@ -174,7 +173,6 @@ class StockController extends BaseAdminController
 
         return $this->success([
             'id' => $product->id,
-            'uuid' => $product->uuid,
             'name' => $product->name,
             'sku' => $product->sku,
             'barcode' => $product->barcode,
@@ -185,7 +183,6 @@ class StockController extends BaseAdminController
             'reorder_point' => (int) $product->reorder_point,
             'track_inventory' => (bool) $product->track_inventory,
             'in_stock' => (bool) $product->in_stock,
-            'warehouse_location' => $product->warehouse_location,
             'thumbnail' => $product->thumbnail,
             'category' => $product->category ? [
                 'id' => $product->category->id,
@@ -222,8 +219,8 @@ class StockController extends BaseAdminController
         if ($request->filled('product_id')) {
             $productId = (string) $request->input('product_id');
             $resolvedId = Str::isUuid($productId)
-                ? Product::where('uuid', $productId)->value('uuid')
-                : Product::where('sku', $productId)->value('uuid');
+                ? Product::whereKey($productId)->value('id')
+                : Product::where('sku', $productId)->value('id');
 
             if ($resolvedId) {
                 $query->where('stockable_type', Product::class)
@@ -363,7 +360,7 @@ class StockController extends BaseAdminController
     {
         $query = Product::query()
             ->with(['category:id,name', 'brand:id,name'])
-            ->select(['uuid', 'name', 'sku', 'barcode', 'stock_quantity', 'min_stock_alert', 'cost_price', 'price', 'in_stock', 'warehouse_location', 'category_id', 'brand_id', 'updated_at'])
+            ->select(['id', 'name', 'sku', 'barcode', 'stock_quantity', 'min_stock_alert', 'cost_price', 'price', 'in_stock', 'category_id', 'brand_id', 'updated_at'])
             ->where('track_inventory', true);
 
         if ($request->filled('q')) {
@@ -394,7 +391,7 @@ class StockController extends BaseAdminController
 
         return response()->streamDownload(function () use ($query) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['ID', 'Name', 'SKU', 'Barcode', 'Category', 'Brand', 'Stock Qty', 'Min Alert', 'Cost Price', 'Sale Price', 'In Stock', 'Warehouse', 'Last Updated']);
+            fputcsv($handle, ['ID', 'Name', 'SKU', 'Barcode', 'Category', 'Brand', 'Stock Qty', 'Min Alert', 'Cost Price', 'Sale Price', 'In Stock', 'Last Updated']);
             $query->orderBy('name')->chunk(500, function ($products) use ($handle) {
                 foreach ($products as $p) {
                     fputcsv($handle, [
@@ -403,7 +400,6 @@ class StockController extends BaseAdminController
                         $p->stock_quantity, $p->min_stock_alert,
                         $p->cost_price, $p->price,
                         $p->in_stock ? 'Yes' : 'No',
-                        $p->warehouse_location ?? 'Main Warehouse',
                         $p->updated_at?->toDateTimeString(),
                     ]);
                 }

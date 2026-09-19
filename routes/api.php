@@ -10,7 +10,9 @@ use App\Http\Controllers\Api\Client\V1\KhqrController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
 use App\Http\Controllers\Api\Client\V1\OrderController;
 use App\Http\Controllers\Api\Client\V1\ProductController;
+use App\Http\Controllers\Api\Client\V1\ProfileController;
 use App\Http\Controllers\Api\Client\V1\PromotionController;
+use App\Http\Controllers\Api\Client\V1\ReviewController;
 use App\Http\Controllers\Api\Client\V1\ShippingMethodController;
 use App\Http\Controllers\Api\Client\V1\SlideController;
 use App\Http\Controllers\Api\Client\V1\UserProfileController;
@@ -55,7 +57,7 @@ Route::prefix('v1')->group(function () {
     Route::get('brands/{brand}', [BrandController::class, 'show']);
 
     Route::get('products', [ProductController::class, 'index']);
-    Route::get('products/{id}', [ProductController::class, 'show']);
+    Route::get('products/{product}', [ProductController::class, 'show']);
     Route::get('products/{product}/variants', [ProductController::class, 'variants']);
 
     Route::get('shipping-methods', [ShippingMethodController::class, 'index']);
@@ -77,6 +79,22 @@ Route::prefix('v1')->group(function () {
             ->middleware(['permission:client.coupons.apply', 'throttle:promo-apply']);
 
         Route::prefix('carts')->middleware('permission:client.carts.manage')->group(function () {
+        Route::prefix('profile')->group(function () {
+            Route::get('/', [ProfileController::class, 'show']);
+            Route::patch('/', [ProfileController::class, 'update'])->middleware('permission:client.profile.update');
+            Route::post('change-password', [ProfileController::class, 'changePassword'])->middleware('permission:client.profile.change-password');
+            Route::post('image', [ProfileController::class, 'updateProfileImage'])->middleware('permission:client.profile.update-image');
+        });
+
+        Route::prefix('reviews')->middleware('permission:client.reviews.manage')->group(function () {
+            Route::get('/', [ReviewController::class, 'index']);
+            Route::post('/', [ReviewController::class, 'store']);
+            Route::get('{review}', [ReviewController::class, 'show']);
+            Route::patch('{review}', [ReviewController::class, 'update']);
+            Route::delete('{review}', [ReviewController::class, 'destroy']);
+        });
+
+        Route::prefix('cart')->middleware('permission:client.carts.manage')->group(function () {
             Route::get('/', [CartController::class, 'index']);
             Route::put('/', [CartController::class, 'store']);
             Route::post('items', [CartController::class, 'addItem']);

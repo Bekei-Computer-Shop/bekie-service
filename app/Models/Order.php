@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\RoutesByUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Order extends Model
 {
@@ -51,6 +52,23 @@ class Order extends Model
         'cancelled_at' => 'datetime',
         'refunded_at' => 'datetime',
     ];
+
+    /**
+     * Keep old numeric order links working while UUIDs remain the canonical
+     * route key for all newly generated admin links.
+     */
+    public function resolveRouteBindingQuery($query, $value, $field = null)
+    {
+        if (($field === null || $field === 'uuid') && ctype_digit((string) $value)) {
+            return $query->whereKey((int) $value);
+        }
+
+        if (($field === null || $field === 'uuid') && ! Str::isUuid((string) $value)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return parent::resolveRouteBindingQuery($query, $value, $field);
+    }
 
     public function items()
     {

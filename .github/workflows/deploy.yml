@@ -1,0 +1,161 @@
+name: Build and Deploy to Google Cloud
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: project-87b51d11-3d16-43db-9d0
+  REGION: asia-southeast1
+  REPOSITORY: bekie
+  IMAGE_NAME: laravel-app
+  SERVICE_NAME: laravel-app
+  MIGRATE_JOB_NAME: bekie-migrate
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+
+    outputs:
+      image-uri: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Configure Docker authentication to Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      - name: Generate image tag
+        id: meta
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-8)
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}"
+          echo "tag=${IMAGE}:${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  migrate:
+    name: Run Database Migrations
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Point migrate job at the new image
+        run: |
+          gcloud run jobs update ${{ env.MIGRATE_JOB_NAME }} \
+            --image ${{ needs.build-and-push.outputs.image-uri }} \
+            --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} \
+            --args="artisan","migrate","--force"
+
+      - name: Execute migrations and wait for completion
+        run: |
+          gcloud run jobs execute ${{ env.MIGRATE_JOB_NAME }} \
+            --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} --wait
+
+      # Reuses the same Cloud Run Job resource (no separate seed job is
+      # provisioned). PreProductionSeeder is idempotent (firstOrCreate /
+      # guarded creates throughout), so running it on every deploy is safe
+      # and only fills in missing catalog/demo data.
+      - name: Point migrate job at the seeder
+        run: |
+          gcloud run jobs update ${{ env.MIGRATE_JOB_NAME }} \
+            --image ${{ needs.build-and-push.outputs.image-uri }} \
+            --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} \
+            --args="artisan","db:seed","--class=PreProductionSeeder","--force"
+
+      - name: Execute seeder and wait for completion
+        run: |
+          gcloud run jobs execute ${{ env.MIGRATE_JOB_NAME }} \
+            --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} --wait
+
+      - name: Restore migrate job to its default command
+        if: always()
+        run: |
+          gcloud run jobs update ${{ env.MIGRATE_JOB_NAME }} \
+            --image ${{ needs.build-and-push.outputs.image-uri }} \
+            --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} \
+            --args="artisan","migrate","--force"
+
+  deploy:
+    name: Deploy to Cloud Run
+    needs: [build-and-push, migrate]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image ${{ needs.build-and-push.outputs.image-uri }} \
+            --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }}
+
+      - name: Verify deployment
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} \
+            --format='value(status.url)')
+
+          echo "Service deployed at: $SERVICE_URL"
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/up" || echo "000")
+
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "Health check passed (HTTP $HTTP_STATUS)"
+          else
+            echo "Health check returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Post deployment summary
+        if: always()
+        run: |
+          echo "## Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image**: ${{ needs.build-and-push.outputs.image-uri }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit**: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Service**: ${{ env.SERVICE_NAME }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Region**: ${{ env.REGION }}" >> "$GITHUB_STEP_SUMMARY"

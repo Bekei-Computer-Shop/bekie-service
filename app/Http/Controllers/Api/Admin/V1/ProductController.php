@@ -115,7 +115,7 @@ class ProductController extends BaseAdminController
         $thumbnailWasSent = array_key_exists('thumbnail', $data);
         unset($data['variants'], $data['images'], $data['promotion_ids']);
 
-        $data['slug'] = $data['slug'] ?? Str::slug((string) $data['name']);
+        $data['slug'] = $data['slug'] ?? $this->uniqueSlug(Str::slug((string) $data['name']));
 
         $product = DB::transaction(function () use ($data, $variants, $images, $promotionIds, $thumbnailWasSent): Product {
             $product = Product::create($data);
@@ -210,10 +210,10 @@ class ProductController extends BaseAdminController
         return $this->noContent();
     }
 
-    public function restore(string $uuid): JsonResponse
+    public function restore(string $id): JsonResponse
     {
         /** @var Product|null $product */
-        $product = Product::onlyTrashed()->where('uuid', $uuid)->firstOrFail();
+        $product = Product::onlyTrashed()->whereKey($id)->firstOrFail();
         $product->restore();
         $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants', 'images', 'promotions']);
 
@@ -309,6 +309,25 @@ class ProductController extends BaseAdminController
             $product->thumbnail = $primaryUrl;
             $product->save();
         }
+    }
+
+    /**
+     * Dedupe an auto-derived slug against `products.slug` (a plain, global
+     * unique index — soft-deleted rows still occupy their slug), since the
+     * name isn't itself required to be unique and two products can easily
+     * slugify to the same string.
+     */
+    private function uniqueSlug(string $base): string
+    {
+        $slug = $base;
+        $suffix = 2;
+
+        while (Product::withTrashed()->where('slug', $slug)->exists()) {
+            $slug = "{$base}-{$suffix}";
+            $suffix++;
+        }
+
+        return $slug;
     }
 
     /**

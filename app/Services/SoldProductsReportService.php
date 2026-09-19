@@ -19,19 +19,19 @@ class SoldProductsReportService
 
         $periodExpression = $this->periodExpression($groupBy, DB::connection()->getDriverName());
 
-        // `order_items.product_id` holds the product UUID reference.
+        // `order_items.product_id` holds the UUID-valued product id.
         $rows = DB::table('order_items')
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
-            ->join('products', 'order_items.product_id', '=', 'products.uuid')
+            ->join('products', 'order_items.product_id', '=', 'products.id')
             ->whereBetween('orders.created_at', [$startDate->toDateTimeString(), $endDate->endOfDay()->toDateTimeString()])
             ->whereNotIn('orders.status', ['rejected', 'cancelled'])
             ->selectRaw($periodExpression.' as period')
-            ->selectRaw('CAST(products.uuid AS text) as product_id')
+            ->selectRaw('CAST(products.id AS text) as product_id')
             ->selectRaw('products.name as product_name')
             ->selectRaw('SUM(order_items.quantity) as quantity_sold')
             ->selectRaw('SUM(order_items.total) as revenue')
             ->groupByRaw($periodExpression)
-            ->groupBy('products.uuid', 'products.name')
+            ->groupBy('products.id', 'products.name')
             ->orderBy('period')
             ->orderBy('product_name')
             ->get();
@@ -71,13 +71,13 @@ class SoldProductsReportService
 
         $tableRows = DB::table('order_items')
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
-            ->join('products', 'order_items.product_id', '=', 'products.uuid')
+            ->join('products', 'order_items.product_id', '=', 'products.id')
             ->leftJoin('categories', 'products.category_id', '=', 'categories.id')
             ->whereBetween('orders.created_at', [$startDate->toDateTimeString(), $endDate->endOfDay()->toDateTimeString()])
             ->whereNotIn('orders.status', ['rejected', 'cancelled'])
-            ->selectRaw('CAST(products.uuid AS text) as product_id, products.name as product_name, products.sku as sku, categories.name as category_name')
+            ->selectRaw('CAST(products.id AS text) as product_id, products.name as product_name, products.sku as sku, categories.name as category_name')
             ->selectRaw('SUM(order_items.quantity) as quantity_sold, SUM(order_items.total) as revenue')
-            ->groupBy('products.uuid', 'products.name', 'products.sku', 'categories.name')
+            ->groupBy('products.id', 'products.name', 'products.sku', 'categories.name')
             ->orderByDesc('quantity_sold')
             ->get();
 

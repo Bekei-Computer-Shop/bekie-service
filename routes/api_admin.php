@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\Admin\V1\PermissionController;
 use App\Http\Controllers\Api\Admin\V1\ProductController;
 use App\Http\Controllers\Api\Admin\V1\PromotionController;
 use App\Http\Controllers\Api\Admin\V1\ReportController;
+use App\Http\Controllers\Api\Admin\V1\ReviewController;
 use App\Http\Controllers\Api\Admin\V1\RoleController;
 use App\Http\Controllers\Api\Admin\V1\StockController;
 use App\Http\Controllers\Api\Admin\V1\StoreSettingsController;
@@ -104,6 +105,7 @@ Route::prefix('admin')->group(function () {
         });
 
         Route::middleware('permission:content.view')->group(function () {
+            Route::get('content/categories', [ContentController::class, 'categories']);
             Route::get('content', [ContentController::class, 'index']);
             Route::get('content/{item}', [ContentController::class, 'show']);
         });
@@ -155,6 +157,18 @@ Route::prefix('admin')->group(function () {
         });
         Route::middleware('permission:orders.delete')->group(function () {
             Route::delete('orders/{order}', [OrderController::class, 'destroy']);
+        });
+
+        // ─── Customer Reviews Management ───────────────────────────────
+        Route::middleware('permission:reviews.view')->group(function () {
+            Route::get('reviews', [ReviewController::class, 'index']);
+            Route::get('reviews/{review}', [ReviewController::class, 'show']);
+        });
+        Route::middleware('permission:reviews.update')->group(function () {
+            Route::patch('reviews/{review}', [ReviewController::class, 'update']);
+        });
+        Route::middleware('permission:reviews.delete')->group(function () {
+            Route::delete('reviews/{review}', [ReviewController::class, 'destroy']);
         });
 
         Route::middleware('permission:administrators.view')->group(function () {

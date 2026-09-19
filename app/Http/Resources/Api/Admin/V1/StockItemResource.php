@@ -13,9 +13,8 @@ use Illuminate\Support\Carbon;
  * Serializes a stockable row for the inventory list and detail views.
  *
  * Used instead of dumping the raw Eloquent model, which leaked internal
- * columns (description, meta strings, warehouse internals) into every list
- * response and dragged the full row in even when the page only needed a few
- * columns.
+ * columns (description, meta strings, ...) into every list response and
+ * dragged the full row in even when the page only needed a few columns.
  */
 class StockItemResource extends JsonResource
 {
@@ -26,12 +25,10 @@ class StockItemResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'uuid' => $this->when($this->resource instanceof Product, $this->uuid),
             'name' => $this->name,
             'sku' => $this->sku,
             'barcode' => $this->barcode,
             'thumbnail' => $this->thumbnail,
-            'warehouse_location' => $this->warehouse_location ?? 'Main Warehouse',
             'stockable_type' => $this->resource instanceof Product ? 'product' : 'variant',
             'stock_quantity' => (int) $this->stock_quantity,
             'reserved_stock' => (int) $this->reserved_stock,

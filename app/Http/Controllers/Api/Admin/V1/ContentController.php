@@ -17,6 +17,23 @@ class ContentController extends BaseAdminController
 
     private const MAX_PER_PAGE = 100;
 
+    /**
+     * Distinct, non-empty category values already in use, so the admin form's
+     * category picker reflects real content instead of a guessed-at list.
+     */
+    public function categories(Request $request): JsonResponse
+    {
+        $categories = ContentItem::query()
+            ->when($request->filled('type'), fn ($query) => $query->where('type', $request->input('type')))
+            ->whereNotNull('category')
+            ->where('category', '!=', '')
+            ->distinct()
+            ->orderBy('category')
+            ->pluck('category');
+
+        return $this->success($categories);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $perPage = min(

@@ -30,7 +30,9 @@ class UpdateProductRequest extends FormRequest
         $targetId = $target?->getKey();
 
         return [
-            'category_id' => ['sometimes', 'integer', Rule::exists((new Category)->getTable(), 'id')->whereNull('deleted_at')],
+            // Nullable: a product can be removed from its category entirely
+            // (the admin category picker's "uncheck to remove" flow does this).
+            'category_id' => ['sometimes', 'nullable', 'integer', Rule::exists((new Category)->getTable(), 'id')->whereNull('deleted_at')],
             'brand_id' => ['sometimes', 'nullable', 'integer', Rule::exists((new Brand)->getTable(), 'id')->whereNull('deleted_at')],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'slug' => [
