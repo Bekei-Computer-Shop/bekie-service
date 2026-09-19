@@ -47,16 +47,20 @@ class CartController extends BaseApiController
      *     "items": []
      *   }
      * }
+     * @response 200 {
+     *   "status": "success",
+     *   "data": []
+     * }
      */
     public function index(Request $request)
     {
-        $user = $request->user();
-
-        $cart = Cart::where('user_id', $user->id)->where('session_id', null)->first();
+        $cart = Cart::where('user_id', $request->user()->id)
+            ->where('session_id', null)
+            ->first();
 
         if (! $cart) {
             return $this->success([
-                'user_id' => $user->id,
+                'user_id' => $request->user()->id,
                 'currency' => 'USD',
                 'subtotal' => 0,
                 'discount_total' => 0,

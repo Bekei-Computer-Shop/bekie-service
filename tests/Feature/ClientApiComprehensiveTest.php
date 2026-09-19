@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Models\Brand;
 use App\Models\Cart;
 use App\Models\Category;
-use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Wishlist;

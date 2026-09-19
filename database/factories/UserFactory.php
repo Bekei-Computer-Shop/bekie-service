@@ -39,6 +39,15 @@ class UserFactory extends Factory
         ];
     }
 
+    public function configure(): static
+    {
+        return $this->afterCreating(function (User $user): void {
+            if (! $user->hasRole('user')) {
+                $user->assignRole('user');
+            }
+        });
+    }
+
     public function unverified(): static
     {
         return $this->state(fn (array $attributes): array => [

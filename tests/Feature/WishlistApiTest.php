@@ -149,7 +149,7 @@ test('check product in empty wishlist returns false', function (): void {
     $product = Product::factory()->create();
 
     $response = $this->withHeader('Authorization', "Bearer {$this->token}")
-        ->getJson('/api/v1/wishlist/check?product_id=' . $product->id);
+        ->getJson('/api/v1/wishlist/check?product_id='.$product->id);
 
     $response->assertStatus(200)
         ->assertJson([
@@ -172,7 +172,7 @@ test('check product in wishlist returns true', function (): void {
     ]);
 
     $response = $this->withHeader('Authorization', "Bearer {$this->token}")
-        ->getJson('/api/v1/wishlist/check?product_id=' . $product->id);
+        ->getJson('/api/v1/wishlist/check?product_id='.$product->id);
 
     $response->assertStatus(200)
         ->assertJson([

@@ -14,6 +14,7 @@ class CartItemFactory extends Factory
     public function definition(): array
     {
         $product = Product::factory();
+
         return [
             'cart_id' => Cart::factory(),
             'product_id' => $product,

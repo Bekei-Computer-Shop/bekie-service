@@ -397,11 +397,7 @@ return new class extends Migration
             $defs[] = 'foreign key ("product_id") references "products" ("uuid") on delete '.($cfg['on_delete'] === 'cascade' ? 'cascade' : 'set null');
 
             $columns = collect($cols)->map(fn (array $c) => '"'.$c['name'].'"')->all();
-            $selects = collect($cols)->map(
-                fn (array $c) => $c['name'] === 'product_id'
-                    ? 'products."uuid"'
-                    : '"'.$table.'"."'.$c['name'].'"'
-            )->all();
+            $selects = collect($cols)->map(fn (array $c) => $c['name'] === 'product_id' ? 'products."uuid"' : '"'.$table.'"."'.$c['name'].'"')->all();
 
             DB::statement('create table "'.$table.'_new" ('.implode(', ', $defs).')');
             DB::statement(
@@ -702,7 +698,7 @@ return new class extends Migration
             $defs[] = 'foreign key ("product_id") references "products" ("id") on delete '.($cfg['on_delete'] === 'cascade' ? 'cascade' : 'set null');
 
             $columns = collect($cols)->map(fn (array $c) => '"'.$c['name'].'"')->all();
-            $selects = collect($cols)->map(fn (array $c) => $c['name'] === 'product_id' ? 'products."id"' : '"'.$c['name'].'"')->all();
+            $selects = collect($cols)->map(fn (array $c) => $c['name'] === 'product_id' ? 'products."id"' : '"'.$table.'"."'.$c['name'].'"')->all();
 
             DB::statement('create table "'.$table.'_new" ('.implode(', ', $defs).')');
             DB::statement(

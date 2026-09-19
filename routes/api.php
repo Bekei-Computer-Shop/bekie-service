@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\Client\V1\PromotionController;
 use App\Http\Controllers\Api\Client\V1\ReviewController;
 use App\Http\Controllers\Api\Client\V1\ShippingMethodController;
 use App\Http\Controllers\Api\Client\V1\SlideController;
+use App\Http\Controllers\Api\Client\V1\UserProfileController;
 use App\Http\Controllers\Api\Client\V1\WishlistController;
 use App\Http\Controllers\HealthController;
 use App\Http\Middleware\AuthenticateAdminApiToken;
@@ -40,6 +41,8 @@ Route::prefix('v1')->group(function () {
         ->middleware('throttle:auth-client');
     Route::post('auth/logout', [AuthController::class, 'logout'])
         ->middleware([AuthenticateApiToken::class, 'permission:client.auth.logout']);
+    Route::post('auth/change-password', [AuthController::class, 'changePassword'])
+        ->middleware(AuthenticateApiToken::class);
 
     Route::prefix('master')->group(function () {
         Route::get('categories', [MasterDataController::class, 'categories']);
@@ -69,6 +72,9 @@ Route::prefix('v1')->group(function () {
     Route::get('promotions', [PromotionController::class, 'index']);
 
     Route::middleware(AuthenticateApiToken::class)->group(function () {
+        Route::get('profile', [UserProfileController::class, 'show']);
+        Route::post('profile/avatar', [UserProfileController::class, 'updateAvatar']);
+
         Route::post('coupons/apply', [CouponController::class, 'apply'])
             ->middleware(['permission:client.coupons.apply', 'throttle:promo-apply']);
 
@@ -94,6 +100,15 @@ Route::prefix('v1')->group(function () {
             Route::patch('items/{item}', [CartController::class, 'updateItem']);
             Route::delete('items/{item}', [CartController::class, 'removeItem']);
             Route::post('checkout', [CartController::class, 'checkout'])->middleware('throttle:client-checkout');
+        });
+
+        Route::prefix('wishlists')->middleware('permission:client.wishlists.manage')->group(function () {
+            Route::get('/', [WishlistController::class, 'index']);
+            Route::put('/', [WishlistController::class, 'store']);
+            Route::delete('/', [WishlistController::class, 'destroy']);
+            Route::get('check', [WishlistController::class, 'checkProduct']);
+            Route::post('items', [WishlistController::class, 'addItem']);
+            Route::delete('items/{item}', [WishlistController::class, 'removeItem']);
         });
 
         Route::prefix('wishlist')->middleware('permission:client.wishlists.manage')->group(function () {
