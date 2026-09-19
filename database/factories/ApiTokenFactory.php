@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\ApiToken;
+use App\Models\User;
 use App\Services\JwtService;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -12,6 +13,8 @@ use Illuminate\Support\Str;
  */
 class ApiTokenFactory extends Factory
 {
+    protected $model = ApiToken::class;
+
     /**
      * Define the model's default state.
      *
@@ -19,11 +22,10 @@ class ApiTokenFactory extends Factory
      */
     public function definition(): array
     {
-        $user = \App\Models\User::factory()->create();
         $jti = Str::random(64);
 
         return [
-            'user_id' => $user->id,
+            'user_id' => User::factory(),
             'token' => hash('sha256', $jti),
             'refresh_token' => hash('sha256', Str::random(80)),
             'expires_at' => now()->addDays(60),
@@ -39,7 +41,7 @@ class ApiTokenFactory extends Factory
      * Generate a valid JWT token for testing.
      * This method creates both the ApiToken record and returns the actual JWT.
      */
-    public function withJwt()
+    public function withJwt(): static
     {
         return $this->afterCreating(function (ApiToken $token) {
             $jwtService = new JwtService;
@@ -49,7 +51,6 @@ class ApiTokenFactory extends Factory
                 'scope' => 'client',
             ];
             $token->jwt_token = $jwtService->encode($payload, 60 * 24 * 60 * 60);
-            // Update the token hash to match
             $token->update(['token' => hash('sha256', $payload['jti'])]);
         });
     }

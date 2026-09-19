@@ -94,6 +94,24 @@ Route::prefix('v1')->group(function () {
             Route::delete('items/{item}', [WishlistController::class, 'removeItem']);
         });
 
+        Route::prefix('wishlist')->middleware('permission:client.wishlists.manage')->group(function () {
+            Route::get('/', [WishlistController::class, 'index']);
+            Route::put('/', [WishlistController::class, 'store']);
+            Route::delete('/', [WishlistController::class, 'destroy']);
+            Route::get('check', [WishlistController::class, 'checkProduct']);
+            Route::post('items', [WishlistController::class, 'addItem']);
+            Route::delete('items/{item}', [WishlistController::class, 'removeItem']);
+        });
+
+        Route::prefix('cart')->middleware('permission:client.carts.manage')->group(function () {
+            Route::get('/', [CartController::class, 'index']);
+            Route::put('/', [CartController::class, 'store']);
+            Route::post('items', [CartController::class, 'addItem']);
+            Route::patch('items/{item}', [CartController::class, 'updateItem']);
+            Route::delete('items/{item}', [CartController::class, 'removeItem']);
+            Route::post('checkout', [CartController::class, 'checkout'])->middleware('throttle:client-checkout');
+        });
+
         Route::prefix('orders')->middleware('permission:client.orders.manage')->group(function () {
             Route::get('/', [OrderController::class, 'index']);
             Route::post('/', [OrderController::class, 'store'])->middleware('throttle:client-checkout');

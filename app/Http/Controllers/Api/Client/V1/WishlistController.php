@@ -20,7 +20,7 @@ class WishlistController extends BaseApiController
      * Get authenticated user's wishlist
      *
      * Returns the authenticated user's single wishlist with all items.
-     * Returns an empty array if no wishlist exists.
+     * If no wishlist exists, returns an empty wishlist structure with no items.
      *
      * @response 200 {
      *   "status": "success",
@@ -31,7 +31,7 @@ class WishlistController extends BaseApiController
      *     "description": null,
      *     "is_public": false,
      *     "is_active": true,
-     *     "items": [...]
+     *     "items": []
      *   }
      * }
      * @response 200 {
@@ -44,7 +44,14 @@ class WishlistController extends BaseApiController
         $wishlist = Wishlist::where('user_id', $request->user()->id)->first();
 
         if (! $wishlist) {
-            return $this->success([]);
+            return $this->success([
+                'user_id' => $request->user()->id,
+                'name' => 'My Wishlist',
+                'description' => null,
+                'is_public' => false,
+                'is_active' => true,
+                'items' => [],
+            ]);
         }
 
         return $this->success(new WishlistResource($wishlist->load('items.product', 'items.variant')));
@@ -106,7 +113,6 @@ class WishlistController extends BaseApiController
     public function destroy(Request $request)
     {
         $wishlist = Wishlist::where('user_id', $request->user()->id)->firstOrFail();
-
         $wishlist->items()->delete();
 
         return $this->noContent();

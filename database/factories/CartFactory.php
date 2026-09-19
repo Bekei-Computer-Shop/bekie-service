@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class CartFactory extends Factory
 {
+    protected $model = Cart::class;
+
     /**
      * @return array<string, mixed>
      */
