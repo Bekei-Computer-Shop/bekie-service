@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\Admin\V1\LogController;
 use App\Http\Controllers\Api\Admin\V1\MediaController;
 use App\Http\Controllers\Api\Admin\V1\NotificationController;
 use App\Http\Controllers\Api\Admin\V1\OrderController;
+use App\Http\Controllers\Api\Admin\V1\PasswordRecoveryController;
 use App\Http\Controllers\Api\Admin\V1\PermissionController;
 use App\Http\Controllers\Api\Admin\V1\ProductController;
 use App\Http\Controllers\Api\Admin\V1\PromotionController;
@@ -31,6 +32,12 @@ Route::prefix('admin')->group(function () {
         ->middleware('throttle:auth-admin');
     Route::post('auth/refresh', [AuthController::class, 'refresh'])
         ->middleware('throttle:auth-admin');
+    Route::post('auth/forgot-password', [PasswordRecoveryController::class, 'forgot'])
+        ->middleware('throttle:auth-admin');
+    Route::post('auth/verify-reset-otp', [PasswordRecoveryController::class, 'verify'])
+        ->middleware('throttle:auth-otp');
+    Route::post('auth/reset-password', [PasswordRecoveryController::class, 'reset'])
+        ->middleware('throttle:auth-admin-sensitive');
 
     // Protected Admin Routes
     Route::middleware([AuthenticateAdminApiToken::class])->group(function () {

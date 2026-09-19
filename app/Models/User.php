@@ -45,6 +45,7 @@ class User extends Authenticatable
         'last_name',
         'username',
         'email',
+        'recovery_email',
         'avatar',
         'phone',
         'role',

@@ -5,7 +5,9 @@ use App\Http\Controllers\Api\Client\V1\AuthController;
 use App\Http\Controllers\Api\Client\V1\BrandController;
 use App\Http\Controllers\Api\Client\V1\CartController;
 use App\Http\Controllers\Api\Client\V1\CategoryController;
+use App\Http\Controllers\Api\Client\V1\ContactController;
 use App\Http\Controllers\Api\Client\V1\CouponController;
+use App\Http\Controllers\Api\Client\V1\EmailVerificationController;
 use App\Http\Controllers\Api\Client\V1\KhqrController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
 use App\Http\Controllers\Api\Client\V1\OrderController;
@@ -43,6 +45,9 @@ Route::prefix('v1')->group(function () {
         ->middleware([AuthenticateApiToken::class, 'permission:client.auth.logout']);
     Route::post('auth/change-password', [AuthController::class, 'changePassword'])
         ->middleware(AuthenticateApiToken::class);
+    Route::post('contact', [ContactController::class, 'store'])->middleware('throttle:contact');
+    Route::post('auth/verify-email-otp', [EmailVerificationController::class, 'verify'])->middleware('throttle:auth-otp');
+    Route::post('auth/resend-email-otp', [EmailVerificationController::class, 'resend'])->middleware('throttle:auth-otp');
 
     Route::prefix('master')->group(function () {
         Route::get('categories', [MasterDataController::class, 'categories']);

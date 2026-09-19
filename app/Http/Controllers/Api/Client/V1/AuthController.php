@@ -6,13 +6,17 @@ use App\Http\Requests\Api\Client\V1\ChangePasswordRequest;
 use App\Http\Requests\Api\Client\V1\LoginRequest;
 use App\Http\Requests\Api\Client\V1\RefreshTokenRequest;
 use App\Http\Requests\Api\Client\V1\RegisterRequest;
+use App\Mail\CustomerVerificationOtpMail;
 use App\Models\ApiToken;
 use App\Models\User;
 use App\Services\AdminNotificationService;
 use App\Services\AuthService;
+use App\Services\OtpService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class AuthController extends BaseApiController
 {
@@ -50,6 +54,32 @@ class AuthController extends BaseApiController
 
         app(AdminNotificationService::class)->newCustomer($user);
 
+        if ($email) {
+            $issued = app(OtpService::class)->issue($user, $email, 'customer_email_verification');
+
+            try {
+                Mail::to($email)->queue(new CustomerVerificationOtpMail($issued['code'], (int) config('otp.expires_minutes')));
+            } catch (\Throwable $exception) {
+                Log::error('Customer verification email could not be queued.', ['exception' => $exception::class]);
+            }
+
+            return $this->created([
+                'email_verification_required' => true,
+                'email' => $email,
+                'user' => [
+                    'id' => $user->id,
+                    'email' => $user->email,
+                    'phone' => $user->phone,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'name' => $user->name,
+                    'role' => $user->role,
+                    'is_active' => (bool) $user->is_active,
+                    'is_banned' => (bool) $user->is_banned,
+                ],
+            ], 'Registration successful. Verify your email to continue.');
+        }
+
         $tokenPair = $this->authService->createToken($user, $request);
 
         return $this->created([
@@ -77,6 +107,12 @@ class AuthController extends BaseApiController
 
         if (! $user || ! Hash::check($request->input('password'), $user->password)) {
             return $this->error('Invalid credentials.', 401);
+        }
+
+        if ($user->email && ! $user->email_verified_at) {
+            return $this->error('Email verification is required before login.', 403, [
+                'email_verification_required' => true,
+            ]);
         }
 
         $tokenPair = $this->authService->createToken($user, $request);

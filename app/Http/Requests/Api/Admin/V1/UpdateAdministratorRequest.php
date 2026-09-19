@@ -20,6 +20,7 @@ class UpdateAdministratorRequest extends FormRequest
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->route('user')->id)],
+            'recovery_email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'password' => ['sometimes', 'nullable', 'string', 'min:8'],
             'role_id' => ['required', 'integer', 'exists:roles,id'],
         ];

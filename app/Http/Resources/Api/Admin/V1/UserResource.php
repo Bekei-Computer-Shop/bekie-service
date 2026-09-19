@@ -32,6 +32,7 @@ class UserResource extends JsonResource
             'name' => $user->name,
             'username' => $user->username,
             'email' => $user->email,
+            'recovery_email' => $user->recovery_email,
             'phone' => $user->phone,
             'is_admin' => (bool) $user->is_admin,
             'is_active' => (bool) $user->is_active,

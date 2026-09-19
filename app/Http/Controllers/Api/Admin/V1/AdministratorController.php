@@ -39,6 +39,7 @@ class AdministratorController extends BaseAdminController
             'first_name' => $data['first_name'],
             'last_name' => $data['last_name'],
             'email' => $data['email'],
+            'recovery_email' => $data['recovery_email'] ?? null,
             'password' => Hash::make($data['password']),
             'is_admin' => true,
             'is_active' => true,
@@ -58,6 +59,7 @@ class AdministratorController extends BaseAdminController
             'first_name' => $data['first_name'],
             'last_name' => $data['last_name'],
             'email' => $data['email'],
+            'recovery_email' => $data['recovery_email'] ?? null,
             'password' => $data['password'] ? Hash::make($data['password']) : $user->password,
         ]);
 

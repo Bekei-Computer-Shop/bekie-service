@@ -29,12 +29,11 @@ class AuthTest extends TestCase
             ->assertJsonPath('data.user.email', 'newuser@example.com')
             ->assertJsonPath('data.user.first_name', 'John')
             ->assertJsonPath('data.user.last_name', 'Doe')
-            ->assertJsonPath('data.token_type', 'Bearer')
+            ->assertJsonPath('data.email_verification_required', true)
             ->assertJsonStructure([
                 'data' => [
-                    'access_token',
-                    'refresh_token',
-                    'expires_at',
+                    'email',
+                    'email_verification_required',
                     'user' => [
                         'id',
                         'email',
