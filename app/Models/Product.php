@@ -53,6 +53,7 @@ class Product extends Model
         'max_stock_level',
         'reorder_point',
         'track_inventory',
+        'is_serialized',
         'in_stock',
         'weight',
         'length',
@@ -69,6 +70,16 @@ class Product extends Model
         'sort_order',
         'version',
     ];
+
+    protected function casts(): array
+    {
+        return ['is_serialized' => 'boolean'];
+    }
+
+    public function serials()
+    {
+        return $this->hasMany(ProductSerial::class);
+    }
 
     /*
     |--------------------------------------------------------------------------

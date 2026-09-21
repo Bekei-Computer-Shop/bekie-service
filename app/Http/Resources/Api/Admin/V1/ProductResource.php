@@ -43,6 +43,7 @@ class ProductResource extends JsonResource
             'stock_quantity' => (int) $product->stock_quantity,
             'min_stock_alert' => (int) $product->min_stock_alert,
             'track_inventory' => (bool) $product->track_inventory,
+            'is_serialized' => (bool) $product->is_serialized,
             'in_stock' => (bool) $product->in_stock,
             'weight' => $product->weight !== null ? (float) $product->weight : null,
             'length' => $product->length !== null ? (float) $product->length : null,

@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\AdminNotificationService;
+use App\Services\ProductSerialService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -204,6 +205,10 @@ class OrderController extends BaseAdminController
         });
 
         app(AdminNotificationService::class)->newOrder($order, 'web');
+
+        if ($request->filled('serial_numbers')) {
+            app(ProductSerialService::class)->sellForOrder($request->input('serial_numbers'), (int) $order->user_id, (int) $order->id, (int) $request->user()->id);
+        }
 
         return $this->created(new OrderResource($order->fresh(['user', 'items.product', 'coupon'])));
     }

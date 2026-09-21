@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Admin\V1\OrderController;
 use App\Http\Controllers\Api\Admin\V1\PasswordRecoveryController;
 use App\Http\Controllers\Api\Admin\V1\PermissionController;
 use App\Http\Controllers\Api\Admin\V1\ProductController;
+use App\Http\Controllers\Api\Admin\V1\ProductSerialController;
 use App\Http\Controllers\Api\Admin\V1\PromotionController;
 use App\Http\Controllers\Api\Admin\V1\ReportController;
 use App\Http\Controllers\Api\Admin\V1\ReviewController;
@@ -50,6 +51,18 @@ Route::prefix('admin')->group(function () {
         Route::get('notifications', [NotificationController::class, 'index']);
         Route::post('notifications/{notification}/read', [NotificationController::class, 'read']);
         Route::post('notifications/read-all', [NotificationController::class, 'readAll']);
+
+        Route::middleware('permission:product-serials.view')->group(function () {
+            Route::get('product-serials', [ProductSerialController::class, 'index']);
+            Route::get('product-serials/summary', [ProductSerialController::class, 'summary']);
+            Route::get('product-serials/lookup/{serialNumber}', [ProductSerialController::class, 'lookup']);
+            Route::get('product-serials/{productSerial}', [ProductSerialController::class, 'show']);
+            Route::get('product-serials/{productSerial}/history', [ProductSerialController::class, 'history']);
+        });
+        Route::middleware('permission:product-serials.manage')->group(function () {
+            Route::post('product-serials', [ProductSerialController::class, 'store']);
+            Route::patch('product-serials/{productSerial}', [ProductSerialController::class, 'update']);
+        });
 
         // Dashboard — the portal's landing page, so every admin role is granted
         // dashboard.view rather than it being scoped to a single capability.

@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\Client\V1\CouponController;
 use App\Http\Controllers\Api\Client\V1\EmailVerificationController;
 use App\Http\Controllers\Api\Client\V1\KhqrController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
+use App\Http\Controllers\Api\Client\V1\MyProductController;
 use App\Http\Controllers\Api\Client\V1\OrderController;
 use App\Http\Controllers\Api\Client\V1\ProductController;
 use App\Http\Controllers\Api\Client\V1\ProfileController;
@@ -78,6 +79,8 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware(AuthenticateApiToken::class)->group(function () {
         Route::get('profile', [UserProfileController::class, 'show']);
+        Route::get('my-products', [MyProductController::class, 'index']);
+        Route::get('my-products/{productSerial}', [MyProductController::class, 'show']);
         Route::post('profile/avatar', [UserProfileController::class, 'updateAvatar']);
 
         Route::post('coupons/apply', [CouponController::class, 'apply'])
