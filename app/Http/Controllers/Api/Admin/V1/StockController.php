@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StockMovement;
 use App\Services\StockService;
+use App\Services\ProductSerialService;
 use Dedoc\Scramble\Attributes\Endpoint;
 use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\Response;
@@ -20,12 +21,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 #[Group(name: 'Stock Management', description: 'Inventory overview, low-stock alerts, and stock movement history for admin operators.')]
 class StockController extends BaseAdminController
 {
-    public function __construct(protected StockService $stockService) {}
+    public function __construct(protected StockService $stockService, protected ProductSerialService $productSerials) {}
 
     #[Endpoint(title: 'List stock items', description: 'Returns tracked products with current stock levels and low-stock thresholds for admin inventory review.')]
     #[Response(status: 200, description: 'Inventory listing with pagination.')]
@@ -46,6 +48,7 @@ class StockController extends BaseAdminController
                 'track_inventory',
                 'in_stock',
                 'thumbnail',
+                'is_serialized',
                 'category_id',
                 'brand_id',
                 'created_at',
@@ -54,7 +57,7 @@ class StockController extends BaseAdminController
             ->where('track_inventory', true);
 
         if ($request->boolean('include_variants')) {
-            $query->with(['variants:id,product_id,name,sku,stock_quantity,min_stock_alert']);
+            $query->with(['variants:id,product_id,name,sku,stock_quantity,min_stock_alert,is_serialized']);
         }
 
         $search = $request->input('q') ?? $request->input('search');
@@ -156,7 +159,28 @@ class StockController extends BaseAdminController
             $product = $query->where('sku', $id)->firstOrFail();
         }
 
-        $movementsQuery = $product->stockMovements()->latest()->with('createdBy:id,first_name,last_name,email');
+        // Fetch movements for both the product and all its variants
+        $productMovements = $product->stockMovements();
+
+        // Get variant IDs for this product
+        $variantIds = $product->variants()->pluck('id')->toArray();
+
+        // Combine product and variant movements using UNION
+        $movementsQuery = StockMovement::query()
+            ->where(function ($q) use ($product, $variantIds): void {
+                // Product-level movements
+                $q->where(function ($nested) use ($product): void {
+                    $nested->where('stockable_type', 'App\\Models\\Product')
+                        ->where('stockable_id', $product->id);
+                })
+                // OR variant-level movements
+                ->orWhere(function ($nested) use ($variantIds): void {
+                    $nested->where('stockable_type', 'App\\Models\\ProductVariant')
+                        ->whereIn('stockable_id', $variantIds);
+                });
+            })
+            ->latest()
+            ->with('createdBy:id,first_name,last_name,email');
 
         if ($request->filled('movement_type')) {
             $movementsQuery->where('movement_type', $request->input('movement_type'));
@@ -342,11 +366,52 @@ class StockController extends BaseAdminController
                 'reason' => $item['reason'] ?? $globalReason,
                 'reference' => $item['reference'] ?? $globalReference,
                 'metadata' => $item['metadata'] ?? [],
+                'serial_numbers' => $item['serial_numbers'] ?? [],
             ];
         }
 
         try {
-            $movements = $this->stockService->bulkAdjust($prepared);
+            $movements = DB::transaction(function () use ($prepared, $request) {
+                $movements = $this->stockService->bulkAdjust($prepared);
+                $variantProductIds = collect($prepared)
+                    ->pluck('stockable')
+                    ->filter(fn ($stockable) => $stockable instanceof ProductVariant)
+                    ->map(fn (ProductVariant $variant) => $variant->product_id)
+                    ->unique();
+
+                foreach ($variantProductIds as $productId) {
+                    $product = Product::query()->lockForUpdate()->find($productId);
+                    if ($product) {
+                        $total = (int) $product->variants()->sum('stock_quantity');
+                        $product->forceFill([
+                            'stock_quantity' => $total,
+                            'in_stock' => $total > 0,
+                        ])->save();
+                    }
+                }
+
+                foreach ($prepared as $item) {
+                    $serialNumbers = $item['serial_numbers'] ?? [];
+                    if ($serialNumbers === []) {
+                        continue;
+                    }
+
+                    $stockable = $item['stockable'];
+                    $product = $stockable instanceof ProductVariant ? $stockable->product : $stockable;
+                    $this->productSerials->receive(
+                        $serialNumbers,
+                        (string) $product->id,
+                        $stockable instanceof ProductVariant ? (int) $stockable->id : null,
+                        null,
+                        $item['reference'],
+                        $request->user()?->id,
+                        $item['reason'],
+                        (int) $item['quantity'],
+                    );
+                }
+
+                return $movements;
+            });
 
             return $this->created(StockMovementResource::collection($movements));
         } catch (\InvalidArgumentException $e) {

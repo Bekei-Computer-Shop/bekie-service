@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Client\V1\ReviewController;
 use App\Http\Controllers\Api\Client\V1\ShippingMethodController;
 use App\Http\Controllers\Api\Client\V1\SlideController;
 use App\Http\Controllers\Api\Client\V1\UserProfileController;
+use App\Http\Controllers\Api\Client\V1\WarrantyController;
 use App\Http\Controllers\Api\Client\V1\WishlistController;
 use App\Http\Controllers\HealthController;
 use App\Http\Middleware\AuthenticateAdminApiToken;
@@ -79,8 +80,11 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware(AuthenticateApiToken::class)->group(function () {
         Route::get('profile', [UserProfileController::class, 'show']);
+        Route::get('my-products/summary', [MyProductController::class, 'summary']);
         Route::get('my-products', [MyProductController::class, 'index']);
         Route::get('my-products/{productSerial}', [MyProductController::class, 'show']);
+        Route::get('warranty/summary', [WarrantyController::class, 'summary']);
+        Route::get('warranty/{serialNumber}', [WarrantyController::class, 'validate']);
         Route::post('profile/avatar', [UserProfileController::class, 'updateAvatar']);
 
         Route::post('coupons/apply', [CouponController::class, 'apply'])

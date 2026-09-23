@@ -193,8 +193,27 @@ class Product extends Model
         return $query->where('category_id', $categoryId);
     }
 
+    public function scopeSerialized($query)
+    {
+        return $query->where('is_serialized', true);
+    }
+
     public function getStockValueAttribute()
     {
         return (int) $this->stock_quantity * (float) $this->cost_price;
+    }
+
+    public function getAvailableSerialCountAttribute(): int
+    {
+        return $this->serials()
+            ->where('status', ProductSerial::AVAILABLE)
+            ->count();
+    }
+
+    public function getSoldSerialCountAttribute(): int
+    {
+        return $this->serials()
+            ->where('status', ProductSerial::SOLD)
+            ->count();
     }
 }

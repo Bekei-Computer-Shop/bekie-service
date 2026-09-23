@@ -55,12 +55,17 @@ Route::prefix('admin')->group(function () {
         Route::middleware('permission:product-serials.view')->group(function () {
             Route::get('product-serials', [ProductSerialController::class, 'index']);
             Route::get('product-serials/summary', [ProductSerialController::class, 'summary']);
+            Route::get('product-serials/warranty/stats', [ProductSerialController::class, 'warrantyStats']);
+            Route::get('product-serials/warranty/validate/{serialNumber}', [ProductSerialController::class, 'validateWarranty']);
             Route::get('product-serials/lookup/{serialNumber}', [ProductSerialController::class, 'lookup']);
+            Route::get('product-serials/export', [ProductSerialController::class, 'export']);
             Route::get('product-serials/{productSerial}', [ProductSerialController::class, 'show']);
             Route::get('product-serials/{productSerial}/history', [ProductSerialController::class, 'history']);
         });
         Route::middleware('permission:product-serials.manage')->group(function () {
             Route::post('product-serials', [ProductSerialController::class, 'store']);
+            Route::post('product-serials/bulk-update-status', [ProductSerialController::class, 'bulkUpdateStatus']);
+            Route::post('product-serials/{productSerial}/warranty', [ProductSerialController::class, 'setWarranty']);
             Route::patch('product-serials/{productSerial}', [ProductSerialController::class, 'update']);
         });
 

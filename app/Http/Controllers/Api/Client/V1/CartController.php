@@ -392,7 +392,7 @@ class CartController extends BaseApiController
 
         $cart->update(['status' => 'converted']);
 
-        app(ProductSerialService::class)->sellForOrder($request->input('serial_numbers', []), (int) $cart->user_id, (int) $order->id);
+        app(ProductSerialService::class)->reserveForOrder($request->input('serial_numbers', []), (int) $cart->user_id, (int) $order->id);
 
         return $this->created(new OrderResource($order->load('items')));
     }

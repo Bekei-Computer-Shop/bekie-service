@@ -8,9 +8,10 @@ This project provides:
 
 - Versioned API routes under `api/v1`
 - Product catalog endpoints for categories, brands, products, and variants
+- **Serial number tracking** with warranty management for hardware products
 - Cart management for guest and authenticated contexts
 - Wishlist CRUD and item management
-- Order checkout flow with shipping calculation
+- Order checkout flow with shipping calculation and serialized product handling
 - Coupon validation endpoint
 - Shipping method discovery
 - Swagger API documentation available through the browser
@@ -122,6 +123,7 @@ The admin API uses dedicated namespaces and folder structure:
 - Request validation via FormRequest classes
 - Swagger documentation with a browser interface
 - Cart and order workflows following professional e-commerce patterns
+- **Complete Serial Number Tracking System** with warranty management
 
 ## Professional API Features
 
@@ -188,6 +190,19 @@ New migrations support admin features:
 - `EnsureJsonResponse` middleware – Ensures JSON response format
 - `ApiSecurityHeaders` middleware – Adds security headers to all responses
 - `AdminRoleMiddleware` – Protects admin endpoints with role check
+
+### 8. Serial Number Tracking & Warranty Management
+Professional hardware product tracking system featuring:
+- **Complete Lifecycle Tracking**: Serial numbers tracked through 10+ statuses from receiving through warranty
+- **Warranty Management**: Automatic warranty activation at sale, custom periods, expiration monitoring
+- **Audit Trail**: Full history of all status changes with actor tracking
+- **Inventory Management**: Warehouse assignment, batch receiving, bulk operations
+- **Admin API**: `/api/v1/admin/product-serials` with filtering, bulk updates, warranty stats
+- **Customer API**: `/api/v1/my-products` and `/api/v1/warranty` for customer self-service
+- **Database Indexes**: Optimized queries for warranty lookups and customer inventory
+- **API Resources**: Structured responses with related product, order, and warranty data
+
+For complete documentation, see [SERIAL_NUMBERS_FEATURE.md](SERIAL_NUMBERS_FEATURE.md) and [SERIAL_NUMBERS_EXAMPLES.md](SERIAL_NUMBERS_EXAMPLES.md).
 
 ## Running Migrations
 After pulling the latest changes, run:

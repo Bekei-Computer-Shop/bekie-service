@@ -30,6 +30,9 @@ class BulkStockMovementRequest extends FormRequest
                         $item['stockable_type'] = ProductVariant::class;
                     }
                 }
+                if (array_key_exists('stockable_id', $item)) {
+                    $item['stockable_id'] = (string) $item['stockable_id'];
+                }
             }
             $this->merge(['items' => $items]);
         }
@@ -51,6 +54,8 @@ class BulkStockMovementRequest extends FormRequest
             'items.*.reason' => ['nullable', 'string', 'max:255'],
             'items.*.reference' => ['nullable', 'string', 'max:255'],
             'items.*.metadata' => ['nullable', 'array'],
+            'items.*.serial_numbers' => ['nullable', 'array'],
+            'items.*.serial_numbers.*' => ['required', 'string', 'distinct', 'max:191'],
             'reason' => ['nullable', 'string', 'max:255'],
             'reference' => ['nullable', 'string', 'max:255'],
         ];
@@ -111,6 +116,15 @@ class BulkStockMovementRequest extends FormRequest
 
                     if ($newQty < 0) {
                         $validator->errors()->add("items.{$index}.quantity", "Resulting stock cannot be negative (current: {$current}).");
+                    }
+
+                    $serialNumbers = $item['serial_numbers'] ?? [];
+                    if ($serialNumbers !== [] && count($serialNumbers) !== $qty) {
+                        $validator->errors()->add("items.{$index}.serial_numbers", 'Serial number count must match the adjustment quantity.');
+                    }
+                    $isSerialized = ($stockable instanceof ProductVariant || $stockable instanceof Product) && $stockable->is_serialized;
+                    if ($isSerialized && count($serialNumbers) !== $qty) {
+                        $validator->errors()->add("items.{$index}.serial_numbers", 'Each serialized variant unit requires a serial number.');
                     }
                 }
             }

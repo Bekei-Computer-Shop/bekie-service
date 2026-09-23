@@ -34,6 +34,7 @@ class OrderResource extends JsonResource
             'cancelled_at' => $this->cancelled_at,
             'refunded_at' => $this->refunded_at,
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
+            'serials' => ProductSerialResource::collection($this->whenLoaded('serials')),
         ];
     }
 }
