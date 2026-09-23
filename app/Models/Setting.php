@@ -33,7 +33,7 @@ class Setting extends Model
         };
     }
 
-    public static function putStore(string $key, mixed $value): self
+    public static function putStore(string $key, mixed $value, string $group = 'store'): self
     {
         [$type, $encoded] = match (true) {
             is_bool($value) => ['boolean', $value ? '1' : '0'],
@@ -46,7 +46,7 @@ class Setting extends Model
         return static::updateOrCreate(
             ['key' => $key],
             [
-                'group' => 'store',
+                'group' => $group,
                 'value' => $encoded,
                 'type' => $type,
                 'autoload' => true,

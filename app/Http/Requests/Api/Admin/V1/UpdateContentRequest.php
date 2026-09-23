@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Api\Admin\V1;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateContentRequest extends FormRequest
 {
@@ -16,7 +17,27 @@ class UpdateContentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'type' => ['sometimes', 'string', 'max:50'],
+            'type' => ['sometimes', 'string', Rule::in(['slide', 'news', 'page'])],
+            'slug' => [
+                'sometimes',
+                'nullable',
+                'string',
+                Rule::in([
+                    'about-us',
+                    'contact-us',
+                    'terms-and-conditions',
+                    'privacy-policy',
+                    'shipping-policy',
+                    'returns-policy',
+                    'warranty-policy',
+                    'faq',
+                    'support',
+                    'delivery-information',
+                    'size-guide',
+                    'careers',
+                ]),
+                Rule::unique('content_items', 'slug')->ignore($this->route('item')),
+            ],
             'title' => ['sometimes', 'string', 'max:255'],
             'body' => ['sometimes', 'nullable', 'string'],
             'category' => ['sometimes', 'nullable', 'string', 'max:100'],

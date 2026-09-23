@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Client\V1\BrandController;
 use App\Http\Controllers\Api\Client\V1\CartController;
 use App\Http\Controllers\Api\Client\V1\CategoryController;
 use App\Http\Controllers\Api\Client\V1\ContactController;
+use App\Http\Controllers\Api\Client\V1\ContentPageController;
 use App\Http\Controllers\Api\Client\V1\CouponController;
 use App\Http\Controllers\Api\Client\V1\EmailVerificationController;
 use App\Http\Controllers\Api\Client\V1\KhqrController;
@@ -77,6 +78,9 @@ Route::prefix('v1')->group(function () {
     // Storefront content: homepage carousel slides and live promotions.
     Route::get('slides', [SlideController::class, 'index']);
     Route::get('promotions', [PromotionController::class, 'index']);
+    Route::get('about-us', [ContentPageController::class, 'show'])->defaults('slug', 'about-us');
+    Route::get('terms-and-conditions', [ContentPageController::class, 'show'])->defaults('slug', 'terms-and-conditions');
+    Route::get('contact-us', [ContentPageController::class, 'show'])->defaults('slug', 'contact-us');
 
     Route::middleware(AuthenticateApiToken::class)->group(function () {
         Route::get('profile', [UserProfileController::class, 'show']);
