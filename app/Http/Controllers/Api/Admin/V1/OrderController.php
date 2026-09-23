@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\AdminNotificationService;
+use App\Services\ProductSerialService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -205,6 +206,10 @@ class OrderController extends BaseAdminController
 
         app(AdminNotificationService::class)->newOrder($order, 'web');
 
+        if ($request->filled('serial_numbers')) {
+            app(ProductSerialService::class)->reserveForOrder($request->input('serial_numbers'), (int) $order->user_id, (int) $order->id, (int) $request->user()->id);
+        }
+
         return $this->created(new OrderResource($order->fresh(['user', 'items.product', 'coupon'])));
     }
 
@@ -223,7 +228,15 @@ class OrderController extends BaseAdminController
             }
         }
 
+        $previousStatus = $order->status;
         $order->update($validated);
+
+        if (($validated['status'] ?? null) === 'completed' && $previousStatus !== 'completed') {
+            app(ProductSerialService::class)->finalizeOrder((int) $order->id, (int) $request->user()->id);
+        }
+        if (($validated['status'] ?? null) === 'cancelled' && $previousStatus !== 'cancelled') {
+            app(ProductSerialService::class)->releaseOrder((int) $order->id, (int) $request->user()->id, 'Order cancelled.');
+        }
 
         return $this->success(new OrderResource($order->fresh(['user', 'items.product', 'coupon'])));
     }
@@ -254,6 +267,7 @@ class OrderController extends BaseAdminController
     public function reject(Order $order): JsonResponse
     {
         $order->update(['status' => 'cancelled']);
+        app(ProductSerialService::class)->releaseOrder((int) $order->id, null, 'Order rejected.');
 
         return $this->success(new OrderResource($order->fresh(['user', 'items.product', 'coupon'])));
     }

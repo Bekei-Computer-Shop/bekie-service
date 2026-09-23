@@ -16,10 +16,12 @@ use App\Http\Controllers\Api\Admin\V1\OrderController;
 use App\Http\Controllers\Api\Admin\V1\PasswordRecoveryController;
 use App\Http\Controllers\Api\Admin\V1\PermissionController;
 use App\Http\Controllers\Api\Admin\V1\ProductController;
+use App\Http\Controllers\Api\Admin\V1\ProductSerialController;
 use App\Http\Controllers\Api\Admin\V1\PromotionController;
 use App\Http\Controllers\Api\Admin\V1\ReportController;
 use App\Http\Controllers\Api\Admin\V1\ReviewController;
 use App\Http\Controllers\Api\Admin\V1\RoleController;
+use App\Http\Controllers\Api\Admin\V1\SettingsController;
 use App\Http\Controllers\Api\Admin\V1\StockController;
 use App\Http\Controllers\Api\Admin\V1\StoreSettingsController;
 use App\Http\Controllers\Api\Admin\V1\UserController;
@@ -51,9 +53,28 @@ Route::prefix('admin')->group(function () {
         Route::post('notifications/{notification}/read', [NotificationController::class, 'read']);
         Route::post('notifications/read-all', [NotificationController::class, 'readAll']);
 
+        Route::middleware('permission:product-serials.view')->group(function () {
+            Route::get('product-serials', [ProductSerialController::class, 'index']);
+            Route::get('product-serials/summary', [ProductSerialController::class, 'summary']);
+            Route::get('product-serials/warranty/stats', [ProductSerialController::class, 'warrantyStats']);
+            Route::get('product-serials/warranty/validate/{serialNumber}', [ProductSerialController::class, 'validateWarranty']);
+            Route::get('product-serials/lookup/{serialNumber}', [ProductSerialController::class, 'lookup']);
+            Route::get('product-serials/export', [ProductSerialController::class, 'export']);
+            Route::get('product-serials/{productSerial}', [ProductSerialController::class, 'show']);
+            Route::get('product-serials/{productSerial}/history', [ProductSerialController::class, 'history']);
+        });
+        Route::middleware('permission:product-serials.manage')->group(function () {
+            Route::post('product-serials', [ProductSerialController::class, 'store']);
+            Route::post('product-serials/bulk-update-status', [ProductSerialController::class, 'bulkUpdateStatus']);
+            Route::post('product-serials/{productSerial}/warranty', [ProductSerialController::class, 'setWarranty']);
+            Route::patch('product-serials/{productSerial}', [ProductSerialController::class, 'update']);
+        });
+
         // Dashboard — the portal's landing page, so every admin role is granted
         // dashboard.view rather than it being scoped to a single capability.
         Route::get('dashboard', [DashboardController::class, 'index'])->middleware('permission:dashboard.view');
+        Route::get('settings', [SettingsController::class, 'show'])->middleware('permission:settings.view');
+        Route::patch('settings', [SettingsController::class, 'update'])->middleware('permission:settings.update');
         Route::get('settings/store', [StoreSettingsController::class, 'show'])->middleware('permission:settings.view');
         Route::patch('settings/store', [StoreSettingsController::class, 'update'])->middleware('permission:settings.update');
         Route::post('settings/store/payway/check', [StoreSettingsController::class, 'checkPaywayConnection'])->middleware('permission:settings.view');

@@ -13,6 +13,7 @@ class ContentItemResource extends JsonResource
         return [
             'id' => $this->id,
             'type' => $this->type,
+            'slug' => $this->slug,
             'title' => $this->title,
             'body' => $this->body,
             'category' => $this->category,

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class OrderItem extends Model
@@ -42,18 +44,25 @@ class OrderItem extends Model
     |--------------------------------------------------------------------------
     */
 
-    public function order()
+    public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
 
-    public function product()
+    public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
     }
 
-    public function variant()
+    public function variant(): BelongsTo
     {
         return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+    }
+
+    public function serials(): HasMany
+    {
+        return $this->hasMany(ProductSerial::class, 'order_id', 'order_id')
+            ->where('product_id', $this->product_id)
+            ->when($this->product_variant_id, fn ($q) => $q->where('product_variant_id', $this->product_variant_id));
     }
 }

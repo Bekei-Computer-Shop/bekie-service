@@ -70,6 +70,8 @@ class AdminPermissionsSeeder extends Seeder
         // Stock
         'stock.view',
         'stock.update',
+        'product-serials.view',
+        'product-serials.manage',
 
         // Promotions
         'promotions.view',
@@ -155,6 +157,7 @@ class AdminPermissionsSeeder extends Seeder
             'products.view', 'products.create', 'products.update', 'products.delete',
             'media.view', 'media.create', 'media.delete',
             'stock.view', 'stock.update',
+            'product-serials.view', 'product-serials.manage',
             'promotions.view', 'promotions.create', 'promotions.update', 'promotions.delete',
             'content.view', 'content.create', 'content.update', 'content.delete',
             'customers.view', 'customers.create', 'customers.update', 'customers.delete',
@@ -176,6 +179,7 @@ class AdminPermissionsSeeder extends Seeder
         // media, so media.delete is deliberately absent.
         'manager' => [
             'dashboard.view',
+            'product-serials.view', 'product-serials.manage',
             'settings.view', 'settings.update',
             'admin.profile.view', 'admin.profile.update', 'admin.auth.logout',
             'orders.view', 'orders.approve',

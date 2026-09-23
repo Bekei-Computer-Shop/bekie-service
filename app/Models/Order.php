@@ -75,6 +75,11 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function serials()
+    {
+        return $this->hasMany(ProductSerial::class);
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

@@ -6,10 +6,12 @@ use App\Http\Controllers\Api\Client\V1\BrandController;
 use App\Http\Controllers\Api\Client\V1\CartController;
 use App\Http\Controllers\Api\Client\V1\CategoryController;
 use App\Http\Controllers\Api\Client\V1\ContactController;
+use App\Http\Controllers\Api\Client\V1\ContentPageController;
 use App\Http\Controllers\Api\Client\V1\CouponController;
 use App\Http\Controllers\Api\Client\V1\EmailVerificationController;
 use App\Http\Controllers\Api\Client\V1\KhqrController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
+use App\Http\Controllers\Api\Client\V1\MyProductController;
 use App\Http\Controllers\Api\Client\V1\OrderController;
 use App\Http\Controllers\Api\Client\V1\ProductController;
 use App\Http\Controllers\Api\Client\V1\ProfileController;
@@ -18,6 +20,7 @@ use App\Http\Controllers\Api\Client\V1\ReviewController;
 use App\Http\Controllers\Api\Client\V1\ShippingMethodController;
 use App\Http\Controllers\Api\Client\V1\SlideController;
 use App\Http\Controllers\Api\Client\V1\UserProfileController;
+use App\Http\Controllers\Api\Client\V1\WarrantyController;
 use App\Http\Controllers\Api\Client\V1\WishlistController;
 use App\Http\Controllers\HealthController;
 use App\Http\Middleware\AuthenticateAdminApiToken;
@@ -75,9 +78,17 @@ Route::prefix('v1')->group(function () {
     // Storefront content: homepage carousel slides and live promotions.
     Route::get('slides', [SlideController::class, 'index']);
     Route::get('promotions', [PromotionController::class, 'index']);
+    Route::get('about-us', [ContentPageController::class, 'show'])->defaults('slug', 'about-us');
+    Route::get('terms-and-conditions', [ContentPageController::class, 'show'])->defaults('slug', 'terms-and-conditions');
+    Route::get('contact-us', [ContentPageController::class, 'show'])->defaults('slug', 'contact-us');
 
     Route::middleware(AuthenticateApiToken::class)->group(function () {
         Route::get('profile', [UserProfileController::class, 'show']);
+        Route::get('my-products/summary', [MyProductController::class, 'summary']);
+        Route::get('my-products', [MyProductController::class, 'index']);
+        Route::get('my-products/{productSerial}', [MyProductController::class, 'show']);
+        Route::get('warranty/summary', [WarrantyController::class, 'summary']);
+        Route::get('warranty/{serialNumber}', [WarrantyController::class, 'validate']);
         Route::post('profile/avatar', [UserProfileController::class, 'updateAvatar']);
 
         Route::post('coupons/apply', [CouponController::class, 'apply'])

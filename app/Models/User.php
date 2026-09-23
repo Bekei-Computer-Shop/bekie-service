@@ -144,6 +144,11 @@ class User extends Authenticatable
         return $this->hasMany(Order::class);
     }
 
+    public function productSerials(): HasMany
+    {
+        return $this->hasMany(ProductSerial::class, 'customer_id');
+    }
+
     public function addresses(): HasMany
     {
         return $this->hasMany(Address::class);

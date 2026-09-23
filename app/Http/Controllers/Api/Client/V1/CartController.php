@@ -15,6 +15,7 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingMethod;
+use App\Services\ProductSerialService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -323,6 +324,12 @@ class CartController extends BaseApiController
 
         $addressSnapshot = $this->resolveAddressSnapshot($request);
 
+        try {
+            app(ProductSerialService::class)->assertCartSerialsAvailable($cart->items, $request->input('serial_numbers', []));
+        } catch (\InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
+        }
+
         $shippingWeight = $this->calculateCartWeight($cart);
 
         $order = Order::create([
@@ -384,6 +391,8 @@ class CartController extends BaseApiController
         }
 
         $cart->update(['status' => 'converted']);
+
+        app(ProductSerialService::class)->reserveForOrder($request->input('serial_numbers', []), (int) $cart->user_id, (int) $order->id);
 
         return $this->created(new OrderResource($order->load('items')));
     }

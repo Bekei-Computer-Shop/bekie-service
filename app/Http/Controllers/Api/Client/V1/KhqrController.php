@@ -284,6 +284,7 @@ class KhqrController extends BaseApiController
                 'payment_status' => 'paid',
                 'paid_at' => now(),
             ]);
+            app(ProductSerialService::class)->finalizeOrder((int) $transaction->order->id);
 
             return $this->success([], 'KHQR payment confirmed.');
         } catch (RuntimeException $exception) {

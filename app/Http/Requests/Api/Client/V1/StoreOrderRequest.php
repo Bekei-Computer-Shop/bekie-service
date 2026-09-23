@@ -29,6 +29,8 @@ class StoreOrderRequest extends FormRequest
             'payment_method' => 'nullable|in:aba_payway,cod',
             'currency' => 'nullable|in:USD,KHR',
             'metadata' => 'nullable|array',
+            'serial_numbers' => 'sometimes|array',
+            'serial_numbers.*' => 'string|max:191',
         ];
     }
 }

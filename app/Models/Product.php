@@ -53,6 +53,7 @@ class Product extends Model
         'max_stock_level',
         'reorder_point',
         'track_inventory',
+        'is_serialized',
         'in_stock',
         'weight',
         'length',
@@ -69,6 +70,16 @@ class Product extends Model
         'sort_order',
         'version',
     ];
+
+    protected function casts(): array
+    {
+        return ['is_serialized' => 'boolean'];
+    }
+
+    public function serials()
+    {
+        return $this->hasMany(ProductSerial::class);
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -182,8 +193,27 @@ class Product extends Model
         return $query->where('category_id', $categoryId);
     }
 
+    public function scopeSerialized($query)
+    {
+        return $query->where('is_serialized', true);
+    }
+
     public function getStockValueAttribute()
     {
         return (int) $this->stock_quantity * (float) $this->cost_price;
+    }
+
+    public function getAvailableSerialCountAttribute(): int
+    {
+        return $this->serials()
+            ->where('status', ProductSerial::AVAILABLE)
+            ->count();
+    }
+
+    public function getSoldSerialCountAttribute(): int
+    {
+        return $this->serials()
+            ->where('status', ProductSerial::SOLD)
+            ->count();
     }
 }

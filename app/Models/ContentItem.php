@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property string $type
+ * @property string|null $slug
  * @property string $title
  * @property string|null $body
  * @property string|null $category
@@ -27,6 +28,7 @@ class ContentItem extends Model
 
     protected $fillable = [
         'type',
+        'slug',
         'title',
         'body',
         'category',

@@ -52,6 +52,7 @@ class OrderResource extends JsonResource
                 'provider' => $this->shipping_provider,
             ],
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
+            'serials' => ProductSerialResource::collection($this->whenLoaded('serials')),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

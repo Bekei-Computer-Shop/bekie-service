@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\Admin\V1\Product;
 
+use App\Http\Requests\Api\Admin\V1\Product\Concerns\ValidatesProductImages;
 use App\Models\Brand;
 use App\Models\Category;
-use App\Http\Requests\Api\Admin\V1\Product\Concerns\ValidatesProductImages;
-use App\Models\ProductVariant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -40,6 +39,7 @@ class StoreProductRequest extends FormRequest
             'stock_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000000'],
             'min_stock_alert' => ['nullable', 'integer', 'min:0', 'max:1000000000'],
             'track_inventory' => ['nullable', 'boolean'],
+            'is_serialized' => ['nullable', 'boolean'],
             'in_stock' => ['nullable', 'boolean'],
             'weight' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
             'length' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
@@ -72,6 +72,7 @@ class StoreProductRequest extends FormRequest
             'variants.*.stock_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000000'],
             'variants.*.min_stock_alert' => ['nullable', 'integer', 'min:0', 'max:1000000000'],
             'variants.*.track_inventory' => ['nullable', 'boolean'],
+            'variants.*.is_serialized' => ['nullable', 'boolean'],
             'variants.*.in_stock' => ['nullable', 'boolean'],
             'variants.*.weight' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
             'variants.*.length' => ['nullable', 'numeric', 'min:0', 'max:1000000'],

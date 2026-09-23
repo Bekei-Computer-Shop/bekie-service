@@ -26,6 +26,7 @@ class ProductVariant extends Model
         'min_stock_alert',
         'max_stock_level',
         'track_inventory',
+        'is_serialized',
         'in_stock',
         'weight',
         'length',
@@ -41,6 +42,7 @@ class ProductVariant extends Model
 
     protected $casts = [
         'attributes' => 'array',
+        'is_serialized' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -65,5 +67,10 @@ class ProductVariant extends Model
     {
         // Explicit morph keys for consistency with Product::stockMovements().
         return $this->morphMany(StockMovement::class, 'stockable', 'stockable_type', 'stockable_id');
+    }
+
+    public function serials()
+    {
+        return $this->hasMany(ProductSerial::class);
     }
 }

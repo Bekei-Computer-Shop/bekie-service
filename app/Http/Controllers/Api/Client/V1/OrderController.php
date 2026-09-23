@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ShippingMethod;
 use App\Services\AdminNotificationService;
+use App\Services\ProductSerialService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -38,6 +39,12 @@ class OrderController extends BaseApiController
 
         $shippingMethod = ShippingMethod::findOrFail($request->shipping_method_id);
         $addressSnapshot = $this->resolveAddressSnapshot($request);
+
+        try {
+            app(ProductSerialService::class)->assertCartSerialsAvailable($cart->items, $request->input('serial_numbers', []));
+        } catch (\InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
+        }
 
         $shippingWeight = $this->calculateCartWeight($cart);
 
@@ -129,6 +136,8 @@ class OrderController extends BaseApiController
         }
 
         $cart->update(['status' => 'converted']);
+
+        app(ProductSerialService::class)->reserveForOrder($request->input('serial_numbers', []), (int) $cart->user_id, (int) $order->id);
 
         app(AdminNotificationService::class)->newOrder($order, 'app');
 

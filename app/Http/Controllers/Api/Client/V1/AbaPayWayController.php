@@ -427,6 +427,7 @@ class AbaPayWayController extends BaseApiController
                 if ($status->isPaid()) {
                     $this->paymentService->markAsPaid($payment, $payload);
                     $order->update(['payment_status' => 'paid', 'paid_at' => now()]);
+                    app(ProductSerialService::class)->finalizeOrder((int) $order->id);
                     Log::info('PayWay payment approved', [
                         'order_id' => $order->id,
                         'transaction_id' => $transactionId,
@@ -434,6 +435,7 @@ class AbaPayWayController extends BaseApiController
                 } elseif ($status->isFailed()) {
                     $this->paymentService->markAsFailed($payment, $payload);
                     $order->update(['payment_status' => 'failed']);
+                    app(ProductSerialService::class)->releaseOrder((int) $order->id, null, 'Payment failed.');
                     Log::info('PayWay payment failed', [
                         'order_id' => $order->id,
                         'transaction_id' => $transactionId,
