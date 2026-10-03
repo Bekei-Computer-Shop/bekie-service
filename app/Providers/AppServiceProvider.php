@@ -129,6 +129,13 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
+        RateLimiter::for('auth-password-reset', function (Request $request): array {
+            return [
+                Limit::perMinute(10)->by($request->ip()),
+                Limit::perMinutes(15, 30)->by(strtolower((string) $request->input('email')).'|'.$request->ip()),
+            ];
+        });
+
         RateLimiter::for('contact', function (Request $request): array {
             return [Limit::perMinutes(10, 5)->by($request->ip())];
         });

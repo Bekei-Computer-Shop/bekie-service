@@ -109,12 +109,6 @@ class AuthController extends BaseApiController
             return $this->error('Invalid credentials.', 401);
         }
 
-        if ($user->email && ! $user->email_verified_at) {
-            return $this->error('Email verification is required before login.', 403, [
-                'email_verification_required' => true,
-            ]);
-        }
-
         $tokenPair = $this->authService->createToken($user, $request);
 
         return $this->success([

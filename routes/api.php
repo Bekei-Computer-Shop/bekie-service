@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\Client\V1\KhqrController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
 use App\Http\Controllers\Api\Client\V1\MyProductController;
 use App\Http\Controllers\Api\Client\V1\OrderController;
+use App\Http\Controllers\Api\Client\V1\PasswordResetController;
 use App\Http\Controllers\Api\Client\V1\ProductController;
 use App\Http\Controllers\Api\Client\V1\ProfileController;
 use App\Http\Controllers\Api\Client\V1\PromotionController;
@@ -42,6 +43,12 @@ Route::prefix('v1')->group(function () {
         ->middleware('throttle:auth-client');
     Route::post('auth/login', [AuthController::class, 'login'])
         ->middleware('throttle:auth-client');
+    Route::post('auth/forgot-password', [PasswordResetController::class, 'forgot'])
+        ->middleware('throttle:auth-password-reset');
+    Route::post('auth/verify-otp', [PasswordResetController::class, 'verify'])
+        ->middleware('throttle:auth-password-reset');
+    Route::post('auth/reset-password', [PasswordResetController::class, 'reset'])
+        ->middleware('throttle:auth-password-reset');
     Route::post('auth/refresh', [AuthController::class, 'refresh'])
         ->middleware('throttle:auth-client');
     Route::post('auth/logout', [AuthController::class, 'logout'])
