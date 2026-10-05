@@ -177,11 +177,39 @@ class CustomerSeeder extends Seeder
             $created++;
         }
 
+        $this->seedLoginUser();
+
         $this->command->info("Seeded {$created} customers with {$orders} completed orders.");
         $this->command->line('Remove them again with:');
         $this->command->line("  delete from order_items where order_id in (select id from orders where metadata->>'seeded_by' = '".self::TAG."');");
         $this->command->line("  delete from orders where metadata->>'seeded_by' = '".self::TAG."';");
         $this->command->line("  delete from users where email like 'customer.%@bekie.test';");
+        $this->command->line("  delete from users where email = 'oun.pav125@gmail.com';");
+    }
+
+    private function seedLoginUser(): void
+    {
+        $email = 'oun.pav125@gmail.com';
+
+        $user = User::firstOrNew(['email' => strtolower(trim($email))]);
+        $user->fill([
+            'first_name' => 'Oun',
+            'last_name' => 'Pav',
+            'username' => 'oun_pav_125',
+            'phone' => '+85512345679',
+            'is_admin' => false,
+            'is_active' => true,
+            'email_verified_at' => now(),
+            'password' => Hash::make('ounpav123!@#'),
+        ]);
+
+        $user->save();
+
+        if (! $user->hasRole('user')) {
+            $user->assignRole('user');
+        }
+
+        $this->command->info("Seeded login account for {$email}.");
     }
 
     /**

@@ -10,6 +10,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasColumn('content_items', 'slug')) {
+            return;
+        }
+
         Schema::table('content_items', function (Blueprint $table): void {
             $table->string('slug')->nullable()->unique()->after('type');
         });
@@ -17,6 +21,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! Schema::hasColumn('content_items', 'slug')) {
+            return;
+        }
+
         Schema::table('content_items', function (Blueprint $table): void {
             $table->dropUnique(['slug']);
             $table->dropColumn('slug');
