@@ -54,18 +54,26 @@ class AdministratorController extends BaseAdminController
     public function update(UpdateAdministratorRequest $request, User $user): JsonResponse
     {
         $data = $request->validated();
+        $password = $data['password'] ?? null;
 
         $user->update([
             'first_name' => $data['first_name'],
             'last_name' => $data['last_name'],
             'email' => $data['email'],
-            'recovery_email' => $data['recovery_email'] ?? null,
-            'password' => $data['password'] ? Hash::make($data['password']) : $user->password,
+            'recovery_email' => array_key_exists('recovery_email', $data) ? $data['recovery_email'] : $user->recovery_email,
+            'phone' => array_key_exists('phone', $data) ? $data['phone'] : $user->phone,
+            'password' => $password ? Hash::make($password) : $user->password,
+            'is_active' => $data['is_active'] ?? $user->is_active,
         ]);
 
         $role = Role::findById($data['role_id']);
-        if (! $user->hasRole($role)) {
-            $user->syncRoles([$role]);
+        $user->syncRoles([$role]);
+
+        if ($password) {
+            ApiToken::query()
+                ->where('user_id', $user->id)
+                ->where('scope', 'admin')
+                ->update(['revoked' => true]);
         }
 
         return $this->success(new UserResource($user));

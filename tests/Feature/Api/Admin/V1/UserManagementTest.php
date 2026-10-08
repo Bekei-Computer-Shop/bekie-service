@@ -177,6 +177,58 @@ test('admin can assign and revoke roles', function (): void {
     expect($target->fresh()->hasRole('manager'))->toBeFalse();
 });
 
+test('admin can update administrator profile status and password without changing role permissions', function (): void {
+    [, $token] = adminAuthedUser();
+    $target = User::factory()->create([
+        'is_admin' => true,
+        'is_active' => true,
+        'email' => 'target@example.com',
+    ]);
+    $target->assignRole('staff');
+    (new AdminAuthService)->createAdminToken($target);
+
+    $staffRole = Role::where('name', 'staff')->where('guard_name', 'api')->firstOrFail();
+    $permissionsBefore = $staffRole->getPermissionNames()->sort()->values()->all();
+
+    $this->withHeaders(authHeader($token))
+        ->putJson('/api/v1/admin/administrators/'.$target->id, [
+            'first_name' => 'Updated',
+            'last_name' => 'Administrator',
+            'email' => 'target@example.com',
+            'phone' => '+15555550123',
+            'recovery_email' => 'recovery@example.com',
+            'password' => 'New-strong-password-123!',
+            'password_confirmation' => 'New-strong-password-123!',
+            'role_id' => $staffRole->id,
+            'is_active' => false,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.email', 'target@example.com')
+        ->assertJsonPath('data.phone', '+15555550123')
+        ->assertJsonPath('data.is_active', false);
+
+    $target->refresh();
+    expect($target->first_name)->toBe('Updated')
+        ->and($target->recovery_email)->toBe('recovery@example.com')
+        ->and($target->is_active)->toBeFalse()
+        ->and(Hash::check('New-strong-password-123!', $target->password))->toBeTrue()
+        ->and($target->hasRole('staff'))->toBeTrue()
+        ->and(ApiToken::where('user_id', $target->id)->where('scope', 'admin')->where('revoked', false)->exists())->toBeFalse()
+        ->and($staffRole->fresh()->getPermissionNames()->sort()->values()->all())->toBe($permissionsBefore);
+
+    $passwordHash = $target->password;
+    $this->withHeaders(authHeader($token))
+        ->putJson('/api/v1/admin/administrators/'.$target->id, [
+            'first_name' => 'Updated',
+            'last_name' => 'Administrator',
+            'email' => 'target@example.com',
+            'role_id' => $staffRole->id,
+        ])
+        ->assertOk();
+
+    expect($target->fresh()->password)->toBe($passwordHash);
+});
+
 test('soft-deleted user has their admin tokens revoked', function (): void {
     [$admin, $token] = adminAuthedUser();
 
