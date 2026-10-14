@@ -91,6 +91,11 @@ class AdminPermissionsSeeder extends Seeder
         'customers.update',
         'customers.delete',
 
+        // Customer reviews
+        'reviews.view',
+        'reviews.update',
+        'reviews.delete',
+
         // Orders
         'orders.view',
         'orders.create',
@@ -142,6 +147,7 @@ class AdminPermissionsSeeder extends Seeder
         'client.carts.manage',
         'client.wishlists.manage',
         'client.orders.manage',
+        'client.reviews.manage',
     ];
 
     /**
@@ -161,6 +167,7 @@ class AdminPermissionsSeeder extends Seeder
             'promotions.view', 'promotions.create', 'promotions.update', 'promotions.delete',
             'content.view', 'content.create', 'content.update', 'content.delete',
             'customers.view', 'customers.create', 'customers.update', 'customers.delete',
+            'reviews.view', 'reviews.update', 'reviews.delete',
             'orders.view', 'orders.create', 'orders.update', 'orders.delete',
             'administrators.view', 'administrators.create', 'administrators.update', 'administrators.delete', 'administrators.password-reset',
             'banners.view', 'banners.create', 'banners.update', 'banners.delete',
@@ -209,6 +216,7 @@ class AdminPermissionsSeeder extends Seeder
             'client.carts.manage',
             'client.wishlists.manage',
             'client.orders.manage',
+            'client.reviews.manage',
         ],
     ];
 
