@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\Admin\V1\ContentController;
 use App\Http\Controllers\Api\Admin\V1\CustomerController;
 use App\Http\Controllers\Api\Admin\V1\DashboardController;
 use App\Http\Controllers\Api\Admin\V1\LogController;
+use App\Http\Controllers\Api\Admin\V1\MailTestController;
 use App\Http\Controllers\Api\Admin\V1\MediaController;
 use App\Http\Controllers\Api\Admin\V1\NotificationController;
 use App\Http\Controllers\Api\Admin\V1\OrderController;
@@ -48,6 +49,9 @@ Route::prefix('admin')->group(function () {
         Route::post('auth/logout', [AuthController::class, 'logout'])->middleware('permission:admin.auth.logout');
         Route::post('auth/change-password', [AuthController::class, 'changePassword'])
             ->middleware(['permission:admin.profile.update', 'throttle:auth-admin-sensitive']);
+        Route::post('mail/test', [MailTestController::class, 'send'])
+            ->middleware('throttle:admin-sensitive')
+            ->name('admin.mail.test');
 
         Route::get('notifications', [NotificationController::class, 'index']);
         Route::post('notifications/{notification}/read', [NotificationController::class, 'read']);
