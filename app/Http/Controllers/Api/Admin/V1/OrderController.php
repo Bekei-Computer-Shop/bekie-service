@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\AdminNotificationService;
 use App\Services\ProductSerialService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -121,6 +122,35 @@ class OrderController extends BaseAdminController
             'sqlsrv' => "format(created_at, 'yyyy-MM')",
             default => "date_format(created_at, '%Y-%m')",
         };
+    }
+
+    /**
+     * Orders this admin has not opened yet, for the sidebar badge and the
+     * "New" marker in the orders table. Per admin: see AdminNotificationService.
+     */
+    public function unviewed(Request $request): JsonResponse
+    {
+        return $this->success($this->unviewedPayload($request));
+    }
+
+    /**
+     * Called when an admin opens an order. Answers with the refreshed list so
+     * the client can drop the order without knowing which id (uuid or numeric)
+     * the page was opened with.
+     */
+    public function viewed(Request $request, Order $order): JsonResponse
+    {
+        app(AdminNotificationService::class)->markOrderViewed($request->user(), $order);
+
+        return $this->success($this->unviewedPayload($request));
+    }
+
+    /** @return array{count: int, order_ids: array<int, string>} */
+    private function unviewedPayload(Request $request): array
+    {
+        $ids = app(AdminNotificationService::class)->unviewedOrderUuids($request->user());
+
+        return ['count' => count($ids), 'order_ids' => $ids];
     }
 
     public function show(Order $order): JsonResponse

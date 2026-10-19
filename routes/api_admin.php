@@ -169,7 +169,11 @@ Route::prefix('admin')->group(function () {
 
         Route::middleware('permission:orders.view')->group(function () {
             Route::get('orders', [OrderController::class, 'index']);
+            // Declared before orders/{order}, which would otherwise try to
+            // bind "unviewed" as an order and 404.
+            Route::get('orders/unviewed', [OrderController::class, 'unviewed']);
             Route::get('orders/{order}', [OrderController::class, 'show']);
+            Route::post('orders/{order}/viewed', [OrderController::class, 'viewed']);
         });
         Route::middleware('permission:orders.create')->group(function () {
             Route::post('orders', [OrderController::class, 'store']);
