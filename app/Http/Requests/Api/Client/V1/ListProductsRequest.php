@@ -18,7 +18,7 @@ class ListProductsRequest extends FormRequest
             'category_id' => ['sometimes', 'array'],
             'category_id.*' => ['integer'],
             'brand_id' => ['sometimes', 'array'],
-            'brand_id.*' => ['string', 'uuid'],
+            'brand_id.*' => ['integer'],
             'min_price' => ['sometimes', 'numeric', 'min:0'],
             'max_price' => ['sometimes', 'numeric', 'min:0'],
             'sort_by' => ['sometimes', 'string', 'in:featured,price_asc,price_desc,newest,popular'],
