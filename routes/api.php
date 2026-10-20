@@ -102,7 +102,6 @@ Route::prefix('v1')->group(function () {
             ->middleware(['permission:client.coupons.apply', 'throttle:promo-apply']);
 
         Route::prefix('profile')->group(function () {
-            Route::get('/', [ProfileController::class, 'show']);
             Route::patch('/', [ProfileController::class, 'update'])->middleware('permission:client.profile.update');
             Route::post('change-password', [ProfileController::class, 'changePassword'])->middleware('permission:client.profile.change-password');
             Route::post('image', [ProfileController::class, 'updateProfileImage'])->middleware('permission:client.profile.update-image');

@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
  * @property string $action
  * @property string|null $target_type
  * @property int|null $target_id
+ * @property string|null $target_key
  * @property string|null $ip_address
  * @property string|null $user_agent
  * @property Carbon $created_at
@@ -30,6 +31,7 @@ class ActivityLog extends Model
         'action',
         'target_type',
         'target_id',
+        'target_key',
         'ip_address',
         'user_agent',
         'created_at',
@@ -44,13 +46,16 @@ class ActivityLog extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    public static function record(?User $user, string $action, ?string $targetType = null, ?int $targetId = null, ?string $ipAddress = null, ?string $userAgent = null): self
+    public static function record(?User $user, string $action, ?string $targetType = null, int|string|null $targetId = null, ?string $ipAddress = null, ?string $userAgent = null): self
     {
+        $isNumericTargetId = is_int($targetId) || (is_string($targetId) && ctype_digit($targetId));
+
         return self::create([
             'user_id' => $user?->id,
             'action' => $action,
             'target_type' => $targetType,
-            'target_id' => $targetId,
+            'target_id' => $isNumericTargetId ? (int) $targetId : null,
+            'target_key' => $targetId !== null && ! $isNumericTargetId ? (string) $targetId : null,
             'ip_address' => $ipAddress,
             'user_agent' => $userAgent,
             'created_at' => now(),

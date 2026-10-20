@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Api\Client\V1;
 
 use App\Models\ShippingMethod;
+use Database\Seeders\ShippingMethodSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -72,5 +73,28 @@ class ShippingMethodTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('status', 'success')
             ->assertJsonCount(2, 'data');
+    }
+
+    public function test_shipping_method_seeder_is_idempotent_and_restores_seeded_options(): void
+    {
+        $seeder = new ShippingMethodSeeder;
+        $seeder->run();
+
+        ShippingMethod::where('code', 'standard_courier')->firstOrFail()->delete();
+        $seeder->run();
+        $seeder->run();
+
+        $this->assertDatabaseCount('shipping_methods', 5);
+        $this->assertDatabaseHas('shipping_methods', [
+            'code' => 'standard_courier',
+            'name' => 'Standard Courier',
+            'is_active' => true,
+            'deleted_at' => null,
+        ]);
+
+        $this->getJson('/api/v1/shipping-methods')
+            ->assertOk()
+            ->assertJsonCount(5, 'data')
+            ->assertJsonPath('data.0.code', 'store_pickup');
     }
 }

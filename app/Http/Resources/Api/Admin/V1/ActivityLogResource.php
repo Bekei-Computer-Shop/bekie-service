@@ -16,7 +16,7 @@ class ActivityLogResource extends JsonResource
             'action' => $this->action,
             'target' => [
                 'type' => $this->target_type,
-                'id' => $this->target_id,
+                'id' => $this->target_key ?? $this->target_id,
             ],
             'ip_address' => $this->ip_address,
             'user_agent' => $this->user_agent,
