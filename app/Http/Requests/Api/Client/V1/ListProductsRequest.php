@@ -16,7 +16,7 @@ class ListProductsRequest extends FormRequest
         return [
             'search' => ['sometimes', 'string', 'max:255'],
             'category_id' => ['sometimes', 'array'],
-            'category_id.*' => ['string', 'uuid'],
+            'category_id.*' => ['integer'],
             'brand_id' => ['sometimes', 'array'],
             'brand_id.*' => ['string', 'uuid'],
             'min_price' => ['sometimes', 'numeric', 'min:0'],
@@ -30,11 +30,11 @@ class ListProductsRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         // Convert single category_id or brand_id to array for consistent handling
-        if ($this->has('category_id') && !is_array($this->category_id)) {
+        if ($this->has('category_id') && ! is_array($this->category_id)) {
             $this->merge(['category_id' => [$this->category_id]]);
         }
 
-        if ($this->has('brand_id') && !is_array($this->brand_id)) {
+        if ($this->has('brand_id') && ! is_array($this->brand_id)) {
             $this->merge(['brand_id' => [$this->brand_id]]);
         }
 

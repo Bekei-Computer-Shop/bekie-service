@@ -56,8 +56,8 @@ class LogAdminAction
                 return [Str::studly(Str::singular($key)), (int) $value];
             }
 
-            if (is_object($value) && property_exists($value, 'getKey')) {
-                return [class_basename($value), (int) $value->getKey()];
+            if (is_object($value) && method_exists($value, 'getKey')) {
+                return [class_basename($value), $value->getKey()];
             }
         }
 
