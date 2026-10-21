@@ -3,10 +3,18 @@
 namespace App\Http\Controllers\Api\Client\V1;
 
 use App\Http\Requests\Api\Client\V1\ListProductsRequest;
+use App\Http\Resources\Api\Client\V1\ContentPageResource;
+use App\Http\Resources\Api\Client\V1\ProductImageResource;
 use App\Http\Resources\Api\Client\V1\ProductListResource;
 use App\Http\Resources\Api\Client\V1\ProductResource;
+use App\Http\Resources\Api\Client\V1\ProductSpecificationsResource;
 use App\Http\Resources\Api\Client\V1\ProductVariantResource;
+use App\Http\Resources\Api\Client\V1\RelatedProductResource;
+use App\Models\ContentItem;
 use App\Models\Product;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProductController extends BaseApiController
@@ -117,5 +125,139 @@ class ProductController extends BaseApiController
     public function variants(Product $product)
     {
         return $this->success(ProductVariantResource::collection($product->variants()->where('is_active', true)->orderBy('sort_order')->get()));
+    }
+
+    public function gallery(Product $product): JsonResponse
+    {
+        $this->assertClientVisible($product);
+        $product->load(['images' => fn ($query) => $query->where('is_active', true)]);
+
+        $primaryImage = $product->images->first(fn ($image): bool => $image->is_primary);
+        $productThumbnail = $this->productThumbnail($product);
+        $thumbnails = $product->images->where('type', 'thumbnail')->values();
+
+        return $this->success([
+            'product_id' => $product->id,
+            'primary_image' => $primaryImage
+                ? (new ProductImageResource($primaryImage))->resolve()
+                : $productThumbnail,
+            'images' => ProductImageResource::collection($product->images)->resolve(),
+            'thumbnails' => $thumbnails->isNotEmpty()
+                ? ProductImageResource::collection($thumbnails)->resolve()
+                : ($productThumbnail ? [$productThumbnail] : []),
+        ]);
+    }
+
+    public function related(Product $product, Request $request): JsonResponse
+    {
+        $this->assertClientVisible($product);
+        $validated = $request->validate([
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:24'],
+        ]);
+
+        $hasCategory = $product->category_id !== null;
+        $hasBrand = $product->brand_id !== null;
+        $limit = (int) ($validated['limit'] ?? 8);
+
+        if (! $hasCategory && ! $hasBrand) {
+            return $this->success([
+                'items' => [],
+                'meta' => ['limit' => $limit, 'count' => 0],
+            ]);
+        }
+
+        $query = Product::query()
+            ->where('is_active', true)
+            ->where('id', '!=', $product->id)
+            ->with(['category:id,name', 'brand:id,name'])
+            ->where(function (Builder $related) use ($product, $hasCategory, $hasBrand): void {
+                if ($hasCategory) {
+                    $related->where('category_id', $product->category_id);
+                }
+
+                if ($hasBrand) {
+                    $method = $hasCategory ? 'orWhere' : 'where';
+                    $related->{$method}('brand_id', $product->brand_id);
+                }
+            });
+
+        if ($hasCategory) {
+            $query->orderByRaw('CASE WHEN category_id = ? THEN 0 ELSE 1 END', [$product->category_id]);
+        }
+
+        if ($hasBrand) {
+            $query->orderByRaw('CASE WHEN brand_id = ? THEN 0 ELSE 1 END', [$product->brand_id]);
+        }
+
+        $products = $query
+            ->orderByDesc('is_featured')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->limit($limit)
+            ->get();
+
+        return $this->success([
+            'items' => RelatedProductResource::collection($products)->resolve(),
+            'meta' => ['limit' => $limit, 'count' => $products->count()],
+        ]);
+    }
+
+    public function specifications(Product $product): JsonResponse
+    {
+        $this->assertClientVisible($product);
+        $product->load(['variants' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order')]);
+
+        return $this->success((new ProductSpecificationsResource($product))->resolve());
+    }
+
+    public function warrantyPolicies(Product $product): JsonResponse
+    {
+        $this->assertClientVisible($product);
+
+        $policy = ContentItem::query()
+            ->published()
+            ->byType('page')
+            ->where(function (Builder $query): void {
+                $query->where('slug', 'warranty-policy')
+                    ->orWhere('title', 'Warranty & Returns Policy');
+            })
+            ->where(function (Builder $query): void {
+                $query->whereNull('published_at')
+                    ->orWhere('published_at', '<=', now());
+            })
+            ->orderByRaw("CASE WHEN slug = 'warranty-policy' THEN 0 ELSE 1 END")
+            ->first();
+
+        return $this->success([
+            'product_id' => $product->id,
+            'policy_source' => $policy ? 'store' : null,
+            'warranty_and_returns_policy' => $policy ? (new ContentPageResource($policy))->resolve() : null,
+        ]);
+    }
+
+    private function assertClientVisible(Product $product): void
+    {
+        abort_unless($product->is_active, 404);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function productThumbnail(Product $product): ?array
+    {
+        if (! $product->thumbnail) {
+            return null;
+        }
+
+        return [
+            'id' => null,
+            'product_id' => $product->id,
+            'image' => $product->thumbnail,
+            'url' => $product->thumbnail,
+            'alt_text' => null,
+            'title' => null,
+            'type' => 'thumbnail',
+            'is_primary' => true,
+            'is_active' => true,
+            'sort_order' => 0,
+        ];
     }
 }

@@ -52,7 +52,7 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/refresh', [AuthController::class, 'refresh'])
         ->middleware('throttle:auth-client');
     Route::post('auth/logout', [AuthController::class, 'logout'])
-        ->middleware([AuthenticateApiToken::class, 'permission:client.auth.logout']);
+        ->middleware(AuthenticateApiToken::class);
     Route::post('auth/change-password', [AuthController::class, 'changePassword'])
         ->middleware(AuthenticateApiToken::class);
     Route::post('contact', [ContactController::class, 'store'])->middleware('throttle:contact');
@@ -73,6 +73,10 @@ Route::prefix('v1')->group(function () {
 
     Route::get('products', [ProductController::class, 'index']);
     Route::get('products/{product}', [ProductController::class, 'show']);
+    Route::get('products/{product}/gallery', [ProductController::class, 'gallery']);
+    Route::get('products/{product}/related', [ProductController::class, 'related']);
+    Route::get('products/{product}/specifications', [ProductController::class, 'specifications']);
+    Route::get('products/{product}/warranty-policies', [ProductController::class, 'warrantyPolicies']);
     Route::get('products/{product}/variants', [ProductController::class, 'variants']);
 
     Route::get('shipping-methods', [ShippingMethodController::class, 'index']);
@@ -99,15 +103,15 @@ Route::prefix('v1')->group(function () {
         Route::post('profile/avatar', [UserProfileController::class, 'updateAvatar']);
 
         Route::post('coupons/apply', [CouponController::class, 'apply'])
-            ->middleware(['permission:client.coupons.apply', 'throttle:promo-apply']);
+            ->middleware('throttle:promo-apply');
 
         Route::prefix('profile')->group(function () {
-            Route::patch('/', [ProfileController::class, 'update'])->middleware('permission:client.profile.update');
-            Route::post('change-password', [ProfileController::class, 'changePassword'])->middleware('permission:client.profile.change-password');
-            Route::post('image', [ProfileController::class, 'updateProfileImage'])->middleware('permission:client.profile.update-image');
+            Route::patch('/', [ProfileController::class, 'update']);
+            Route::post('change-password', [ProfileController::class, 'changePassword']);
+            Route::post('image', [ProfileController::class, 'updateProfileImage']);
         });
 
-        Route::prefix('reviews')->middleware('permission:client.reviews.manage')->group(function () {
+        Route::prefix('reviews')->group(function () {
             Route::get('/', [ReviewController::class, 'index']);
             Route::post('/', [ReviewController::class, 'store']);
             Route::get('{review}', [ReviewController::class, 'show']);
@@ -115,7 +119,7 @@ Route::prefix('v1')->group(function () {
             Route::delete('{review}', [ReviewController::class, 'destroy']);
         });
 
-        Route::prefix('cart')->middleware('permission:client.carts.manage')->group(function () {
+        Route::prefix('cart')->group(function () {
             Route::get('/', [CartController::class, 'index']);
             Route::put('/', [CartController::class, 'store']);
             Route::post('items', [CartController::class, 'addItem']);
@@ -124,7 +128,7 @@ Route::prefix('v1')->group(function () {
             Route::post('checkout', [CartController::class, 'checkout'])->middleware('throttle:client-checkout');
         });
 
-        Route::prefix('wishlists')->middleware('permission:client.wishlists.manage')->group(function () {
+        Route::prefix('wishlists')->group(function () {
             Route::get('/', [WishlistController::class, 'index']);
             Route::put('/', [WishlistController::class, 'store']);
             Route::delete('/', [WishlistController::class, 'destroy']);
@@ -133,7 +137,7 @@ Route::prefix('v1')->group(function () {
             Route::delete('items/{item}', [WishlistController::class, 'removeItem']);
         });
 
-        Route::prefix('wishlist')->middleware('permission:client.wishlists.manage')->group(function () {
+        Route::prefix('wishlist')->group(function () {
             Route::get('/', [WishlistController::class, 'index']);
             Route::put('/', [WishlistController::class, 'store']);
             Route::delete('/', [WishlistController::class, 'destroy']);
@@ -142,23 +146,21 @@ Route::prefix('v1')->group(function () {
             Route::delete('items/{item}', [WishlistController::class, 'removeItem']);
         });
 
-        Route::prefix('orders')->middleware('permission:client.orders.manage')->group(function () {
+        Route::prefix('orders')->group(function () {
             Route::get('/', [OrderController::class, 'index']);
             Route::post('/', [OrderController::class, 'store'])->middleware('throttle:client-checkout');
             Route::get('{order}', [OrderController::class, 'show']);
         });
 
-        Route::middleware('permission:client.orders.manage')->group(function () {
-            // ABA PayWay payment endpoints
-            Route::post('payments/aba/purchase', [AbaPayWayController::class, 'purchase'])->middleware('throttle:client-checkout');
-            Route::get('payments/aba/{transactionId}', [AbaPayWayController::class, 'check'])->middleware('throttle:client-checkout');
+        // ABA PayWay payment endpoints
+        Route::post('payments/aba/purchase', [AbaPayWayController::class, 'purchase'])->middleware('throttle:client-checkout');
+        Route::get('payments/aba/{transactionId}', [AbaPayWayController::class, 'check'])->middleware('throttle:client-checkout');
 
-            // KHQR payment endpoints
-            Route::post('payments/khqr/generate', [KhqrController::class, 'generate'])->middleware('throttle:client-checkout');
-            Route::get('payments/khqr/{transactionId}', [KhqrController::class, 'check'])->middleware('throttle:client-checkout');
-            Route::post('payments/khqr/{transactionId}/confirm', [KhqrController::class, 'confirm'])->middleware('throttle:client-checkout');
-            Route::delete('payments/khqr/{transactionId}', [KhqrController::class, 'cancel'])->middleware('throttle:client-checkout');
-        });
+        // KHQR payment endpoints
+        Route::post('payments/khqr/generate', [KhqrController::class, 'generate'])->middleware('throttle:client-checkout');
+        Route::get('payments/khqr/{transactionId}', [KhqrController::class, 'check'])->middleware('throttle:client-checkout');
+        Route::post('payments/khqr/{transactionId}/confirm', [KhqrController::class, 'confirm'])->middleware('throttle:client-checkout');
+        Route::delete('payments/khqr/{transactionId}', [KhqrController::class, 'cancel'])->middleware('throttle:client-checkout');
     });
 
     require __DIR__.'/api_admin.php';

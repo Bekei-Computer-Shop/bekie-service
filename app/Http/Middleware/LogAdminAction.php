@@ -16,6 +16,10 @@ class LogAdminAction
     {
         $response = $next($request);
 
+        if (! in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            return $response;
+        }
+
         /** @var User|null $actor */
         $actor = $request->attributes->get('authenticated_user');
 
