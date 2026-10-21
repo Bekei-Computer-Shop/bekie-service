@@ -41,7 +41,7 @@ class ProductSerialController extends BaseAdminController
                 $request->validated('serial_numbers'),
                 $request->validated('product_id'),
                 $request->validated('product_variant_id'),
-                null,
+                $request->validated('warehouse'),
                 $request->validated('receiving_reference'),
                 $request->user()->id,
                 $request->validated('notes'),

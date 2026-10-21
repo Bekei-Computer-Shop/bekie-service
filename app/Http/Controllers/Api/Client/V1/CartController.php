@@ -320,7 +320,7 @@ class CartController extends BaseApiController
             return $this->error('Cart is empty.', 422);
         }
 
-        $shippingMethod = ShippingMethod::findOrFail($request->shipping_method_id);
+        $shippingMethod = ShippingMethod::active()->findOrFail($request->shipping_method_id);
 
         $addressSnapshot = $this->resolveAddressSnapshot($request);
 
@@ -331,6 +331,10 @@ class CartController extends BaseApiController
         }
 
         $shippingWeight = $this->calculateCartWeight($cart);
+
+        if (! $shippingMethod->supportsWeight($shippingWeight)) {
+            return $this->error('Selected shipping method does not support the cart weight.', 422);
+        }
 
         $order = Order::create([
             'user_id' => $cart->user_id,
