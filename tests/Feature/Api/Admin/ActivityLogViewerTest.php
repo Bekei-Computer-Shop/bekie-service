@@ -28,6 +28,21 @@ beforeEach(function (): void {
     $this->seed(AdminPermissionsSeeder::class);
 });
 
+test('admin list and detail reads do not create activity logs', function (): void {
+    [, $token] = adminActivityLogAuthedUser();
+    $product = Product::factory()->create();
+
+    $this->withHeaders(['Authorization' => 'Bearer '.$token])
+        ->getJson('/api/v1/admin/products')
+        ->assertOk();
+
+    $this->withHeaders(['Authorization' => 'Bearer '.$token])
+        ->getJson('/api/v1/admin/products/'.$product->id)
+        ->assertOk();
+
+    $this->assertDatabaseCount('activity_logs', 0);
+});
+
 test('admin can filter activity logs by actor action and date range', function (): void {
     [$actor, $token] = adminActivityLogAuthedUser();
 
