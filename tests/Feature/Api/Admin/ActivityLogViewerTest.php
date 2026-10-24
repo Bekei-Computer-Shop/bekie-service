@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\ActivityLog;
+use App\Models\Product;
 use App\Models\User;
 use App\Services\AdminAuthService;
 use Database\Seeders\AdminPermissionsSeeder;
@@ -25,6 +26,21 @@ function adminActivityLogAuthedUser(array $attrs = []): array
 
 beforeEach(function (): void {
     $this->seed(AdminPermissionsSeeder::class);
+});
+
+test('admin list and detail reads do not create activity logs', function (): void {
+    [, $token] = adminActivityLogAuthedUser();
+    $product = Product::factory()->create();
+
+    $this->withHeaders(['Authorization' => 'Bearer '.$token])
+        ->getJson('/api/v1/admin/products')
+        ->assertOk();
+
+    $this->withHeaders(['Authorization' => 'Bearer '.$token])
+        ->getJson('/api/v1/admin/products/'.$product->id)
+        ->assertOk();
+
+    $this->assertDatabaseCount('activity_logs', 0);
 });
 
 test('admin can filter activity logs by actor action and date range', function (): void {
@@ -58,5 +74,31 @@ test('admin can filter activity logs by actor action and date range', function (
     $response->assertOk()
         ->assertJsonCount(1, 'data.items')
         ->assertJsonPath('data.items.0.action', 'updated')
-        ->assertJsonPath('data.items.0.actor.id', $actor->id);
+        ->assertJsonPath('data.items.0.actor.id', $actor->id)
+        ->assertJsonPath('data.items.0.target.id', $target->id);
+});
+
+test('admin product updates log the authenticated actor and bound product target once', function (): void {
+    [$actor, $token] = adminActivityLogAuthedUser();
+    $product = Product::factory()->create();
+
+    $this->withHeaders(['Authorization' => 'Bearer '.$token])
+        ->putJson('/api/v1/admin/products/'.$product->id, [
+            'name' => 'Updated product name',
+        ])
+        ->assertOk();
+
+    $this->assertDatabaseCount('activity_logs', 1);
+
+    $log = ActivityLog::query()->firstOrFail();
+
+    expect($log->user_id)->toBe($actor->id)
+        ->and($log->action)->toBe('updated')
+        ->and($log->target_type)->toBe('Product')
+        ->and($log->target_key)->toBe($product->id);
+
+    $this->withHeaders(['Authorization' => 'Bearer '.$token])
+        ->getJson('/api/v1/admin/activity-logs?target_type=Product')
+        ->assertOk()
+        ->assertJsonPath('data.items.0.target.id', $product->id);
 });

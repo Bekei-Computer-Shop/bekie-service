@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             StockAlertSeeder::class,
             CustomerSeeder::class,
             CartWishlistSeeder::class,
+            ShippingMethodSeeder::class,
             DemoOrderSeeder::class,
             BannerSeeder::class,
             PromotionSeeder::class,

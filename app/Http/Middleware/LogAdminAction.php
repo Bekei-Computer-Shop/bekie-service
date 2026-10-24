@@ -16,6 +16,10 @@ class LogAdminAction
     {
         $response = $next($request);
 
+        if (! in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            return $response;
+        }
+
         /** @var User|null $actor */
         $actor = $request->attributes->get('authenticated_user');
 
@@ -56,8 +60,8 @@ class LogAdminAction
                 return [Str::studly(Str::singular($key)), (int) $value];
             }
 
-            if (is_object($value) && property_exists($value, 'getKey')) {
-                return [class_basename($value), (int) $value->getKey()];
+            if (is_object($value) && method_exists($value, 'getKey')) {
+                return [class_basename($value), $value->getKey()];
             }
         }
 

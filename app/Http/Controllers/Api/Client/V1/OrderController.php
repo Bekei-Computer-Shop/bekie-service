@@ -37,7 +37,7 @@ class OrderController extends BaseApiController
             return $this->error('Cart must contain at least one item.', 422);
         }
 
-        $shippingMethod = ShippingMethod::findOrFail($request->shipping_method_id);
+        $shippingMethod = ShippingMethod::active()->findOrFail($request->shipping_method_id);
         $addressSnapshot = $this->resolveAddressSnapshot($request);
 
         try {
@@ -47,6 +47,10 @@ class OrderController extends BaseApiController
         }
 
         $shippingWeight = $this->calculateCartWeight($cart);
+
+        if (! $shippingMethod->supportsWeight($shippingWeight)) {
+            return $this->error('Selected shipping method does not support the cart weight.', 422);
+        }
 
         // The coupon the customer applied to the cart, if it still exists. The
         // code is snapshotted onto the order regardless; the model is only used

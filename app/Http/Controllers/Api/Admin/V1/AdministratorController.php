@@ -12,18 +12,29 @@ use App\Models\ApiToken;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class AdministratorController extends BaseAdminController
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $administrators = User::role('admin')
-            ->orWhereHas('roles', fn ($query) => $query->where('name', 'super-admin'))
+        $perPage = min(max($request->integer('per_page', 15), 1), 100);
+        $administrators = User::query()
+            ->where('is_admin', true)
+            ->with('roles')
             ->latest()
-            ->paginate(15);
+            ->paginate($perPage);
 
-        return $this->success(UserResource::collection($administrators));
+        return $this->success([
+            'items' => UserResource::collection($administrators->items())->resolve(),
+            'pagination' => [
+                'total' => $administrators->total(),
+                'per_page' => $administrators->perPage(),
+                'current_page' => $administrators->currentPage(),
+                'last_page' => $administrators->lastPage(),
+            ],
+        ]);
     }
 
     public function show(User $user): JsonResponse

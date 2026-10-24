@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\Admin\V1\ReportController;
 use App\Http\Controllers\Api\Admin\V1\ReviewController;
 use App\Http\Controllers\Api\Admin\V1\RoleController;
 use App\Http\Controllers\Api\Admin\V1\SettingsController;
+use App\Http\Controllers\Api\Admin\V1\ShippingMethodController;
 use App\Http\Controllers\Api\Admin\V1\StockController;
 use App\Http\Controllers\Api\Admin\V1\StoreSettingsController;
 use App\Http\Controllers\Api\Admin\V1\UserController;
@@ -82,6 +83,10 @@ Route::prefix('admin')->group(function () {
         Route::get('settings/store', [StoreSettingsController::class, 'show'])->middleware('permission:settings.view');
         Route::patch('settings/store', [StoreSettingsController::class, 'update'])->middleware('permission:settings.update');
         Route::post('settings/store/payway/check', [StoreSettingsController::class, 'checkPaywayConnection'])->middleware('permission:settings.view');
+        Route::get('shipping-methods', [ShippingMethodController::class, 'index'])->middleware('permission:settings.view');
+        Route::post('shipping-methods', [ShippingMethodController::class, 'store'])->middleware('permission:settings.update');
+        Route::match(['put', 'patch'], 'shipping-methods/{shippingMethod}', [ShippingMethodController::class, 'update'])->middleware('permission:settings.update');
+        Route::delete('shipping-methods/{shippingMethod}', [ShippingMethodController::class, 'destroy'])->middleware('permission:settings.update');
 
         // Catalog Management
         Route::apiResource('brands', BrandController::class)->only(['index', 'show'])->middleware('permission:brands.view');

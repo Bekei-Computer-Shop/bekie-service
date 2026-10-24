@@ -8,6 +8,7 @@ use App\Models\ApiToken;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
+use App\Models\ShippingMethod;
 use App\Models\User;
 use App\Services\JwtService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -259,5 +260,39 @@ class CartTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('status', 'success')
             ->assertJsonPath('data', []);
+    }
+
+    public function test_checkout_rejects_cart_weight_above_shipping_method_limit(): void
+    {
+        $product = Product::factory()->create(['weight' => 2]);
+        CartItem::create([
+            'cart_id' => $this->cart->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'unit_price' => 100,
+            'sale_price' => 100,
+            'cost_price' => 50,
+            'subtotal' => 100,
+            'discount' => 0,
+            'total' => 100,
+            'product_name' => $product->name,
+            'product_sku' => $product->sku,
+        ]);
+        $shippingMethod = ShippingMethod::factory()->active()->create(['max_weight' => 1]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
+            ->postJson('/api/v1/cart/checkout', [
+                'cart_id' => $this->cart->id,
+                'shipping_method_id' => $shippingMethod->id,
+                'recipient_name' => 'John Doe',
+                'address_line_1' => '123 Main St',
+                'city' => 'New York',
+                'country' => 'United States',
+            ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonPath('message', 'Selected shipping method does not support the cart weight.');
+
+        $this->assertDatabaseMissing('orders', ['user_id' => $this->user->id]);
     }
 }

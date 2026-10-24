@@ -24,14 +24,12 @@ class SettingsController extends BaseAdminController
             'length_unit' => 'cm',
             'business_address' => '15 Street 184, Phnom Penh, Cambodia',
             'country' => 'Cambodia',
+            'logo_url' => '',
+            'logo_path' => '',
+            'favicon_url' => '',
+            'favicon_path' => '',
         ],
         'payments' => [
-            'providers' => [
-                ['id' => 'cod', 'name' => 'Cash on delivery', 'status' => 'Active', 'enabled' => true, 'mode' => 'Live', 'connected' => true],
-                ['id' => 'bank', 'name' => 'Bank transfer', 'status' => 'Needs setup', 'enabled' => false, 'mode' => 'Test', 'connected' => false],
-                ['id' => 'card', 'name' => 'Card', 'status' => 'Active', 'enabled' => true, 'mode' => 'Live', 'connected' => true],
-                ['id' => 'paypal', 'name' => 'PayPal', 'status' => 'Inactive', 'enabled' => false, 'mode' => 'Test', 'connected' => false],
-            ],
             'minimum_order' => 15,
             'instructions' => 'Please pay the total upon delivery and keep the receipt for confirmation.',
         ],
@@ -80,16 +78,15 @@ class SettingsController extends BaseAdminController
         ],
         'integrations' => [
             'cards' => [
-                ['id' => 'analytics', 'name' => 'Analytics', 'status' => 'Connected', 'description' => 'Track orders, traffic, and conversions', 'enabled' => true],
+                ['id' => 'analytics', 'name' => 'Analytics', 'status' => 'Not connected', 'description' => 'Track orders, traffic, and conversions', 'enabled' => false],
                 ['id' => 'facebook', 'name' => 'Facebook Pixel', 'status' => 'Not connected', 'description' => 'Track ad conversions and retargeting', 'enabled' => false],
-                ['id' => 'telegram', 'name' => 'Telegram', 'status' => 'Connected', 'description' => 'Send order and stock alerts', 'enabled' => true],
+                ['id' => 'telegram', 'name' => 'Telegram', 'status' => 'Not connected', 'description' => 'Send order and stock alerts', 'enabled' => false],
                 ['id' => 'email', 'name' => 'Email service', 'status' => 'Needs setup', 'description' => 'Sync product emails and automation', 'enabled' => false],
-                ['id' => 'maps', 'name' => 'Google Maps', 'status' => 'Connected', 'description' => 'Store location and directions', 'enabled' => true],
-                ['id' => 'webhooks', 'name' => 'Webhooks', 'status' => 'Connected', 'description' => 'Sent to fulfillment and CRM tools', 'enabled' => true],
+                ['id' => 'maps', 'name' => 'Google Maps', 'status' => 'Not connected', 'description' => 'Store location and directions', 'enabled' => false],
+                ['id' => 'webhooks', 'name' => 'Webhooks', 'status' => 'Not connected', 'description' => 'Send events to fulfillment and CRM tools', 'enabled' => false],
             ],
             'webhooks' => [
-                ['endpoint' => 'https://hooks.example.com/shipments', 'events' => 'Order shipped', 'secret' => '••••••••', 'status' => 'Healthy'],
-                ['endpoint' => 'https://hooks.example.com/inventory', 'events' => 'Low stock', 'secret' => '••••••••', 'status' => 'Failed 2h ago'],
+                'webhooks' => [],
             ],
         ],
     ];
@@ -107,6 +104,20 @@ class SettingsController extends BaseAdminController
 
         if (! is_array($payload)) {
             return $this->error('The settings payload is invalid.', 422);
+        }
+
+        foreach ($payload as $section => $sectionValues) {
+            if (! is_array($sectionValues) || ! array_key_exists($section, self::DEFAULTS)) {
+                return $this->error('The settings section is invalid.', 422);
+            }
+
+            $unknownKeys = array_diff(array_keys($sectionValues), array_keys(self::DEFAULTS[$section]));
+            if ($unknownKeys !== []) {
+                return $this->error('The settings payload contains unsupported fields.', 422, [
+                    'section' => $section,
+                    'fields' => array_values($unknownKeys),
+                ]);
+            }
         }
 
         DB::transaction(function () use ($payload): void {
