@@ -3,7 +3,7 @@ version: '3.9'
 services:
   app:
     image: bekie-service:latest
-    environment:
+    environment: &app-environment
       APP_ENV: production
       APP_DEBUG: "false"
       APP_URL: http://localhost
@@ -20,6 +20,13 @@ services:
       QUEUE_CONNECTION: redis
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
+      MAIL_SCHEME: ${MAIL_SCHEME:-smtp}
+      MAIL_HOST: ${MAIL_HOST:-live.smtp.mailtrap.io}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-api}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-noreply@demomailtrap.co}
       RUN_MIGRATIONS: "true"
       FILESYSTEM_DISK: local
     depends_on:
@@ -42,6 +49,23 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
+    networks:
+      - appnet
+
+  queue:
+    image: bekie-service:latest
+    command: ["php", "artisan", "queue:work", "redis", "--sleep=3", "--tries=3", "--timeout=90"]
+    environment:
+      <<: *app-environment
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      - db
+      - redis
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
     networks:
       - appnet
 
