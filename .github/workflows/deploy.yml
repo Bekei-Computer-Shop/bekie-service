@@ -3,7 +3,20 @@ name: Build and Deploy to Google Cloud
 on:
   push:
     branches: [main]
+    # Docs-only pushes don't change the image, so skip the production deploy.
+    # A push that also touches any other file still deploys.
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".claude/**"
   workflow_dispatch:
+
+# One deploy at a time: a second push waits for the running deploy to finish
+# instead of overlapping its migrations. Queued runs are not cancelled, so a
+# deploy that is mid-migration is never killed.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
 
 env:
   PROJECT_ID: project-87b51d11-3d16-43db-9d0
