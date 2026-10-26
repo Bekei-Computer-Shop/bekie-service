@@ -40,6 +40,9 @@ class SlideResource extends JsonResource
             'images' => $images,
             'duration_ms' => (int) ($meta['durationMs'] ?? 3000),
             'transition' => $meta['transition'] ?? 'fade',
+            // How each image comes in, parallel to `images` (cover first). Empty
+            // for slides saved before images had their own; `transition` applies.
+            'transitions' => array_values(is_array($meta['transitions'] ?? null) ? $meta['transitions'] : []),
             'gradient' => $meta['gradient'] ?? null,
             'meta' => $meta,
             'position' => $this->position,
