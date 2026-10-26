@@ -16,6 +16,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingMethod;
 use App\Services\ProductSerialService;
+use App\Services\TaxCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -60,18 +61,28 @@ class CartController extends BaseApiController
             ->first();
 
         if (! $cart) {
+            $taxBreakdown = app(TaxCalculator::class)->calculate(0, 0, 'Cambodia');
+
             return $this->success([
                 'user_id' => $request->user()->id,
                 'currency' => 'USD',
                 'subtotal' => 0,
                 'discount_total' => 0,
                 'tax_total' => 0,
+                'prices_include_tax' => $taxBreakdown['prices_include_tax'],
+                'show_tax_at_checkout' => $taxBreakdown['show_tax_at_checkout'],
                 'shipping_total' => 0,
                 'grand_total' => 0,
                 'status' => 'active',
                 'items' => [],
             ]);
         }
+
+        $taxCalculator = app(TaxCalculator::class);
+        $taxBreakdown = $taxCalculator->calculate((float) $cart->subtotal, (float) $cart->discount_total, 'Cambodia');
+        $cart->setAttribute('tax_total', $taxBreakdown['tax_total']);
+        $cart->setAttribute('prices_include_tax', $taxBreakdown['prices_include_tax']);
+        $cart->setAttribute('show_tax_at_checkout', $taxBreakdown['show_tax_at_checkout']);
 
         return $this->success(new CartResource($cart->load('items.product', 'items.variant')));
     }
@@ -336,15 +347,22 @@ class CartController extends BaseApiController
             return $this->error('Selected shipping method does not support the cart weight.', 422);
         }
 
+        $taxBreakdown = app(TaxCalculator::class)->calculate(
+            (float) $cart->subtotal,
+            (float) $cart->discount_total,
+            $request->country,
+        );
+        $shippingTotal = $shippingMethod->calculateCost($shippingWeight);
+
         $order = Order::create([
             'user_id' => $cart->user_id,
             'address_id' => $request->address_id,
             'order_number' => $this->generateOrderNumber(),
             'subtotal' => $cart->subtotal,
             'discount_total' => $cart->discount_total,
-            'tax_total' => $cart->tax_total,
-            'shipping_total' => $shippingMethod->calculateCost($shippingWeight),
-            'grand_total' => $cart->subtotal + $cart->tax_total + $shippingMethod->calculateCost($shippingWeight) - $cart->discount_total,
+            'tax_total' => $taxBreakdown['tax_total'],
+            'shipping_total' => $shippingTotal,
+            'grand_total' => $taxBreakdown['grand_total'] + $shippingTotal,
             'currency' => $cart->currency,
             'payment_method' => $request->input('payment_method', 'manual'),
             'payment_status' => 'pending',
@@ -407,11 +425,16 @@ class CartController extends BaseApiController
 
         $subtotal = $items->sum(fn ($item) => $item->total);
 
+        $taxBreakdown = app(TaxCalculator::class)->calculate($subtotal, (float) $cart->discount_total, 'Cambodia');
+
         $cart->update([
             'subtotal' => $subtotal,
-            'grand_total' => $subtotal + $cart->tax_total + $cart->shipping_total - $cart->discount_total,
+            'tax_total' => $taxBreakdown['tax_total'],
+            'grand_total' => $taxBreakdown['grand_total'] + $cart->shipping_total,
             'last_activity_at' => now(),
         ]);
+        $cart->setAttribute('prices_include_tax', $taxBreakdown['prices_include_tax']);
+        $cart->setAttribute('show_tax_at_checkout', $taxBreakdown['show_tax_at_checkout']);
 
         return $cart;
     }

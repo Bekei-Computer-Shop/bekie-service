@@ -13,6 +13,7 @@ use App\Models\OrderItem;
 use App\Models\ShippingMethod;
 use App\Services\AdminNotificationService;
 use App\Services\ProductSerialService;
+use App\Services\TaxCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -27,7 +28,7 @@ class OrderController extends BaseApiController
         return $this->success(OrderResource::collection($query->orderBy('created_at', 'desc')->paginate(15)));
     }
 
-    public function store(StoreOrderRequest $request)
+    public function store(StoreOrderRequest $request, TaxCalculator $taxCalculator)
     {
         $cart = Cart::with('items.product', 'items.variant')->findOrFail($request->cart_id);
 
@@ -59,6 +60,13 @@ class OrderController extends BaseApiController
             ? Coupon::where('code', $cart->coupon_code)->first()
             : null;
 
+        $taxBreakdown = $taxCalculator->calculate(
+            (float) $cart->subtotal,
+            (float) $cart->discount_total,
+            $request->country,
+        );
+        $shippingTotal = $shippingMethod->calculateCost($shippingWeight);
+
         $order = Order::create([
             'user_id' => $cart->user_id,
             'address_id' => $request->address_id,
@@ -67,9 +75,9 @@ class OrderController extends BaseApiController
             'discount_total' => $cart->discount_total,
             'coupon_id' => $coupon?->id,
             'coupon_code' => $cart->coupon_code,
-            'tax_total' => $cart->tax_total,
-            'shipping_total' => $shippingMethod->calculateCost($shippingWeight),
-            'grand_total' => $cart->subtotal + $cart->tax_total + $shippingMethod->calculateCost($shippingWeight) - $cart->discount_total,
+            'tax_total' => $taxBreakdown['tax_total'],
+            'shipping_total' => $shippingTotal,
+            'grand_total' => $taxBreakdown['grand_total'] + $shippingTotal,
             'currency' => $cart->currency,
             'payment_method' => $request->input('payment_method', 'manual'),
             'payment_status' => 'pending',

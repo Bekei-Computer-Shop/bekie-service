@@ -47,15 +47,6 @@ class SettingsController extends BaseAdminController
             'package_weight' => 1.2,
             'free_shipping_threshold' => 99,
         ],
-        'taxes' => [
-            'prices_include_tax' => true,
-            'show_tax_at_checkout' => true,
-            'tax_id' => 'VAT-2024-118',
-            'rates' => [
-                ['region' => 'Cambodia', 'name' => 'Standard VAT', 'rate' => 10, 'applies_to' => 'All taxable goods'],
-                ['region' => 'International', 'name' => 'No tax', 'rate' => 0, 'applies_to' => 'Exports'],
-            ],
-        ],
         'notifications' => [
             'rows' => [
                 ['name' => 'New order', 'email' => true, 'in_app' => true, 'sms' => false],
@@ -101,17 +92,18 @@ class SettingsController extends BaseAdminController
     public function update(Request $request): JsonResponse
     {
         $payload = $request->input('settings');
+        $defaults = $this->defaultSettings();
 
         if (! is_array($payload)) {
             return $this->error('The settings payload is invalid.', 422);
         }
 
         foreach ($payload as $section => $sectionValues) {
-            if (! is_array($sectionValues) || ! array_key_exists($section, self::DEFAULTS)) {
+            if (! is_array($sectionValues) || ! array_key_exists($section, $defaults)) {
                 return $this->error('The settings section is invalid.', 422);
             }
 
-            $unknownKeys = array_diff(array_keys($sectionValues), array_keys(self::DEFAULTS[$section]));
+            $unknownKeys = array_diff(array_keys($sectionValues), array_keys($defaults[$section]));
             if ($unknownKeys !== []) {
                 return $this->error('The settings payload contains unsupported fields.', 422, [
                     'section' => $section,
@@ -139,7 +131,7 @@ class SettingsController extends BaseAdminController
 
     private function readSettings(): array
     {
-        $settings = self::DEFAULTS;
+        $settings = $this->defaultSettings();
 
         $stored = Setting::query()
             ->where('group', 'settings')
@@ -157,5 +149,13 @@ class SettingsController extends BaseAdminController
         }
 
         return $settings;
+    }
+
+    private function defaultSettings(): array
+    {
+        return [
+            ...self::DEFAULTS,
+            'taxes' => config('taxes'),
+        ];
     }
 }

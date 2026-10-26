@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\Client\V1\PromotionController;
 use App\Http\Controllers\Api\Client\V1\ReviewController;
 use App\Http\Controllers\Api\Client\V1\ShippingMethodController;
 use App\Http\Controllers\Api\Client\V1\SlideController;
+use App\Http\Controllers\Api\Client\V1\TaxSettingsController;
 use App\Http\Controllers\Api\Client\V1\UserProfileController;
 use App\Http\Controllers\Api\Client\V1\WarrantyController;
 use App\Http\Controllers\Api\Client\V1\WishlistController;
@@ -71,7 +72,10 @@ Route::prefix('v1')->group(function () {
     Route::get('brands', [BrandController::class, 'index']);
     Route::get('brands/{brand}', [BrandController::class, 'show']);
 
+    Route::get('products/best-selling', [ProductController::class, 'bestSelling']);
+    Route::get('products/on-promotion', [ProductController::class, 'onPromotion']);
     Route::get('products', [ProductController::class, 'index']);
+    Route::get('products/new', [ProductController::class, 'newProducts']);
     Route::get('products/{product}', [ProductController::class, 'show']);
     Route::get('products/{product}/gallery', [ProductController::class, 'gallery']);
     Route::get('products/{product}/related', [ProductController::class, 'related']);
@@ -94,6 +98,7 @@ Route::prefix('v1')->group(function () {
     Route::get('contact-us', [ContentPageController::class, 'show'])->defaults('slug', 'contact-us');
 
     Route::middleware(AuthenticateApiToken::class)->group(function () {
+        Route::get('tax-settings', [TaxSettingsController::class, 'show']);
         Route::get('profile', [UserProfileController::class, 'show']);
         Route::get('my-products/summary', [MyProductController::class, 'summary']);
         Route::get('my-products', [MyProductController::class, 'index']);

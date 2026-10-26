@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Api\Client\V1;
 
 use App\Models\Category;
+use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -45,6 +46,22 @@ class CategoryTest extends TestCase
 
         $response->assertOk()
             ->assertJsonCount(1, 'data');
+    }
+
+    public function test_category_counts_active_products_including_active_children(): void
+    {
+        $parent = Category::factory()->create();
+        $child = Category::factory()->create(['parent_id' => $parent->id]);
+
+        Product::factory()->create(['category_id' => $parent->id]);
+        Product::factory()->create(['category_id' => $child->id]);
+        Product::factory()->inactive()->create(['category_id' => $child->id]);
+
+        $response = $this->getJson('/api/v1/categories');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.products_count', 2)
+            ->assertJsonPath('data.0.children.0.products_count', 1);
     }
 
     public function test_get_category_detail(): void

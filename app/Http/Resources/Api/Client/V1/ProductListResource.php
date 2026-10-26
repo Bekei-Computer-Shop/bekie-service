@@ -18,9 +18,6 @@ class ProductListResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price,
             'sale_price' => $this->sale_price,
-            'stock_quantity' => $this->stock_quantity,
-            'min_stock_alert' => $this->min_stock_alert,
-            'track_inventory' => $this->track_inventory,
             'in_stock' => $this->in_stock,
             'weight' => $this->weight,
             'length' => $this->length,
@@ -36,6 +33,7 @@ class ProductListResource extends JsonResource
             'sales_count' => $this->sales_count,
             'sort_order' => $this->sort_order,
             'average_rating' => $this->average_rating ?? 0,
+            'reviews_count' => $this->reviews_count ?? 0,
         ];
     }
 }

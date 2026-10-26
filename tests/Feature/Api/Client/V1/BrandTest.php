@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Api\Client\V1;
 
 use App\Models\Brand;
+use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -45,6 +46,19 @@ class BrandTest extends TestCase
 
         $response->assertOk()
             ->assertJsonCount(1, 'data');
+    }
+
+    public function test_brand_count_is_computed_from_active_products(): void
+    {
+        $brand = Brand::factory()->create(['products_count' => 99]);
+
+        Product::factory()->create(['brand_id' => $brand->id]);
+        Product::factory()->inactive()->create(['brand_id' => $brand->id]);
+
+        $response = $this->getJson('/api/v1/brands');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.products_count', 1);
     }
 
     public function test_get_brand_detail(): void

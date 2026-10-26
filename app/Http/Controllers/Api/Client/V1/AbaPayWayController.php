@@ -8,6 +8,7 @@ use App\Enums\PayWayStatus;
 use App\Http\Requests\Api\Client\V1\AbaPayWayPurchaseRequest;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\AbaPayWayException;
 use App\Services\AbaPayWayService;
 use App\Services\PaymentService;
 use Illuminate\Http\JsonResponse;
@@ -85,6 +86,7 @@ class AbaPayWayController extends BaseApiController
      *
      * For **web clients**: Omit `platform` or send `platform=web` to use popup checkout (the PayWay
      * iframe opens in a modal). Do not send `return_deeplink`.
+     * KHQR purchases use popup view so PayWay returns the QR JSON response.
      *
      * For **mobile clients**: Send `platform=mobile` and a base64-encoded `return_deeplink` payload.
      * The request defaults to `view_type=hosted_view` for mobile. The deeplink enables native app
@@ -98,7 +100,7 @@ class AbaPayWayController extends BaseApiController
      * @bodyParam payment_option string optional PayWay payment channel: `abapay_khqr` (QR code) or `cards` (credit/debit card). Example: abapay_khqr
      * @bodyParam platform string optional Client platform: `web` or `mobile`. Defaults to `web`. Example: mobile
      * @bodyParam view_type string optional Checkout presentation: `popup` (modal) or `hosted_view` (redirect). Defaults to `popup` for web, `hosted_view` for mobile. Example: hosted_view
-     * @bodyParam return_url string required Absolute HTTPS or HTTP URL where PayWay POSTs the payment result. Must be accessible from PayWay's servers. Example: https://shop.example.com/payment/return
+     * @bodyParam return_url string optional Ignored. PayWay's callback URL is generated from the server APP_URL.
      * @bodyParam cancel_url string optional Absolute URL to redirect to if the customer cancels checkout. Example: https://shop.example.com/payment/cancel
      * @bodyParam continue_success_url string optional Absolute URL to redirect to after successful payment. Example: https://shop.example.com/orders/1042/paid
      * @bodyParam return_deeplink string optional Base64-encoded JSON payload for native mobile app return handling. Required for mobile native apps; ignored for web. Example: eyJpb3Nfc2NoZW1lIjoiYmVraWU6Ly9wYXltZW50LXJldHVybiIsImFuZHJvaWRfc2NoZW1lIjoiYmVraWU6Ly9wYXltZW50LXJldHVybiJ9
@@ -143,13 +145,6 @@ class AbaPayWayController extends BaseApiController
      * }
      * @response 422 {
      *   "status": "error",
-     *   "message": "The return_url field is required.",
-     *   "errors": {
-     *     "return_url": ["The return_url field is required."]
-     *   }
-     * }
-     * @response 422 {
-     *   "status": "error",
      *   "message": "The selected payment_option is invalid.",
      *   "errors": {
      *     "payment_option": ["The selected payment_option is invalid."]
@@ -157,8 +152,14 @@ class AbaPayWayController extends BaseApiController
      * }
      * @response 502 {
      *   "status": "error",
-     *   "message": "Unable to create the ABA PayWay checkout.",
-     *   "errors": {}
+     *   "message": "Return URL is not whitelisted.",
+     *   "errors": {
+     *     "aba": {
+     *       "status_code": "81",
+     *       "http_status": 200,
+     *       "message": "Return URL is not whitelisted."
+     *     }
+     *   }
      * }
      */
     public function purchase(AbaPayWayPurchaseRequest $request): JsonResponse
@@ -179,20 +180,6 @@ class AbaPayWayController extends BaseApiController
         }
         if (! in_array($order->currency, ['USD', 'KHR'], true)) {
             return $this->error('Order currency is not supported by ABA PayWay.', 422);
-        }
-
-        $payment = $this->paymentService->findPendingByOrderId($order->id);
-        if ($payment && $payment->provider_payment_id) {
-            Log::info('Idempotent purchase request', [
-                'order_id' => $order->id,
-                'existing_transaction_id' => $payment->provider_payment_id,
-            ]);
-
-            return $this->success([
-                'transaction_id' => $payment->provider_payment_id,
-                'view_type' => $payment->metadata['view_type'] ?? 'popup',
-                'gateway' => $payment->gateway_response,
-            ], 'ABA PayWay checkout created.');
         }
 
         try {
@@ -216,8 +203,9 @@ class AbaPayWayController extends BaseApiController
                     'email' => $customer['email'] ?? $request->user()->email,
                     'phone' => $customer['phone'] ?? $request->user()->phone ?? '',
                     'payment_option' => $validated['payment_option'] ?? '',
-                    'view_type' => $validated['view_type'],
-                    'return_url' => $validated['return_url'],
+                    'view_type' => ($validated['payment_option'] ?? '') === 'abapay_khqr'
+                        ? 'popup'
+                        : $validated['view_type'],
                     'cancel_url' => $validated['cancel_url'] ?? '',
                     'continue_success_url' => $validated['continue_success_url'] ?? '',
                     'return_deeplink' => $validated['return_deeplink'] ?? '',
@@ -235,13 +223,22 @@ class AbaPayWayController extends BaseApiController
                 return $this->success($result, 'ABA PayWay checkout created.');
             });
         } catch (RuntimeException $exception) {
+            if ($exception instanceof AbaPayWayException) {
+                $errors = $exception->errors;
+                $message = $exception->getMessage();
+            } else {
+                $errors = ['payment' => ['message' => 'The checkout could not be created.']];
+                $message = 'Unable to create the ABA PayWay checkout.';
+            }
+
             Log::error('ABA PayWay purchase failed', [
                 'order_id' => $order->id,
                 'user_id' => $request->user()->id,
-                'message' => $exception->getMessage(),
+                'aba_status_code' => $errors['aba']['status_code'] ?? null,
+                'message' => $message,
             ]);
 
-            return $this->error('Unable to create the ABA PayWay checkout.', 502);
+            return $this->error($message, 502, $errors);
         }
     }
 
