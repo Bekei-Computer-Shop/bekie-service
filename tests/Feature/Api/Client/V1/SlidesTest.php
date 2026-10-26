@@ -90,3 +90,30 @@ test('a slide composes the cover image and meta frames into one ordered images a
         ->assertJsonPath('data.0.transition', 'fade')
         ->assertJsonPath('data.0.button_url', '/deals');
 });
+test('a slide exposes how each image comes in, in the same order as its images', function (): void {
+    clientSlide([
+        'image_desktop' => 'https://cdn.example/cover.jpg',
+        'meta' => [
+            'frames' => ['https://cdn.example/frame-2.jpg', 'https://cdn.example/frame-3.jpg'],
+            'durationMs' => 3000,
+            'transition' => 'fade',
+            'transitions' => ['fade', 'slide', 'blinds-right'],
+        ],
+    ]);
+
+    $this->getJson('/api/v1/slides')
+        ->assertOk()
+        ->assertJsonPath('data.0.transitions', ['fade', 'slide', 'blinds-right'])
+        ->assertJsonPath('data.0.transition', 'fade');
+});
+
+test('a slide saved before images had their own transition has an empty transitions list', function (): void {
+    clientSlide([
+        'meta' => ['frames' => [], 'durationMs' => 3000, 'transition' => 'cut'],
+    ]);
+
+    $this->getJson('/api/v1/slides')
+        ->assertOk()
+        ->assertJsonPath('data.0.transitions', [])
+        ->assertJsonPath('data.0.transition', 'cut');
+});
