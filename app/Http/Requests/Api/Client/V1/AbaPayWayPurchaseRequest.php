@@ -20,7 +20,6 @@ class AbaPayWayPurchaseRequest extends FormRequest
             'payment_option' => ['nullable', 'in:abapay_khqr,cards'],
             'platform' => ['sometimes', 'in:web,mobile'],
             'view_type' => ['sometimes', 'in:hosted_view,popup'],
-            'return_url' => ['required', 'url', 'max:2048'],
             'cancel_url' => ['nullable', 'url', 'max:2048'],
             'continue_success_url' => ['nullable', 'url', 'max:2048'],
             'return_deeplink' => ['nullable', 'string', 'max:4096'],

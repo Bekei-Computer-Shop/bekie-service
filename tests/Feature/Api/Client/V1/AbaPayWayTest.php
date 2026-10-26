@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Tests\Feature\Api\Client\V1;
 
 use App\Enums\PayWayStatus;
+use App\Http\Middleware\AuthenticateApiToken;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AbaPayWayTest extends TestCase
@@ -24,8 +28,18 @@ class AbaPayWayTest extends TestCase
     {
         parent::setUp();
 
+        $this->withoutMiddleware(AuthenticateApiToken::class);
+        config([
+            'services.payway.merchant_id' => 'test-merchant',
+            'services.payway.api_key' => 'test-api-key',
+            'services.payway.purchase_url' => 'https://payway.example.test/purchase',
+            'services.payway.return_url' => 'https://shop.example.test/api/v1/payments/aba/callback',
+        ]);
+
         $this->customer = User::factory()->create();
-        $this->order = Order::factory()->for($this->customer)->create([
+        $this->order = Order::create([
+            'user_id' => $this->customer->id,
+            'order_number' => Str::upper(Str::random(12)),
             'currency' => 'USD',
             'payment_status' => 'pending',
             'grand_total' => 100.00,
@@ -49,7 +63,9 @@ class AbaPayWayTest extends TestCase
                 'payment_option' => 'abapay_khqr',
             ]);
 
-        $response->assertSuccessful();
+        $response->assertSuccessful()
+            ->assertJsonPath('data.view_type', 'popup')
+            ->assertJsonPath('data.gateway.checkout_qr_url', 'https://example.com/qr');
         $transactionId = $response->json('data.transaction_id');
 
         // Verify Payment record created
@@ -61,7 +77,7 @@ class AbaPayWayTest extends TestCase
         $this->assertEquals($this->customer->id, $payment->user_id);
     }
 
-    public function test_purchase_is_idempotent(): void
+    public function test_retrying_purchase_creates_a_new_transaction_id(): void
     {
         Http::fake([
             config('services.payway.purchase_url') => Http::response([
@@ -70,31 +86,63 @@ class AbaPayWayTest extends TestCase
             ]),
         ]);
 
-        // First purchase
         $response1 = $this->actingAs($this->customer)
             ->postJson('/api/v1/payments/aba/purchase', [
                 'order_id' => $this->order->id,
-                'return_url' => 'https://example.com/return',
                 'payment_option' => 'abapay_khqr',
             ]);
 
         $transactionId1 = $response1->json('data.transaction_id');
 
-        // Duplicate purchase (should return cached)
         $response2 = $this->actingAs($this->customer)
             ->postJson('/api/v1/payments/aba/purchase', [
                 'order_id' => $this->order->id,
-                'return_url' => 'https://example.com/return',
                 'payment_option' => 'abapay_khqr',
             ]);
 
         $transactionId2 = $response2->json('data.transaction_id');
 
-        // Should return the same transaction ID
-        $this->assertEquals($transactionId1, $transactionId2);
+        $this->assertNotSame($transactionId1, $transactionId2);
+        $this->assertLessThanOrEqual(20, strlen($transactionId1));
+        $this->assertLessThanOrEqual(20, strlen($transactionId2));
 
-        // Should only have one payment record
-        $this->assertCount(1, Payment::where('order_id', $this->order->id)->get());
+        $this->assertCount(2, Payment::where('order_id', $this->order->id)->get());
+        $transactionIds = Http::recorded()->map(fn (array $record): ?string => $this->multipartField($record[0], 'tran_id'));
+        $this->assertCount(2, $transactionIds->unique());
+    }
+
+    public function test_purchase_returns_and_logs_aba_failure_details(): void
+    {
+        Http::fake([
+            config('services.payway.purchase_url') => Http::response([
+                'status' => [
+                    'code' => '81',
+                    'message' => 'Return URL test-api-key is not whitelisted for test-merchant.',
+                ],
+            ]),
+        ]);
+        Log::spy();
+
+        $response = $this->actingAs($this->customer)
+            ->postJson('/api/v1/payments/aba/purchase', [
+                'order_id' => $this->order->id,
+                'payment_option' => 'abapay_khqr',
+                'return_url' => 'http://127.0.0.1:8000/attacker-controlled-callback',
+            ]);
+
+        $response->assertStatus(502)
+            ->assertJsonPath('errors.aba.status_code', '81')
+            ->assertJsonPath('errors.aba.message', 'Return URL [REDACTED] is not whitelisted for [REDACTED].');
+
+        Log::shouldHaveReceived('error')->withArgs(function (string $message, array $context): bool {
+            return $message === 'ABA PayWay purchase rejected'
+                && $context['aba_status_code'] === '81'
+                && str_contains($context['response_body'], '[REDACTED]')
+                && ! str_contains($context['response_body'], 'test-api-key')
+                && ! str_contains($context['response_body'], 'test-merchant');
+        })->once();
+
+        Http::assertSent(fn ($request): bool => $this->multipartField($request, 'return_url') === base64_encode(config('services.payway.return_url')));
     }
 
     public function test_callback_marks_payment_as_paid(): void
@@ -278,5 +326,12 @@ class AbaPayWayTest extends TestCase
         }
 
         return base64_encode(hash_hmac('sha512', $input, config('services.payway.api_key'), true));
+    }
+
+    private function multipartField(Request $request, string $name): ?string
+    {
+        preg_match('/name="'.preg_quote($name, '/').'"\r\n(?:Content-Length: \d+\r\n)?\r\n([^\r\n]*)/', $request->body(), $matches);
+
+        return $matches[1] ?? null;
     }
 }

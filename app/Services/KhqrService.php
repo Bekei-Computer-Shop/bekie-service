@@ -32,7 +32,7 @@ class KhqrService
         $merchantId = config('services.khqr.merchant_id') ?? self::MERCHANT_ID;
         $merchantName = config('services.khqr.merchant_name') ?? self::MERCHANT_NAME;
 
-        $amount = $data['amount'] ?? 0;
+        $amount = (float) ($data['amount'] ?? 0);
         $currency = $data['currency'] ?? 'USD';
         $orderId = $data['order_id'];
         $userEmail = $data['user_email'] ?? '';

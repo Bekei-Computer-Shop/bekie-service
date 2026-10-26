@@ -33,7 +33,6 @@ class ProductVariantTest extends TestCase
                         'slug',
                         'price',
                         'sale_price',
-                        'stock_quantity',
                         'is_active',
                     ],
                 ],

@@ -16,6 +16,8 @@ class CartResource extends JsonResource
             'subtotal' => $this->subtotal,
             'discount_total' => $this->discount_total,
             'tax_total' => $this->tax_total,
+            'prices_include_tax' => (bool) $this->prices_include_tax,
+            'show_tax_at_checkout' => (bool) $this->show_tax_at_checkout,
             'shipping_total' => $this->shipping_total,
             'grand_total' => $this->grand_total,
             'coupon_code' => $this->coupon_code,

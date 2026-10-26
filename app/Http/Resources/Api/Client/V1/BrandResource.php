@@ -20,7 +20,7 @@ class BrandResource extends JsonResource
             'is_active' => $this->is_active,
             'is_featured' => $this->is_featured,
             'sort_order' => $this->sort_order,
-            'products_count' => $this->products_count,
+            'products_count' => $this->active_products_count ?? $this->products_count,
         ];
     }
 }

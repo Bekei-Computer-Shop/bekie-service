@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Client\V1;
 
+use App\Http\Requests\Api\Client\V1\ListNewProductsRequest;
 use App\Http\Requests\Api\Client\V1\ListProductsRequest;
 use App\Http\Resources\Api\Client\V1\ContentPageResource;
 use App\Http\Resources\Api\Client\V1\ProductImageResource;
@@ -19,6 +20,89 @@ use Illuminate\Support\Facades\DB;
 
 class ProductController extends BaseApiController
 {
+    public function bestSelling(Request $request): JsonResponse
+    {
+        $limit = min(max((int) $request->query('limit', 8), 1), 24);
+        $sales = DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->select('order_items.product_id')
+            ->selectRaw('SUM(CASE WHEN order_items.quantity > order_items.quantity_refunded THEN order_items.quantity - order_items.quantity_refunded ELSE 0 END) as units_sold')
+            ->where('orders.payment_status', 'paid')
+            ->whereNotIn('orders.status', ['cancelled'])
+            ->whereNull('orders.deleted_at')
+            ->whereNull('order_items.deleted_at')
+            ->groupBy('order_items.product_id');
+
+        $products = Product::query()
+            ->joinSub($sales, 'sales', 'sales.product_id', '=', 'products.id')
+            ->where('products.is_active', true)
+            ->whereHas('approvedReviews')
+            ->select('products.*', 'sales.units_sold as sales_count')
+            ->addSelect([
+                'average_rating' => DB::table('reviews')
+                    ->select(DB::raw('COALESCE(ROUND(AVG(rating), 1), 0)'))
+                    ->whereColumn('product_id', 'products.id')
+                    ->where('status', 'approved')
+                    ->whereNull('deleted_at'),
+            ])
+            ->withCount(['approvedReviews as reviews_count'])
+            ->orderByDesc('sales.units_sold')
+            ->orderBy('products.id')
+            ->limit($limit)
+            ->get();
+
+        return $this->success(ProductListResource::collection($products));
+    }
+
+    public function onPromotion(Request $request): JsonResponse
+    {
+        $limit = min(max((int) $request->query('limit', 8), 1), 24);
+        $products = Product::query()
+            ->where('is_active', true)
+            ->whereNotNull('sale_price')
+            ->whereColumn('sale_price', '<', 'price')
+            ->addSelect([
+                'average_rating' => DB::table('reviews')
+                    ->select(DB::raw('COALESCE(ROUND(AVG(rating), 1), 0)'))
+                    ->whereColumn('product_id', 'products.id')
+                    ->where('status', 'approved')
+                    ->whereNull('deleted_at'),
+            ])
+            ->withCount(['approvedReviews as reviews_count'])
+            ->orderByRaw('(price - sale_price) DESC')
+            ->orderBy('id')
+            ->limit($limit)
+            ->get();
+
+        return $this->success(ProductListResource::collection($products));
+    }
+
+    public function newProducts(ListNewProductsRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+        $now = now();
+        $products = Product::query()
+            ->where('is_active', true)
+            ->where('in_stock', true)
+            ->where('stock_quantity', '>', 0)
+            ->whereBetween('created_at', [$now->copy()->subDays(30), $now])
+            ->addSelect([
+                'average_rating' => DB::table('reviews')
+                    ->select(DB::raw('COALESCE(ROUND(AVG(rating), 1), 0)'))
+                    ->whereColumn('product_id', 'products.id')
+                    ->where('status', 'approved')
+                    ->whereNull('deleted_at'),
+            ])
+            ->orderByDesc('created_at')
+            ->orderBy('id')
+            ->paginate(
+                perPage: (int) ($validated['limit'] ?? 20),
+                page: (int) ($validated['page'] ?? 1)
+            );
+
+        return $this->success(ProductListResource::collection($products));
+    }
+
     public function index(ListProductsRequest $request)
     {
         $query = Product::where('is_active', true)
