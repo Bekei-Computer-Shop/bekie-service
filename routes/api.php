@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Client\V1\EmailVerificationController;
 use App\Http\Controllers\Api\Client\V1\KhqrController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
 use App\Http\Controllers\Api\Client\V1\MyProductController;
+use App\Http\Controllers\Api\Client\V1\NewsController;
 use App\Http\Controllers\Api\Client\V1\OrderController;
 use App\Http\Controllers\Api\Client\V1\PasswordResetController;
 use App\Http\Controllers\Api\Client\V1\ProductController;
@@ -93,6 +94,7 @@ Route::prefix('v1')->group(function () {
     // Storefront content: homepage carousel slides and live promotions.
     Route::get('slides', [SlideController::class, 'index']);
     Route::get('promotions', [PromotionController::class, 'index']);
+    Route::get('news', [NewsController::class, 'index']);
     Route::get('about-us', [ContentPageController::class, 'show'])->defaults('slug', 'about-us');
     Route::get('terms-and-conditions', [ContentPageController::class, 'show'])->defaults('slug', 'terms-and-conditions');
     Route::get('contact-us', [ContentPageController::class, 'show'])->defaults('slug', 'contact-us');

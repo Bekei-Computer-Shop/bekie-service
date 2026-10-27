@@ -29,28 +29,29 @@ class PromotionSeeder extends Seeder
      */
     public function run(): void
     {
-        Coupon::withTrashed()->forceDelete();
-
         foreach ($this->promotions() as $promotion) {
-            Coupon::updateOrCreate(
-                ['code' => $promotion['code']],
-                [
-                    'name' => $promotion['name'],
-                    'description' => $promotion['description'],
-                    'banner_image' => $promotion['banner_image'],
-                    'kind' => $promotion['kind'],
-                    'type' => $promotion['type'],
-                    'value' => $promotion['value'],
-                    'min_order_amount' => $promotion['min_order_amount'],
-                    'max_discount_amount' => $promotion['max_discount_amount'] ?? null,
-                    'starts_at' => $promotion['starts_at'],
-                    'expires_at' => $promotion['expires_at'],
-                    'usage_limit' => $promotion['usage_limit'],
-                    'user_limit' => $promotion['user_limit'],
-                    'used_count' => $promotion['used_count'],
-                    'is_active' => $promotion['is_active'],
-                ]
-            );
+            $coupon = Coupon::withTrashed()->firstOrNew(['code' => $promotion['code']]);
+            $coupon->fill([
+                'name' => $promotion['name'],
+                'description' => $promotion['description'],
+                'banner_image' => $promotion['banner_image'],
+                'kind' => $promotion['kind'],
+                'type' => $promotion['type'],
+                'value' => $promotion['value'],
+                'min_order_amount' => $promotion['min_order_amount'],
+                'max_discount_amount' => $promotion['max_discount_amount'] ?? null,
+                'starts_at' => $promotion['starts_at'],
+                'expires_at' => $promotion['expires_at'],
+                'usage_limit' => $promotion['usage_limit'],
+                'user_limit' => $promotion['user_limit'],
+                'used_count' => $promotion['used_count'],
+                'is_active' => $promotion['is_active'],
+            ]);
+            $coupon->save();
+
+            if ($coupon->trashed()) {
+                $coupon->restore();
+            }
         }
     }
 
