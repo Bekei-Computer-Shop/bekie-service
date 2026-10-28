@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Client\V1;
 
-use App\Enums\PayWayStatus;
 use App\Http\Requests\Api\Client\V1\AbaPayWayPurchaseRequest;
+use App\Jobs\ProcessAbaPayWayCallback;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Services\AbaPayWayException;
 use App\Services\AbaPayWayService;
 use App\Services\PaymentService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -51,7 +53,7 @@ class AbaPayWayController extends BaseApiController
      *       {
      *         "key": "aba_payway",
      *         "enabled": true,
-     *         "options": ["abapay_khqr", "cards"]
+     *         "options": ["abapay_khqr_deeplink", "cards"]
      *       },
      *       {
      *         "key": "cod",
@@ -97,7 +99,7 @@ class AbaPayWayController extends BaseApiController
      * @permission client.orders.manage
      *
      * @bodyParam order_id integer required The authenticated customer's order ID. Example: 1042
-     * @bodyParam payment_option string optional PayWay payment channel: `abapay_khqr` (QR code) or `cards` (credit/debit card). Example: abapay_khqr
+     * @bodyParam payment_option string optional PayWay payment channel: `abapay_khqr_deeplink` (KHQR payload and ABA Mobile deeplink) or `cards` (credit/debit card). Example: abapay_khqr_deeplink
      * @bodyParam platform string optional Client platform: `web` or `mobile`. Defaults to `web`. Example: mobile
      * @bodyParam view_type string optional Checkout presentation: `popup` (modal) or `hosted_view` (redirect). Defaults to `popup` for web, `hosted_view` for mobile. Example: hosted_view
      * @bodyParam return_url string optional Ignored. PayWay's callback URL is generated from the server APP_URL.
@@ -111,14 +113,17 @@ class AbaPayWayController extends BaseApiController
      *   "data": {
      *     "transaction_id": "BK1042A1B2C3D4E5",
      *     "view_type": "hosted_view",
-     *     "gateway": {
-     *       "status": {
-     *         "code": "00",
-     *         "message": "Success!"
+     *       "payment_payload": {
+     *         "type": "qr_string",
+     *         "value": "SANDBOX_QR_PAYLOAD"
      *       },
-     *       "checkout_qr_url": "https://checkout-sandbox.payway.com.kh/qr/...",
-     *       "html": "<form>...</form>"
-     *     }
+     *       "qr_string": "SANDBOX_QR_PAYLOAD",
+     *       "abapay_deeplink": "abamobilebank://ababank.com?type=payway&qrcode=...",
+     *       "checkout_url": "https://checkout-sandbox.payway.com.kh/...",
+     *       "gateway": {
+     *         "status": { "code": "00" },
+     *         "qr_string": "SANDBOX_QR_PAYLOAD"
+     *       }
      *   }
      * }
      * @response 404 {
@@ -182,63 +187,137 @@ class AbaPayWayController extends BaseApiController
             return $this->error('Order currency is not supported by ABA PayWay.', 422);
         }
 
+        $lock = Cache::lock('aba-payway:purchase:order:'.$order->id, 75);
+        if (! $lock->get()) {
+            return $this->error('ABA PayWay setup is already in progress for this order.', 409);
+        }
+
         try {
-            return DB::transaction(function () use ($order, $request, $validated) {
-                $customer = $order->customer_snapshot ?? [];
-                $name = preg_split('/\s+/', trim((string) ($customer['name'] ?? 'Customer')), 2);
-                $transactionId = Str::upper(Str::random(20));
+            [$payment, $isNewPayment, $cachedResponse] = DB::transaction(function () use ($order, $request): array {
+                $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+                if ($lockedOrder->payment_status === 'paid') {
+                    throw new RuntimeException('Order is already paid.');
+                }
 
-                $result = $this->payWay->purchase([
-                    'tran_id' => $transactionId,
-                    'amount' => $order->grand_total,
-                    'shipping' => $order->shipping_total,
-                    'currency' => $order->currency,
-                    'items' => $order->items->map(fn ($item) => [
-                        'name' => $item->product_name,
-                        'quantity' => $item->quantity,
-                        'price' => (float) $item->total,
-                    ])->values()->all(),
-                    'firstname' => $name[0] ?? 'Customer',
-                    'lastname' => $name[1] ?? '',
-                    'email' => $customer['email'] ?? $request->user()->email,
-                    'phone' => $customer['phone'] ?? $request->user()->phone ?? '',
-                    'payment_option' => $validated['payment_option'] ?? '',
-                    'view_type' => ($validated['payment_option'] ?? '') === 'abapay_khqr'
-                        ? 'popup'
-                        : $validated['view_type'],
-                    'cancel_url' => $validated['cancel_url'] ?? '',
-                    'continue_success_url' => $validated['continue_success_url'] ?? '',
-                    'return_deeplink' => $validated['return_deeplink'] ?? '',
-                    'return_params' => json_encode(['order_id' => $order->id], JSON_THROW_ON_ERROR),
-                ]);
+                $payment = Payment::query()
+                    ->where('provider', 'aba_payway')
+                    ->where('order_id', $lockedOrder->id)
+                    ->where('status', 'pending')
+                    ->lockForUpdate()
+                    ->latest()
+                    ->first();
 
-                $order->update([
+                if ($payment && ((float) $payment->amount !== (float) $lockedOrder->grand_total
+                    || $payment->currency !== $lockedOrder->currency)) {
+                    throw new RuntimeException('A pending ABA PayWay payment does not match the order total.');
+                }
+
+                if (! $payment) {
+                    $payment = $this->paymentService->createPendingAbaPayWay(
+                        $lockedOrder,
+                        Str::upper(Str::random(20)),
+                        $request,
+                    );
+                    $isNewPayment = true;
+                } else {
+                    $isNewPayment = false;
+                }
+
+                $lockedOrder->update([
                     'payment_method' => 'aba_payway',
-                    'transaction_id' => $result['transaction_id'],
+                    'transaction_id' => $payment->provider_payment_id,
                     'payment_status' => 'pending',
                 ]);
 
-                $this->paymentService->createFromAbaPayWay($order, $result, $request);
+                $cachedCheckout = data_get($payment->metadata, 'checkout');
+                $cachedResponse = is_array($cachedCheckout)
+                    && data_get($cachedCheckout, 'payment_payload.type') === 'qr_string'
+                    ? $cachedCheckout
+                    : null;
 
-                return $this->success($result, 'ABA PayWay checkout created.');
+                return [$payment, $isNewPayment, $cachedResponse];
             });
+
+            if (is_array($cachedResponse)) {
+                return $this->success($cachedResponse, 'ABA PayWay checkout already created.');
+            }
+
+            if (! $isNewPayment) {
+                $providerStatus = $this->payWay->check((string) $payment->provider_payment_id, allowNotFound: true);
+                if ((string) data_get($providerStatus, 'status.code', '') !== '6') {
+                    return $this->error('An ABA PayWay transaction already exists for this order; it will not be duplicated.', 409);
+                }
+            }
+
+            $customer = $order->customer_snapshot ?? [];
+            $name = preg_split('/\s+/', trim((string) ($customer['name'] ?? 'Customer')), 2);
+            $result = $this->payWay->purchase([
+                'tran_id' => $payment->provider_payment_id,
+                'amount' => $order->grand_total,
+                'shipping' => $order->shipping_total,
+                'currency' => $order->currency,
+                'items' => $order->items->map(fn ($item) => [
+                    'name' => $item->product_name,
+                    'quantity' => $item->quantity,
+                    'price' => (float) $item->total,
+                ])->values()->all(),
+                'firstname' => $name[0] ?? 'Customer',
+                'lastname' => $name[1] ?? '',
+                'email' => $customer['email'] ?? $request->user()->email,
+                'phone' => $customer['phone'] ?? $request->user()->phone ?? '',
+                'payment_option' => $validated['payment_option'] ?? '',
+                'view_type' => in_array(($validated['payment_option'] ?? ''), ['abapay_khqr', 'abapay_khqr_deeplink'], true)
+                    ? 'popup'
+                    : $validated['view_type'],
+                'cancel_url' => $validated['cancel_url'] ?? '',
+                'continue_success_url' => $validated['continue_success_url'] ?? '',
+                'return_deeplink' => $validated['return_deeplink'] ?? '',
+                'return_params' => json_encode(['order_id' => $order->id], JSON_THROW_ON_ERROR),
+            ]);
+
+            $payment->refresh();
+            $payment->update([
+                'metadata' => array_merge($payment->metadata ?? [], [
+                    'checkout' => $result,
+                    'purchase_response_received_at' => now()->toIso8601String(),
+                ]),
+            ]);
+
+            return $this->success($result, 'ABA PayWay checkout created.');
+        } catch (ConnectionException $exception) {
+            Log::error('ABA PayWay purchase connection failed', [
+                'tran_id' => $order->transaction_id,
+                'http_status' => null,
+                'status_code' => null,
+                'error_code' => class_basename($exception),
+            ]);
+
+            return $this->error('ABA PayWay is temporarily unavailable. Check the payment status before retrying.', 502);
         } catch (RuntimeException $exception) {
             if ($exception instanceof AbaPayWayException) {
-                $errors = $exception->errors;
-                $message = $exception->getMessage();
+                $errors = ['aba' => [
+                    'status_code' => $exception->errors['aba']['status_code'] ?? null,
+                    'http_status' => $exception->errors['aba']['http_status'] ?? null,
+                    'reason_code' => $exception->errors['aba']['reason_code'] ?? null,
+                ]];
+                $message = 'Unable to set up ABA PayWay checkout.';
             } else {
                 $errors = ['payment' => ['message' => 'The checkout could not be created.']];
                 $message = 'Unable to create the ABA PayWay checkout.';
             }
 
             Log::error('ABA PayWay purchase failed', [
-                'order_id' => $order->id,
-                'user_id' => $request->user()->id,
+                'tran_id' => $order->transaction_id,
+                'status' => 'failed',
+                'amount' => $order->grand_total,
+                'currency' => $order->currency,
+                'timestamp' => now()->toIso8601String(),
                 'aba_status_code' => $errors['aba']['status_code'] ?? null,
-                'message' => $message,
             ]);
 
             return $this->error($message, 502, $errors);
+        } finally {
+            $lock->release();
         }
     }
 
@@ -301,15 +380,37 @@ class AbaPayWayController extends BaseApiController
         }
 
         try {
-            return $this->success($this->payWay->check($transactionId), 'Transaction status retrieved.');
-        } catch (RuntimeException $exception) {
+            $providerResponse = $this->payWay->check($transactionId);
+            $this->paymentService->reconcileAbaPayWay($payment, $this->payWay->transactionDetails($providerResponse));
+
+            return $this->success($providerResponse, 'Transaction status retrieved.');
+        } catch (ConnectionException $exception) {
+            $reasonCode = 'check_connection_failure';
             Log::error('ABA PayWay status check failed', [
-                'transaction_id' => $transactionId,
-                'user_id' => $request->user()->id,
-                'message' => $exception->getMessage(),
+                'tran_id' => $transactionId,
+                'status' => $payment->status,
+                'reason_code' => $reasonCode,
+                'error_code' => class_basename($exception),
             ]);
 
-            return $this->error('Unable to check the ABA PayWay transaction.', 502);
+            return $this->error('Unable to check the ABA PayWay transaction.', 502, ['reason_code' => $reasonCode]);
+        } catch (RuntimeException $exception) {
+            $reasonCode = $exception instanceof AbaPayWayException
+                ? (string) data_get($exception->errors, 'aba.reason_code', 'check_failed')
+                : 'check_reconciliation_failed';
+
+            Log::error('ABA PayWay status check failed', [
+                'tran_id' => $transactionId,
+                'status' => $payment->status,
+                'timestamp' => now()->toIso8601String(),
+                'reason_code' => $reasonCode,
+                'status_code' => $exception instanceof AbaPayWayException
+                    ? data_get($exception->errors, 'aba.status_code')
+                    : null,
+                'error_code' => class_basename($exception),
+            ]);
+
+            return $this->error('Unable to check the ABA PayWay transaction.', 502, ['reason_code' => $reasonCode]);
         }
     }
 
@@ -354,102 +455,31 @@ class AbaPayWayController extends BaseApiController
     {
         $payload = $request->json()->all();
         $signature = $request->header('X-PayWay-Hmac-Sha512');
-        $transactionId = (string) ($payload['tran_id'] ?? 'unknown');
+        $transactionId = (string) ($payload['tran_id'] ?? '');
 
-        if (! $this->payWay->verifyCallback($payload, $signature)) {
-            Log::warning('PayWay callback signature verification failed', [
-                'transaction_id' => $transactionId,
-                'ip_address' => $request->ip(),
-            ]);
-
+        if (! $this->payWay->verifyCallback($payload, $signature)
+            || ! hash_equals((string) config('aba_payway.merchant_id'), (string) ($payload['merchant_id'] ?? ''))) {
             return $this->error('Invalid PayWay callback signature.', 401);
         }
 
-        $returnParams = $this->parseReturnParams($payload['return_params'] ?? '{}');
-        if (! isset($returnParams['order_id'])) {
-            Log::warning('PayWay callback missing order_id in return_params', [
-                'transaction_id' => $transactionId,
-            ]);
-
+        $payment = Payment::query()
+            ->where('provider', 'aba_payway')
+            ->where('provider_payment_id', $transactionId)
+            ->first();
+        if (! $payment) {
             return $this->error('Order not found.', 404);
         }
 
-        $order = Order::find($returnParams['order_id']);
-        if (! $order) {
-            Log::warning('PayWay callback for non-existent order', [
-                'order_id' => $returnParams['order_id'],
-                'transaction_id' => $transactionId,
-            ]);
-
-            return $this->error('Order not found.', 404);
+        $returnParams = $this->parseReturnParams((string) ($payload['return_params'] ?? '{}'));
+        if (isset($returnParams['order_id']) && (int) $returnParams['order_id'] !== (int) $payment->order_id) {
+            return $this->error('PayWay callback does not match the payment.', 422);
         }
 
-        try {
-            return DB::transaction(function () use ($order, $payload, $transactionId) {
-                $payment = Payment::where('provider_payment_id', $transactionId)
-                    ->where('order_id', $order->id)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (! $payment) {
-                    Log::warning('PayWay callback for transaction without payment record', [
-                        'order_id' => $order->id,
-                        'transaction_id' => $transactionId,
-                    ]);
-
-                    return $this->error('Order not found.', 404);
-                }
-
-                if ($payment->status !== 'pending') {
-                    Log::info('PayWay callback for already-processed transaction (duplicate)', [
-                        'order_id' => $order->id,
-                        'transaction_id' => $transactionId,
-                        'current_status' => $payment->status,
-                    ]);
-
-                    return $this->success(['order_id' => $order->id], 'PayWay callback accepted.');
-                }
-
-                $status = PayWayStatus::tryFrom((string) ($payload['status'] ?? ''));
-                if (! $status) {
-                    Log::warning('PayWay callback with unknown status', [
-                        'order_id' => $order->id,
-                        'transaction_id' => $transactionId,
-                        'status' => $payload['status'] ?? 'null',
-                    ]);
-
-                    return $this->success(['order_id' => $order->id], 'PayWay callback accepted.');
-                }
-
-                if ($status->isPaid()) {
-                    $this->paymentService->markAsPaid($payment, $payload);
-                    $order->update(['payment_status' => 'paid', 'paid_at' => now()]);
-                    app(ProductSerialService::class)->finalizeOrder((int) $order->id);
-                    Log::info('PayWay payment approved', [
-                        'order_id' => $order->id,
-                        'transaction_id' => $transactionId,
-                    ]);
-                } elseif ($status->isFailed()) {
-                    $this->paymentService->markAsFailed($payment, $payload);
-                    $order->update(['payment_status' => 'failed']);
-                    app(ProductSerialService::class)->releaseOrder((int) $order->id, null, 'Payment failed.');
-                    Log::info('PayWay payment failed', [
-                        'order_id' => $order->id,
-                        'transaction_id' => $transactionId,
-                        'payway_status' => $status->value,
-                    ]);
-                }
-
-                return $this->success(['order_id' => $order->id], 'PayWay callback accepted.');
-            });
-        } catch (\Throwable $exception) {
-            Log::error('PayWay callback processing failed', [
-                'order_id' => $order->id,
-                'transaction_id' => $transactionId,
-                'error' => $exception->getMessage(),
-            ]);
-            throw $exception;
+        if ($payment->status === 'pending') {
+            ProcessAbaPayWayCallback::dispatch($payment->id);
         }
+
+        return $this->success(['accepted' => true], 'PayWay callback accepted.');
     }
 
     private function parseReturnParams(string $json): array

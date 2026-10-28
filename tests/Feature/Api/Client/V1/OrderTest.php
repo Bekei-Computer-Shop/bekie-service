@@ -193,7 +193,7 @@ class OrderTest extends TestCase
                 'city' => 'New York',
                 'state' => 'NY',
                 'postal_code' => '10001',
-                'country' => 'United States',
+                'country' => 'US',
             ]);
 
         $response->assertCreated()
@@ -205,7 +205,10 @@ class OrderTest extends TestCase
 
         $this->assertDatabaseHas('orders', [
             'user_id' => $this->user->id,
+            'address_id' => null,
         ]);
+        $this->assertDatabaseCount('addresses', 0);
+        expect($response->json('data.address_snapshot.full_name'))->toBe('John Doe');
     }
 
     public function test_create_order_rejects_inactive_shipping_method(): void
@@ -248,7 +251,7 @@ class OrderTest extends TestCase
                 'address_line_1' => '123 Main St',
                 'city' => 'New York',
                 'postal_code' => '10001',
-                'country' => 'United States',
+                'country' => 'US',
             ]);
 
         $response->assertUnprocessable()
@@ -271,7 +274,7 @@ class OrderTest extends TestCase
                 'address_line_1' => '123 Main St',
                 'city' => 'New York',
                 'postal_code' => '10001',
-                'country' => 'United States',
+                'country' => 'US',
             ]);
 
         $response->assertForbidden();
@@ -287,6 +290,113 @@ class OrderTest extends TestCase
         ]);
 
         $response->assertUnauthorized();
+    }
+
+    public function test_order_checkout_rejects_another_customers_address(): void
+    {
+        $cart = $this->createCartWithProductWeight(1.0);
+        $shippingMethod = ShippingMethod::factory()->active()->create();
+        $otherUser = User::factory()->create();
+        $foreignAddress = $otherUser->addresses()->create([
+            'type' => 'shipping',
+            'full_name' => 'Foreign Customer',
+            'address_line_1' => '1 Other Street',
+            'city' => 'Other City',
+            'postal_code' => '10000',
+            'country' => 'US',
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+        $payload = $this->orderPayload($cart, $shippingMethod);
+        unset($payload['recipient_name'], $payload['address_line_1'], $payload['city'], $payload['postal_code'], $payload['country']);
+        $payload['address_id'] = $foreignAddress->id;
+
+        $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
+            ->postJson('/api/v1/orders', $payload)
+            ->assertNotFound();
+    }
+
+    public function test_order_checkout_uses_an_owned_saved_address(): void
+    {
+        $cart = $this->createCartWithProductWeight(1.0);
+        $shippingMethod = ShippingMethod::factory()->active()->create();
+        $address = $this->user->addresses()->create([
+            'type' => 'shipping',
+            'full_name' => 'Saved Recipient',
+            'phone' => '+85512345678',
+            'address_line_1' => '12 Street 240',
+            'city' => 'Phnom Penh',
+            'postal_code' => '12000',
+            'country' => 'KH',
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+        $payload = [
+            'cart_id' => $cart->id,
+            'shipping_method_id' => $shippingMethod->id,
+            'address_id' => $address->id,
+        ];
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
+            ->postJson('/api/v1/orders', $payload);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.address_id', $address->id)
+            ->assertJsonPath('data.address_snapshot.full_name', 'Saved Recipient')
+            ->assertJsonPath('data.address_snapshot.country', 'KH');
+    }
+
+    public function test_order_checkout_saves_inline_address_only_when_requested_and_preserves_snapshot(): void
+    {
+        $cart = $this->createCartWithProductWeight(1.0);
+        $shippingMethod = ShippingMethod::factory()->active()->create();
+        $payload = $this->orderPayload($cart, $shippingMethod);
+        $payload['save_address'] = true;
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
+            ->postJson('/api/v1/orders', $payload);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.address_snapshot.full_name', 'John Doe')
+            ->assertJsonPath('data.address_snapshot.country', 'US');
+
+        $savedAddressId = $response->json('data.address_id');
+        $this->assertDatabaseHas('addresses', [
+            'id' => $savedAddressId,
+            'user_id' => $this->user->id,
+            'is_default' => true,
+        ]);
+
+        $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
+            ->patchJson("/api/v1/addresses/{$savedAddressId}", ['address_line_1' => '99 Changed Street'])
+            ->assertOk();
+        $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
+            ->deleteJson("/api/v1/addresses/{$savedAddressId}")
+            ->assertNoContent();
+
+        $order = Order::query()->findOrFail($response->json('data.id'));
+        expect($order->address_snapshot['address_line_1'])->toBe('123 Main St');
+    }
+
+    public function test_order_checkout_requires_exactly_one_shipping_destination(): void
+    {
+        $cart = $this->createCartWithProductWeight(1.0);
+        $shippingMethod = ShippingMethod::factory()->active()->create();
+        $basePayload = [
+            'cart_id' => $cart->id,
+            'shipping_method_id' => $shippingMethod->id,
+        ];
+
+        $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
+            ->postJson('/api/v1/orders', $basePayload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['recipient_name', 'address_line_1', 'city', 'postal_code', 'country']);
+
+        $payload = array_replace($this->orderPayload($cart, $shippingMethod), ['address_id' => 999]);
+        $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
+            ->postJson('/api/v1/orders', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['address_id']);
     }
 
     private function createCartWithProductWeight(float $weight): Cart
@@ -326,7 +436,7 @@ class OrderTest extends TestCase
             'address_line_1' => '123 Main St',
             'city' => 'New York',
             'postal_code' => '10001',
-            'country' => 'United States',
+            'country' => 'US',
         ];
     }
 }

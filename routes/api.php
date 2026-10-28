@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Client\V1\AbaPayWayController;
+use App\Http\Controllers\Api\Client\V1\AddressController;
 use App\Http\Controllers\Api\Client\V1\AuthController;
 use App\Http\Controllers\Api\Client\V1\BrandController;
 use App\Http\Controllers\Api\Client\V1\CartController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Api\Client\V1\EmailVerificationController;
 use App\Http\Controllers\Api\Client\V1\KhqrController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
 use App\Http\Controllers\Api\Client\V1\MyProductController;
+use App\Http\Controllers\Api\Client\V1\NewsController;
 use App\Http\Controllers\Api\Client\V1\OrderController;
 use App\Http\Controllers\Api\Client\V1\PasswordResetController;
 use App\Http\Controllers\Api\Client\V1\ProductController;
@@ -93,11 +95,22 @@ Route::prefix('v1')->group(function () {
     // Storefront content: homepage carousel slides and live promotions.
     Route::get('slides', [SlideController::class, 'index']);
     Route::get('promotions', [PromotionController::class, 'index']);
+    Route::get('news', [NewsController::class, 'index']);
     Route::get('about-us', [ContentPageController::class, 'show'])->defaults('slug', 'about-us');
     Route::get('terms-and-conditions', [ContentPageController::class, 'show'])->defaults('slug', 'terms-and-conditions');
     Route::get('contact-us', [ContentPageController::class, 'show'])->defaults('slug', 'contact-us');
 
     Route::middleware(AuthenticateApiToken::class)->group(function () {
+        Route::prefix('addresses')->group(function () {
+            Route::get('/', [AddressController::class, 'index']);
+            Route::post('/', [AddressController::class, 'store']);
+            Route::get('{addressId}', [AddressController::class, 'show']);
+            Route::put('{addressId}', [AddressController::class, 'update']);
+            Route::patch('{addressId}', [AddressController::class, 'update']);
+            Route::delete('{addressId}', [AddressController::class, 'destroy']);
+            Route::post('{addressId}/default', [AddressController::class, 'setDefault']);
+        });
+
         Route::get('tax-settings', [TaxSettingsController::class, 'show']);
         Route::get('profile', [UserProfileController::class, 'show']);
         Route::get('my-products/summary', [MyProductController::class, 'summary']);
@@ -154,6 +167,7 @@ Route::prefix('v1')->group(function () {
         Route::prefix('orders')->group(function () {
             Route::get('/', [OrderController::class, 'index']);
             Route::post('/', [OrderController::class, 'store'])->middleware('throttle:client-checkout');
+            Route::post('{order}/cancel', [OrderController::class, 'cancel']);
             Route::get('{order}', [OrderController::class, 'show']);
         });
 

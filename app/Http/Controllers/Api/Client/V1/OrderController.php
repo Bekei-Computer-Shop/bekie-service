@@ -4,18 +4,22 @@ namespace App\Http\Controllers\Api\Client\V1;
 
 use App\Http\Requests\Api\Client\V1\StoreOrderRequest;
 use App\Http\Resources\Api\Client\V1\OrderResource;
-use App\Models\Address;
 use App\Models\Cart;
 use App\Models\Coupon;
 use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\ShippingMethod;
 use App\Services\AdminNotificationService;
+use App\Services\CustomerAddressService;
 use App\Services\ProductSerialService;
 use App\Services\TaxCalculator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class OrderController extends BaseApiController
 {
@@ -28,7 +32,7 @@ class OrderController extends BaseApiController
         return $this->success(OrderResource::collection($query->orderBy('created_at', 'desc')->paginate(15)));
     }
 
-    public function store(StoreOrderRequest $request, TaxCalculator $taxCalculator)
+    public function store(StoreOrderRequest $request, TaxCalculator $taxCalculator, CustomerAddressService $addressService)
     {
         $cart = Cart::with('items.product', 'items.variant')->findOrFail($request->cart_id);
 
@@ -39,7 +43,7 @@ class OrderController extends BaseApiController
         }
 
         $shippingMethod = ShippingMethod::active()->findOrFail($request->shipping_method_id);
-        $addressSnapshot = $this->resolveAddressSnapshot($request);
+        $shippingAddress = $addressService->resolveCheckoutAddress($request->user(), $request->validated());
 
         try {
             app(ProductSerialService::class)->assertCartSerialsAvailable($cart->items, $request->input('serial_numbers', []));
@@ -63,13 +67,13 @@ class OrderController extends BaseApiController
         $taxBreakdown = $taxCalculator->calculate(
             (float) $cart->subtotal,
             (float) $cart->discount_total,
-            $request->country,
+            $shippingAddress['country'],
         );
         $shippingTotal = $shippingMethod->calculateCost($shippingWeight);
 
         $order = Order::create([
             'user_id' => $cart->user_id,
-            'address_id' => $request->address_id,
+            'address_id' => $shippingAddress['address_id'],
             'order_number' => $this->generateOrderNumber(),
             'subtotal' => $cart->subtotal,
             'discount_total' => $cart->discount_total,
@@ -91,7 +95,7 @@ class OrderController extends BaseApiController
                 'email' => $request->email,
                 'phone' => $request->phone,
             ],
-            'address_snapshot' => $addressSnapshot,
+            'address_snapshot' => $shippingAddress['snapshot'],
             'metadata' => $request->input('metadata', []),
         ]);
 
@@ -163,40 +167,62 @@ class OrderController extends BaseApiController
         return $this->success(new OrderResource($order->load('items')));
     }
 
+    public function cancel(Request $request, Order $order)
+    {
+        abort_unless((int) $order->user_id === (int) $request->user()->id, 404);
+
+        $cancelledOrder = DB::transaction(function () use ($request, $order): Order {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->getKey());
+
+            abort_unless((int) $lockedOrder->user_id === (int) $request->user()->id, 404);
+
+            if ($lockedOrder->status !== 'pending' || $lockedOrder->payment_status !== 'pending') {
+                throw ValidationException::withMessages([
+                    'order' => ['This order can no longer be cancelled online. Contact customer support for assistance.'],
+                ]);
+            }
+
+            $items = OrderItem::query()
+                ->where('order_id', $lockedOrder->id)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($items as $item) {
+                $product = Product::withTrashed()->lockForUpdate()->find($item->product_id);
+                $variant = $item->product_variant_id
+                    ? ProductVariant::withTrashed()->lockForUpdate()->find($item->product_variant_id)
+                    : null;
+
+                if ($product && $product->track_inventory) {
+                    $product->increment('stock_quantity', (int) $item->quantity);
+                }
+
+                if ($variant && $variant->track_inventory) {
+                    $variant->increment('stock_quantity', (int) $item->quantity);
+                }
+            }
+
+            app(ProductSerialService::class)->releaseOrder(
+                (int) $lockedOrder->id,
+                null,
+                'Customer cancelled the order.',
+            );
+
+            $lockedOrder->update([
+                'status' => 'cancelled',
+                'shipping_status' => 'cancelled',
+                'cancelled_at' => now(),
+            ]);
+
+            return $lockedOrder->fresh(['items']);
+        });
+
+        return $this->success(new OrderResource($cancelledOrder), 'Order cancelled successfully.');
+    }
+
     protected function generateOrderNumber(): string
     {
         return 'ORD-'.now()->format('YmdHis').'-'.Str::upper(Str::random(5));
-    }
-
-    protected function resolveAddressSnapshot(StoreOrderRequest $request): array
-    {
-        if ($request->filled('address_id')) {
-            $address = Address::find($request->address_id);
-
-            return $address ? $address->only([
-                'full_name',
-                'phone',
-                'email',
-                'company',
-                'address_line_1',
-                'address_line_2',
-                'city',
-                'state',
-                'postal_code',
-                'country',
-            ]) : [];
-        }
-
-        return [
-            'recipient_name' => $request->recipient_name,
-            'phone' => $request->phone,
-            'address_line_1' => $request->address_line_1,
-            'address_line_2' => $request->address_line_2,
-            'city' => $request->city,
-            'state' => $request->state,
-            'postal_code' => $request->postal_code,
-            'country' => $request->country,
-        ];
     }
 
     protected function calculateCartWeight(Cart $cart): float

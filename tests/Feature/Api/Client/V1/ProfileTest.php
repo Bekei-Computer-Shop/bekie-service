@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\JwtService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -33,6 +34,19 @@ class ProfileTest extends TestCase
             'first_name' => 'John',
             'last_name' => 'Doe',
             'phone' => '+12345678901',
+        ]);
+
+        config([
+            'cloudinary.cloud_name' => 'test-cloud',
+            'cloudinary.api_key' => 'test-api-key',
+            'cloudinary.api_secret' => 'test-api-secret',
+            'cloudinary.folder' => 'uploads',
+        ]);
+        Http::fake([
+            'https://api.cloudinary.com/v1_1/test-cloud/image/upload' => Http::response([
+                'secure_url' => 'https://res.cloudinary.com/test-cloud/image/upload/v123/uploads/avatars/customer-profile.jpg',
+                'public_id' => 'uploads/avatars/customer-'.$this->user->id,
+            ]),
         ]);
 
         $jti = Str::random(64);
@@ -115,10 +129,11 @@ class ProfileTest extends TestCase
             ->assertJsonPath('status', 'success')
             ->assertJsonPath('message', 'Profile image updated successfully.')
             ->assertJsonPath('data.id', $this->user->id)
-            ->assertJsonPath('data.email', 'user@example.com');
+            ->assertJsonPath('data.email', 'user@example.com')
+            ->assertJsonPath('data.avatar', 'https://res.cloudinary.com/test-cloud/image/upload/v123/uploads/avatars/customer-profile.jpg');
 
-        $this->assertNotNull($response->json('data.avatar'));
-        Storage::disk('public')->assertExists($this->user->fresh()->avatar);
+        $this->assertSame($response->json('data.avatar'), $this->user->fresh()->avatar);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.cloudinary.com/v1_1/test-cloud/image/upload');
     }
 
     public function test_upload_profile_image_replaces_old_image(): void
