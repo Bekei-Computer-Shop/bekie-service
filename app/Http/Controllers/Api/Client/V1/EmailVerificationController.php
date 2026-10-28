@@ -8,10 +8,12 @@ use App\Models\OtpChallenge;
 use App\Models\User;
 use App\Services\AuthService;
 use App\Services\OtpService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 class EmailVerificationController extends BaseApiController
@@ -63,12 +65,28 @@ class EmailVerificationController extends BaseApiController
         }
 
         try {
-            $issued = $this->otps->issue($user, $email, 'customer_email_verification');
-            Mail::to($email)->queue(new CustomerVerificationOtpMail($issued['code'], (int) config('otp.expires_minutes')));
-        } catch (TooManyRequestsHttpException $exception) {
-            return $this->error($exception->getMessage(), 429);
+            DB::transaction(function () use ($user, $email): void {
+                $issued = $this->otps->issue($user, $email, 'customer_email_verification');
+                Mail::to($email)->sendNow(new CustomerVerificationOtpMail($issued['code'], (int) config('otp.expires_minutes')));
+            });
+        } catch (TooManyRequestsHttpException) {
+            return $this->success(message: 'If the account can receive verification mail, a new code has been sent.');
         } catch (\Throwable $exception) {
-            Log::error('Customer verification email could not be queued.', ['exception' => $exception::class]);
+            $reference = (string) Str::uuid();
+            Log::error('Customer verification email could not be sent.', [
+                'reference' => $reference,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return $this->error(
+                'We could not send your verification email. Please try again later.',
+                503,
+                [
+                    'mail' => ['MAIL_DELIVERY_FAILED'],
+                    'reference' => [$reference],
+                ],
+            );
         }
 
         return $this->success(message: 'If the account can receive verification mail, a new code has been sent.');

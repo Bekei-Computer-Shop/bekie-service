@@ -14,25 +14,30 @@ class OtpService
     public function issue(?User $user, string $email, string $purpose): array
     {
         $email = strtolower(trim($email));
-        $latest = OtpChallenge::query()
-            ->where('email', $email)
-            ->where('purpose', $purpose)
-            ->latest('id')
-            ->first();
-
-        if ($latest?->last_sent_at?->gt(now()->subSeconds((int) config('otp.resend_cooldown_seconds')))) {
-            throw new TooManyRequestsHttpException(null, 'Please wait before requesting another code.');
-        }
-
         $code = (string) random_int(100000, 999999);
-        $challenge = DB::transaction(function () use ($user, $email, $purpose, $code): OtpChallenge {
+        return DB::transaction(function () use ($user, $email, $purpose, $code): array {
+            if ($user) {
+                User::query()->whereKey($user->getKey())->lockForUpdate()->first();
+            }
+
+            $latest = OtpChallenge::query()
+                ->where('email', $email)
+                ->where('purpose', $purpose)
+                ->latest('id')
+                ->lockForUpdate()
+                ->first();
+
+            if ($latest?->last_sent_at?->gt(now()->subSeconds((int) config('otp.resend_cooldown_seconds')))) {
+                throw new TooManyRequestsHttpException(null, 'Please wait before requesting another code.');
+            }
+
             OtpChallenge::query()
                 ->where('email', $email)
                 ->where('purpose', $purpose)
                 ->whereNull('used_at')
                 ->update(['used_at' => now()]);
 
-            return OtpChallenge::create([
+            $challenge = OtpChallenge::create([
                 'user_id' => $user?->id,
                 'email' => $email,
                 'purpose' => $purpose,
@@ -40,9 +45,9 @@ class OtpService
                 'expires_at' => now()->addMinutes((int) config('otp.expires_minutes')),
                 'last_sent_at' => now(),
             ]);
-        });
 
-        return compact('challenge', 'code');
+            return compact('challenge', 'code');
+        });
     }
 
     public function verify(OtpChallenge $challenge, string $code): string

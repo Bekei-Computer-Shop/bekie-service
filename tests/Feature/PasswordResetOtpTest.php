@@ -52,6 +52,27 @@ test('forgot password returns the same response and sends no mail for an unknown
 
     $unknownResponse->assertOk()->assertExactJson($existingResponse->json());
     Mail::assertSent(PasswordResetOtpMail::class, 1);
+    expect(PasswordResetOtp::query()->count())->toBe(1);
+});
+
+test('failed reset email sending preserves the previous OTP record', function (): void {
+    $user = User::factory()->create(['email' => 'customer@example.com']);
+    $previous = PasswordResetOtp::query()->create([
+        'email' => $user->email,
+        'otp_hash' => Hash::make('123456'),
+        'expires_at' => now()->addMinutes(10),
+    ]);
+    $previous->forceFill(['created_at' => now()->subSeconds((int) config('auth.otp.resend_cooldown_seconds') + 1)])->save();
+    $mailer = Mockery::mock();
+    $mailer->shouldReceive('send')->once()->andThrow(new RuntimeException('SMTP unavailable'));
+    Mail::shouldReceive('to')->once()->with($user->email)->andReturn($mailer);
+
+    $this->postJson('/api/v1/auth/forgot-password', ['email' => $user->email])
+        ->assertStatus(503);
+
+    expect(PasswordResetOtp::query()->count())->toBe(1)
+        ->and(PasswordResetOtp::query()->firstOrFail()->is($previous))->toBeTrue()
+        ->and(Hash::check('123456', $previous->fresh()->otp_hash))->toBeTrue();
 });
 
 test('correct OTP returns a reset token', function (): void {
@@ -100,10 +121,11 @@ test('expired OTP is rejected', function (): void {
 test('resend cooldown is enforced', function (): void {
     Mail::fake();
     User::factory()->create(['email' => 'customer@example.com']);
-    $this->postJson('/api/v1/auth/forgot-password', ['email' => 'customer@example.com'])->assertOk();
+    $initialResponse = $this->postJson('/api/v1/auth/forgot-password', ['email' => 'customer@example.com'])->assertOk();
 
     $this->postJson('/api/v1/auth/forgot-password', ['email' => 'customer@example.com'])
-        ->assertStatus(429);
+        ->assertOk()
+        ->assertExactJson($initialResponse->json());
 });
 
 test('password reset revokes API tokens and makes the reset token single use', function (): void {

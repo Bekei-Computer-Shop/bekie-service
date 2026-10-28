@@ -19,43 +19,47 @@ class PasswordResetOtpService
     {
         $email = strtolower(trim($email));
         $user = User::query()->where('email', $email)->first();
-        $otp = (string) random_int(0, 999999);
-        $otp = str_pad($otp, 6, '0', STR_PAD_LEFT);
-
-        DB::transaction(function () use ($email, $otp): void {
-            $latest = PasswordResetOtp::query()
-                ->where('email', $email)
-                ->latest('id')
-                ->lockForUpdate()
-                ->first();
-
-            $cooldown = (int) config('auth.otp.resend_cooldown_seconds');
-            if ($latest?->created_at?->gt(now()->subSeconds($cooldown))) {
-                throw new TooManyRequestsHttpException(null, 'Please wait before requesting another code.');
-            }
-
-            PasswordResetOtp::query()->where('email', $email)->delete();
-            PasswordResetOtp::query()->create([
-                'email' => $email,
-                'otp_hash' => Hash::make($otp),
-                'expires_at' => now()->addMinutes((int) config('auth.otp.expires_minutes')),
-            ]);
-        });
-
         if (! $user) {
             return;
         }
 
+        $otp = (string) random_int(0, 999999);
+        $otp = str_pad($otp, 6, '0', STR_PAD_LEFT);
+
         try {
-            Mail::to($email)->send(new PasswordResetOtpMail(
-                $otp,
-                (int) config('auth.otp.expires_minutes'),
-            ));
+            DB::transaction(function () use ($email, $otp, $user): void {
+                User::query()->whereKey($user->getKey())->lockForUpdate()->first();
+
+                $latest = PasswordResetOtp::query()
+                    ->where('email', $email)
+                    ->latest('id')
+                    ->lockForUpdate()
+                    ->first();
+
+                $cooldown = (int) config('auth.otp.resend_cooldown_seconds');
+                if ($latest?->created_at?->gt(now()->subSeconds($cooldown))) {
+                    throw new TooManyRequestsHttpException(null, 'Please wait before requesting another code.');
+                }
+
+                PasswordResetOtp::query()->where('email', $email)->delete();
+                PasswordResetOtp::query()->create([
+                    'email' => $email,
+                    'otp_hash' => Hash::make($otp),
+                    'expires_at' => now()->addMinutes((int) config('auth.otp.expires_minutes')),
+                ]);
+
+                Mail::to($email)->send(new PasswordResetOtpMail(
+                    $otp,
+                    (int) config('auth.otp.expires_minutes'),
+                ));
+            });
         } catch (\Throwable $exception) {
             Log::error('Password reset OTP email could not be sent.', [
                 'exception' => $exception::class,
                 'message' => $exception->getMessage(),
             ]);
+
+            throw $exception;
         }
     }
 
