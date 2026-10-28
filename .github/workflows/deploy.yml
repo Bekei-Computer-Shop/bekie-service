@@ -102,20 +102,25 @@ jobs:
             --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} --wait
 
       # Reuses the same Cloud Run Job resource (no separate seed job is
-      # provisioned). PreProductionSeeder is idempotent (firstOrCreate /
-      # guarded creates throughout), so running it on every deploy is safe
-      # and only fills in missing catalog/demo data.
-      - name: Point migrate job at the seeder
+      # provisioned). Both seeders are idempotent (firstOrCreate / guarded
+      # creates throughout), so running them on every deploy is safe:
+      # AdminPermissionsSeeder only adds missing roles/permissions/grants,
+      # PreProductionSeeder only fills in missing catalog/demo data. Order
+      # matters: permissions first, as in DatabaseSeeder. AdminUserSeeder is
+      # deliberately not run here -- it resets well-known admin logins to a
+      # fixed password on every run.
+      - name: Run seeders and wait for completion
         run: |
-          gcloud run jobs update ${{ env.MIGRATE_JOB_NAME }} \
-            --image ${{ needs.build-and-push.outputs.image-uri }} \
-            --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} \
-            --args="artisan","db:seed","--class=PreProductionSeeder","--force"
-
-      - name: Execute seeder and wait for completion
-        run: |
-          gcloud run jobs execute ${{ env.MIGRATE_JOB_NAME }} \
-            --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} --wait
+          for SEEDER in AdminPermissionsSeeder PreProductionSeeder; do
+            echo "::group::db:seed --class=${SEEDER}"
+            gcloud run jobs update ${{ env.MIGRATE_JOB_NAME }} \
+              --image ${{ needs.build-and-push.outputs.image-uri }} \
+              --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} \
+              --args="artisan","db:seed","--class=${SEEDER}","--force"
+            gcloud run jobs execute ${{ env.MIGRATE_JOB_NAME }} \
+              --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} --wait
+            echo "::endgroup::"
+          done
 
       - name: Restore migrate job to its default command
         if: always()
