@@ -7,6 +7,7 @@ use App\Models\ProductSerial;
 use App\Models\ProductSerialHistory;
 use App\Models\ProductVariant;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -38,6 +39,19 @@ class ProductSerialService
         }
 
         return DB::transaction(function () use ($serialNumbers, $productId, $variantId, $warehouse, $reference, $actorId, $note): array {
+            if ($variantId !== null) {
+                // Lock the variant so two receives can't both see it as empty.
+                ProductVariant::query()->lockForUpdate()->findOrFail($variantId);
+                $held = ProductSerial::query()->where('product_variant_id', $variantId)->live()->count();
+                if ($held + count($serialNumbers) > ProductVariant::MAX_SERIALS) {
+                    throw new InvalidArgumentException(
+                        $held >= ProductVariant::MAX_SERIALS
+                            ? 'This variant already has a serial number.'
+                            : 'Each variant can have only '.ProductVariant::MAX_SERIALS.' serial number.',
+                    );
+                }
+            }
+
             $created = [];
             foreach ($serialNumbers as $serialNumber) {
                 if (ProductSerial::query()->whereRaw('LOWER(serial_number) = ?', [strtolower($serialNumber)])->lockForUpdate()->exists()) {
@@ -254,7 +268,7 @@ class ProductSerialService
             ->when($filters['received_to'] ?? null, fn (Builder $query, string $date) => $query->whereDate('created_at', '<=', $date));
     }
 
-    public function getExpiringWarranties(int $daysUntilExpiry = 30): \Illuminate\Support\Collection
+    public function getExpiringWarranties(int $daysUntilExpiry = 30): Collection
     {
         return ProductSerial::query()
             ->where('status', ProductSerial::SOLD)

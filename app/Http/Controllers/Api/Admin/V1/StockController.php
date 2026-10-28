@@ -11,17 +11,17 @@ use App\Http\Resources\Api\Admin\V1\StockSummaryResource;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StockMovement;
-use App\Services\StockService;
 use App\Services\ProductSerialService;
+use App\Services\StockService;
 use Dedoc\Scramble\Attributes\Endpoint;
 use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 #[Group(name: 'Stock Management', description: 'Inventory overview, low-stock alerts, and stock movement history for admin operators.')]
@@ -57,7 +57,12 @@ class StockController extends BaseAdminController
             ->where('track_inventory', true);
 
         if ($request->boolean('include_variants')) {
-            $query->with(['variants:id,product_id,name,sku,stock_quantity,min_stock_alert,is_serialized']);
+            // `serials_count` tells the stock adjustment screen which variants
+            // already hold their one serial number.
+            $query->with(['variants' => fn ($variants) => $variants
+                ->select(['id', 'product_id', 'name', 'sku', 'stock_quantity', 'min_stock_alert', 'is_serialized'])
+                ->withCount(['serials' => fn ($serials) => $serials->live()]),
+            ]);
         }
 
         $search = $request->input('q') ?? $request->input('search');
@@ -174,10 +179,10 @@ class StockController extends BaseAdminController
                         ->where('stockable_id', $product->id);
                 })
                 // OR variant-level movements
-                ->orWhere(function ($nested) use ($variantIds): void {
-                    $nested->where('stockable_type', 'App\\Models\\ProductVariant')
-                        ->whereIn('stockable_id', $variantIds);
-                });
+                    ->orWhere(function ($nested) use ($variantIds): void {
+                        $nested->where('stockable_type', 'App\\Models\\ProductVariant')
+                            ->whereIn('stockable_id', $variantIds);
+                    });
             })
             ->latest()
             ->with('createdBy:id,first_name,last_name,email');
@@ -406,7 +411,9 @@ class StockController extends BaseAdminController
                         $item['reference'],
                         $request->user()?->id,
                         $item['reason'],
-                        (int) $item['quantity'],
+                        // A variant holds one serial however much stock moves, so
+                        // its quantity no longer has to match the serial count.
+                        $stockable instanceof ProductVariant ? null : (int) $item['quantity'],
                     );
                 }
 
