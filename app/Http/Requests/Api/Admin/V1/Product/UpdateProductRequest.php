@@ -8,7 +8,9 @@ use App\Http\Requests\Api\Admin\V1\Product\Concerns\ValidatesProductImages;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UpdateProductRequest extends FormRequest
@@ -85,9 +87,14 @@ class UpdateProductRequest extends FormRequest
 
             // Variant array. When `replace_variants` is omitted or true, the
             // submitted set replaces the existing set. When false, the
-            // controller treats the array as additive.
+            // controller syncs it: a row with an `id` edits that variant (its
+            // SKU included), a row without one is matched by SKU or created.
+            // `remove_missing_variants` additionally removes the product's
+            // variants that the array leaves out.
             'replace_variants' => ['nullable', 'boolean'],
+            'remove_missing_variants' => ['nullable', 'boolean'],
             'variants' => ['nullable', 'array'],
+            'variants.*.id' => ['nullable', 'integer'],
             'variants.*.name' => ['required_with:variants', 'string', 'max:191'],
             'variants.*.slug' => ['nullable', 'string', 'max:191'],
             'variants.*.sku' => ['required_with:variants', 'string', 'max:64', 'regex:/^[A-Za-z0-9._-]+$/'],
@@ -134,6 +141,77 @@ class UpdateProductRequest extends FormRequest
             }
 
             $this->validateSinglePrimaryImage($v);
+            $this->validateVariantRows($v);
         });
+    }
+
+    /**
+     * Variant `id`, `sku`, `slug` and `barcode` checks the column rules can't
+     * express. The database keeps those three unique across every variant,
+     * soft-deleted ones included, so a clash used to surface as a raw 500; here
+     * it is a 422 on the row that caused it.
+     *
+     * A row is checked against everyone except the variant it edits: the one
+     * named by its `id`, or — for clients that send none — the one with the
+     * same SKU.
+     */
+    private function validateVariantRows($validator): void
+    {
+        $rows = $this->input('variants');
+
+        if (! is_array($rows)) {
+            return;
+        }
+
+        /** @var Product|null $product */
+        $product = $this->route('product');
+        $owned = $product ? $product->variants()->get(['id', 'sku'])->keyBy('id') : collect();
+        $skus = [];
+
+        foreach ($rows as $index => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $id = isset($row['id']) && $row['id'] !== '' ? (int) $row['id'] : null;
+
+            if ($id !== null && ! $owned->has($id)) {
+                $validator->errors()->add("variants.{$index}.id", 'This variant does not belong to the product.');
+
+                continue;
+            }
+
+            $sku = (string) ($row['sku'] ?? '');
+            $targetId = $id ?? $owned->firstWhere('sku', $sku)?->id;
+
+            // A new row's slug comes from its name when none is sent, exactly as
+            // ProductController::createVariant() derives it.
+            $slug = ! empty($row['slug'])
+                ? Str::slug((string) $row['slug'])
+                : ($targetId === null ? Str::slug((string) ($row['name'] ?? '')) : '');
+            $barcode = (string) ($row['barcode'] ?? '');
+
+            if ($sku !== '') {
+                if (in_array($sku, $skus, true)) {
+                    $validator->errors()->add("variants.{$index}.sku", 'This SKU appears on more than one variant.');
+                }
+                $skus[] = $sku;
+            }
+
+            foreach (['sku' => $sku, 'slug' => $slug, 'barcode' => $barcode] as $column => $value) {
+                if ($value === '') {
+                    continue;
+                }
+
+                $taken = ProductVariant::withTrashed()
+                    ->where($column, $value)
+                    ->when($targetId !== null, fn ($query) => $query->whereKeyNot($targetId))
+                    ->exists();
+
+                if ($taken) {
+                    $validator->errors()->add("variants.{$index}.{$column}", "This variant {$column} is already used by another variant.");
+                }
+            }
+        }
     }
 }

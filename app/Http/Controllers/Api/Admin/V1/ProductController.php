@@ -9,24 +9,35 @@ use App\Http\Requests\Api\Admin\V1\Product\StoreProductRequest;
 use App\Http\Requests\Api\Admin\V1\Product\UpdateProductRequest;
 use App\Http\Resources\Api\Admin\V1\ProductResource;
 use App\Models\Product;
+use App\Models\ProductSerial;
 use App\Models\ProductVariant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * V1 admin CRUD for the product catalog. Variants are accepted as a
  * nested array on create/update (the user-management plan's
- * "Nested inside Product" choice). Variant identity is keyed by SKU; the
- * set on the product is replaced by the submitted set in a single
- * transaction (the `replace_variants: false` opt-in preserves ids).
+ * "Nested inside Product" choice). By default the set on the product is
+ * replaced by the submitted set in a single transaction; `replace_variants:
+ * false` instead syncs it in place, keeping variant ids — a row's `id` names
+ * the variant it edits (see syncVariants()).
  *
  * `Product::getRouteKeyName()` returns `uuid`, so route-model binding
  * resolves via the `uuid` column.
  */
 class ProductController extends BaseAdminController
 {
+    /**
+     * Columns an edit may set back to null. Everything else is either required
+     * or has a default, so a null there means "not sent", not "clear it".
+     */
+    private const CLEARABLE_VARIANT_COLUMNS = [
+        'barcode', 'sale_price', 'cost_price', 'weight', 'length', 'width', 'height', 'image',
+    ];
+
     public function index(IndexProductsRequest $request): JsonResponse
     {
         $perPage = (int) $request->input('per_page', 18);
@@ -149,6 +160,7 @@ class ProductController extends BaseAdminController
     {
         $data = $request->validated();
         $variants = $data['variants'] ?? null;
+        $removeMissingVariants = $request->boolean('remove_missing_variants');
         $replaceVariants = $variants !== null && ! ($request->boolean('replace_variants') === false && $request->has('replace_variants'));
         // Default: replace. Body must explicitly set `replace_variants: false` to opt out.
         if (! $request->has('replace_variants')) {
@@ -163,9 +175,9 @@ class ProductController extends BaseAdminController
         $promotionIds = array_key_exists('promotion_ids', $data) ? ($data['promotion_ids'] ?? []) : null;
         $thumbnailWasSent = array_key_exists('thumbnail', $data);
 
-        unset($data['variants'], $data['replace_variants'], $data['images'], $data['promotion_ids']);
+        unset($data['variants'], $data['replace_variants'], $data['remove_missing_variants'], $data['images'], $data['promotion_ids']);
 
-        DB::transaction(function () use ($product, $data, $variants, $replaceVariants, $images, $promotionIds, $thumbnailWasSent): void {
+        DB::transaction(function () use ($product, $data, $variants, $replaceVariants, $removeMissingVariants, $images, $promotionIds, $thumbnailWasSent): void {
             if ($data !== []) {
                 // Cast booleans explicitly so the Eloquent model sees real bools
                 // (the FormRequest already coerced, but defence in depth).
@@ -186,16 +198,7 @@ class ProductController extends BaseAdminController
                         $this->createVariant($product, $row);
                     }
                 } else {
-                    // Additive sync by SKU: insert missing, update existing.
-                    $existing = $product->variants()->get()->keyBy('sku');
-                    foreach ($variants as $row) {
-                        $sku = (string) $row['sku'];
-                        if ($existing->has($sku)) {
-                            $existing->get($sku)->update($this->variantFill($row));
-                        } else {
-                            $this->createVariant($product, $row);
-                        }
-                    }
+                    $this->syncVariants($product, $variants, $removeMissingVariants);
                 }
             }
 
@@ -367,7 +370,75 @@ class ProductController extends BaseAdminController
         return $product->variants()->create($row);
     }
 
-    private function variantFill(array $row): array
+    /**
+     * Brings the product's variants in line with the submitted rows without
+     * recreating them — a variant keeps its id, which its serials, stock
+     * history and order lines point at.
+     *
+     * A row with an `id` edits that variant, SKU included, and may clear its
+     * optional fields. A row without one is matched to the variant with the same
+     * SKU (what clients did before ids existed) and otherwise creates a new one.
+     * When `$removeMissing` is set, variants the rows leave out are removed.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function syncVariants(Product $product, array $rows, bool $removeMissing): void
+    {
+        $existing = $product->variants()->get();
+        $byId = $existing->keyBy('id');
+        $bySku = $existing->keyBy('sku');
+        $kept = [];
+
+        foreach ($rows as $row) {
+            $hasId = isset($row['id']) && $row['id'] !== '';
+            $variant = $hasId ? $byId->get((int) $row['id']) : $bySku->get((string) $row['sku']);
+
+            if ($variant) {
+                $variant->update($this->variantFill($row, clearNulls: $hasId));
+            } else {
+                $variant = $this->createVariant($product, $row);
+            }
+
+            $kept[] = $variant->id;
+        }
+
+        if ($removeMissing) {
+            $existing->whereNotIn('id', $kept)->each(fn (ProductVariant $variant) => $this->removeVariant($variant));
+        }
+    }
+
+    /**
+     * Removes a variant — soft-deleted, so the orders, stock movements and
+     * serial history that point at it stay intact.
+     *
+     * A variant still holding a serial number that is in stock or reserved for
+     * an order cannot go: the unit would be orphaned. The admin has to sell,
+     * release or cancel it first.
+     */
+    private function removeVariant(ProductVariant $variant): void
+    {
+        $held = $variant->serials()
+            ->whereIn('status', [ProductSerial::AVAILABLE, ProductSerial::RESERVED])
+            ->exists();
+
+        if ($held) {
+            throw ValidationException::withMessages([
+                'variants' => ["Variant {$variant->sku} still has a serial number in stock or reserved, so it cannot be removed."],
+            ]);
+        }
+
+        // `sku`, `slug` and `barcode` are unique across soft-deleted rows too.
+        // Releasing them lets the same SKU be added again later.
+        $variant->forceFill([
+            'sku' => "{$variant->sku}-removed-{$variant->id}",
+            'slug' => "{$variant->slug}-removed-{$variant->id}",
+            'barcode' => null,
+        ])->save();
+
+        $variant->delete();
+    }
+
+    private function variantFill(array $row, bool $clearNulls = false): array
     {
         $payload = [
             'name' => $row['name'] ?? null,
@@ -399,6 +470,16 @@ class ProductController extends BaseAdminController
             $payload['attributes'] = $normalised;
         }
 
-        return array_filter($payload, fn ($v) => $v !== null);
+        $fill = array_filter($payload, fn ($v) => $v !== null);
+
+        if ($clearNulls) {
+            foreach (self::CLEARABLE_VARIANT_COLUMNS as $column) {
+                if (array_key_exists($column, $row) && $row[$column] === null) {
+                    $fill[$column] = null;
+                }
+            }
+        }
+
+        return $fill;
     }
 }
