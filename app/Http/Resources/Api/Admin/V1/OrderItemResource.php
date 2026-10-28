@@ -23,6 +23,9 @@ class OrderItemResource extends JsonResource
                 : null,
             // Per-line discount frozen at purchase time.
             'discount' => number_format((float) $this->discount, 2, '.', ''),
+            // The promotion behind that discount, as it was at purchase time;
+            // null when the line was not discounted by one.
+            'promotion' => $this->metadata['promotion'] ?? null,
             'line_total' => number_format((float) $this->total, 2, '.', ''),
             'product' => [
                 'id' => $this->product?->id,

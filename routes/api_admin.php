@@ -182,6 +182,8 @@ Route::prefix('admin')->group(function () {
         });
         Route::middleware('permission:orders.create')->group(function () {
             Route::post('orders', [OrderController::class, 'store']);
+            // Prices an order's lines against their promotions without saving.
+            Route::post('orders/preview', [OrderController::class, 'preview']);
         });
         // orders.approve is allowed in here too: approving an order means
         // moving it through its statuses, so an approver may PATCH `status`.
