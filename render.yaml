@@ -127,15 +127,34 @@ services:
       - key: SESSION_SAME_SITE
         value: lax
 
-      # Swap to a transactional provider (Resend/Postmark/SES) when the
-      # first mail-sending feature ships — see DEPLOYMENT.md "Mail".
       - key: MAIL_MAILER
-        value: log
+        value: smtp
+
+      - key: MAIL_SCHEME
+        value: smtp
+
+      - key: MAIL_ENCRYPTION
+        value: tls
+
+      - key: MAIL_HOST
+        sync: false
+
+      - key: MAIL_PORT
+        value: "587"
+
+      - key: MAIL_USERNAME
+        sync: false
+
+      - key: MAIL_PASSWORD
+        sync: false
 
       - key: MAIL_FROM_ADDRESS
         sync: false
 
       - key: MAIL_FROM_NAME
+        sync: false
+
+      - key: CONTACT_SUPPORT_EMAIL
         sync: false
 
     # Laravel health endpoint.
