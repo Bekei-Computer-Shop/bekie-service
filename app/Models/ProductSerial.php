@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -41,6 +42,18 @@ class ProductSerial extends Model
             'warranty_start_at' => 'datetime',
             'warranty_end_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Serials that still count against a variant: everything except a cancelled
+     * one (an undone receive).
+     *
+     * @param  Builder<ProductSerial>  $query
+     * @return Builder<ProductSerial>
+     */
+    public function scopeLive(Builder $query): Builder
+    {
+        return $query->where('status', '!=', self::CANCELLED);
     }
 
     public function product(): BelongsTo

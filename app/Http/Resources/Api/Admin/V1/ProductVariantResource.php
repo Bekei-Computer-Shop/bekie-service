@@ -40,6 +40,8 @@ class ProductVariantResource extends JsonResource
             'attributes' => $variant->attributes ?? new \stdClass,
             'is_default' => (bool) $variant->is_default,
             'is_active' => (bool) $variant->is_active,
+            // Only present where the controller counted them (the product detail).
+            'serials_count' => $variant->serials_count !== null ? (int) $variant->serials_count : null,
             'sort_order' => (int) $variant->sort_order,
             'created_at' => $variant->created_at?->toIso8601String(),
             'updated_at' => $variant->updated_at?->toIso8601String(),

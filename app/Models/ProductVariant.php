@@ -10,6 +10,9 @@ class ProductVariant extends Model
 {
     use SoftDeletes, TracksInventory;
 
+    /** A variant is one physical unit, so it takes a single serial number. */
+    public const MAX_SERIALS = 1;
+
     protected $fillable = [
         'product_id',
         'name',

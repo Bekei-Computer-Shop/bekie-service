@@ -101,7 +101,17 @@ class ProductController extends BaseAdminController
 
     public function show(Product $product): JsonResponse
     {
-        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants', 'images', 'promotions']);
+        // `serials_count` lets the edit screen see which variants already hold a
+        // serial. Cancelled ones (an undone receive) no longer count.
+        $product->load([
+            'category:id,name,slug',
+            'brand:id,name,slug',
+            'variants' => fn ($query) => $query->withCount([
+                'serials' => fn ($serials) => $serials->live(),
+            ]),
+            'images',
+            'promotions',
+        ]);
 
         return $this->success(new ProductResource($product));
     }

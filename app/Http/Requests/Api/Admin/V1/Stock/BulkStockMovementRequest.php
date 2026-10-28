@@ -138,6 +138,11 @@ class BulkStockMovementRequest extends FormRequest
 
                     if ($item['movement_type'] === 'stock_out' || $item['movement_type'] === 'transfer' || $item['movement_type'] === 'adjust' && $adjQty < 0) {
                         $requiredSerialCount = (int) max(0, min(abs($adjQty), $existingSerialCount));
+                    } elseif ($stockable instanceof ProductVariant) {
+                        // A variant holds one serial number, whatever its stock: ask for
+                        // it only while the variant has none.
+                        $heldSerialCount = ProductSerial::query()->where('product_variant_id', (int) $stockable->id)->live()->count();
+                        $requiredSerialCount = max(0, ProductVariant::MAX_SERIALS - $heldSerialCount);
                     } else {
                         $requiredSerialCount = (int) max(0, ($currentQty + $adjQty) - $existingSerialCount);
                     }
@@ -163,6 +168,7 @@ class BulkStockMovementRequest extends FormRequest
                             $record = $existing->get($serialNumber);
                             if (! $record) {
                                 $validator->errors()->add("items.{$index}.serial_numbers", "Serial {$serialNumber} is not in stock for this variant.");
+
                                 continue;
                             }
 
