@@ -161,6 +161,7 @@ class User extends Authenticatable
     public function defaultAddress(): HasOne
     {
         return $this->hasOne(Address::class)
+            ->where('type', 'shipping')
             ->where('is_active', true)
             ->orderByDesc('is_default')
             ->orderByDesc('id');

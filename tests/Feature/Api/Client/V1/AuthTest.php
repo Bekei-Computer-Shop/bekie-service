@@ -8,6 +8,7 @@ use App\Models\ApiToken;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -67,6 +68,34 @@ class AuthTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('data.user.phone', '+12345678901')
             ->assertJsonPath('data.user.name', 'Jane Smith');
+    }
+
+    public function test_register_can_include_an_optional_default_shipping_address(): void
+    {
+        Mail::fake();
+
+        $response = $this->postJson('/api/v1/auth/register', [
+            'email' => 'addressed@example.com',
+            'first_name' => 'Sana',
+            'password' => 'SecurePassword123',
+            'password_confirmation' => 'SecurePassword123',
+            'address' => [
+                'full_name' => 'Sana Customer',
+                'address_line_1' => '12 Street 240',
+                'city' => 'Phnom Penh',
+                'postal_code' => '12000',
+                'country' => 'kh',
+            ],
+        ]);
+
+        $response->assertCreated();
+
+        $user = User::query()->where('email', 'addressed@example.com')->firstOrFail();
+        $this->assertDatabaseHas('addresses', [
+            'user_id' => $user->id,
+            'country' => 'KH',
+            'is_default' => true,
+        ]);
     }
 
     public function test_register_requires_email_or_phone(): void

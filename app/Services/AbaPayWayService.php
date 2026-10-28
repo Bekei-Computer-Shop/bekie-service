@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -14,9 +15,9 @@ class AbaPayWayService
 {
     public function isConfigured(): bool
     {
-        return (bool) config('services.payway.merchant_id')
-            && (bool) config('services.payway.api_key')
-            && (bool) config('services.payway.purchase_url');
+        return (bool) config('aba_payway.merchant_id')
+            && (bool) config('aba_payway.api_key')
+            && (bool) config('aba_payway.purchase_url');
     }
 
     public function purchase(array $data): array
@@ -25,7 +26,7 @@ class AbaPayWayService
 
         $fields = [
             'req_time' => now('UTC')->format('YmdHis'),
-            'merchant_id' => config('services.payway.merchant_id'),
+            'merchant_id' => config('aba_payway.merchant_id'),
             'tran_id' => $data['tran_id'] ?? Str::upper(Str::random(20)),
             'amount' => number_format((float) $data['amount'], 2, '.', ''),
             'items' => base64_encode(json_encode($data['items'] ?? [], JSON_THROW_ON_ERROR)),
@@ -36,7 +37,7 @@ class AbaPayWayService
             'phone' => $data['phone'] ?? '',
             'type' => 'purchase',
             'payment_option' => $data['payment_option'] ?? '',
-            'return_url' => base64_encode((string) config('services.payway.return_url')),
+            'return_url' => base64_encode((string) config('aba_payway.return_url')),
             'cancel_url' => $data['cancel_url'] ?? '',
             'continue_success_url' => $data['continue_success_url'] ?? '',
             'return_deeplink' => $data['return_deeplink'] ?? '',
@@ -48,7 +49,7 @@ class AbaPayWayService
             'additional_params' => $data['additional_params'] ?? '',
             'google_pay_token' => $data['google_pay_token'] ?? '',
             'skip_success_page' => $data['skip_success_page'] ?? 0,
-            'view_type' => ($data['payment_option'] ?? '') === 'abapay_khqr'
+            'view_type' => in_array(($data['payment_option'] ?? ''), ['abapay_khqr', 'abapay_khqr_deeplink'], true)
                 ? 'popup'
                 : ($data['view_type'] ?? 'popup'),
         ];
@@ -71,53 +72,170 @@ class AbaPayWayService
         $response = Http::asMultipart()
             ->acceptJson()
             ->timeout(20)
-            ->post(config('services.payway.purchase_url'), $fields);
-        $gatewayResponse = $response->json() ?? [];
-        $gatewayStatusCode = (string) data_get($gatewayResponse, 'status.code', '');
-        if ($response->failed() || ($gatewayStatusCode !== '' && ! in_array($gatewayStatusCode, ['00', '0'], true))) {
-            $gatewayMessage = (string) data_get($gatewayResponse, 'status.message', '');
+            ->post(config('aba_payway.purchase_url'), $fields);
+        $contentType = strtolower(trim(explode(';', (string) $response->header('Content-Type'))[0]));
+        $gatewayResponse = $response->json();
+        $expectsQrPayload = $fields['payment_option'] === 'abapay_khqr_deeplink';
+
+        if ($response->failed()) {
             $this->failPurchase(
                 $response,
-                $gatewayStatusCode,
-                $gatewayMessage !== '' ? $gatewayMessage : 'ABA PayWay rejected the checkout request.',
+                '',
+                (string) $fields['tran_id'],
+                'ABA PayWay rejected the checkout request.',
+                is_array($gatewayResponse) ? array_keys($gatewayResponse) : [],
+                'http_error',
             );
         }
 
-        if ($fields['payment_option'] === 'abapay_khqr') {
-            $qrCodeUrl = data_get($gatewayResponse, 'checkout_qr_url');
-            $qrCodeScheme = is_string($qrCodeUrl) ? parse_url($qrCodeUrl, PHP_URL_SCHEME) : null;
-            if (! is_string($qrCodeUrl) || filter_var($qrCodeUrl, FILTER_VALIDATE_URL) === false || $qrCodeScheme !== 'https') {
+        if (! $expectsQrPayload) {
+            if ($contentType === 'application/json' && ! is_array($gatewayResponse)) {
+                $this->failPurchase(
+                    $response,
+                    '',
+                    (string) $fields['tran_id'],
+                    'ABA PayWay returned an unexpected checkout response.',
+                    [],
+                    'unexpected_response_type',
+                );
+            }
+
+            $gatewayStatusCode = (string) data_get($gatewayResponse, 'status.code', '');
+            if ($gatewayStatusCode !== '' && ! in_array($gatewayStatusCode, ['00', '0'], true)) {
                 $this->failPurchase(
                     $response,
                     $gatewayStatusCode,
-                    'ABA PayWay did not return a valid HTTPS checkout_qr_url.',
+                    (string) $fields['tran_id'],
+                    'ABA PayWay rejected the checkout request.',
+                    is_array($gatewayResponse) ? array_keys($gatewayResponse) : [],
+                    'provider_rejected',
                 );
             }
+
+            return [
+                'transaction_id' => $fields['tran_id'],
+                'view_type' => $fields['view_type'],
+                'gateway' => is_array($gatewayResponse) ? $gatewayResponse : ['html' => $response->body()],
+            ];
+        }
+
+        if ($contentType !== 'application/json' || ! is_array($gatewayResponse)) {
+            $this->failPurchase(
+                $response,
+                '',
+                (string) $fields['tran_id'],
+                'ABA PayWay returned an unexpected KHQR response.',
+                [],
+                'unexpected_response_type',
+            );
+        }
+
+        $gatewayStatusCode = (string) data_get($gatewayResponse, 'status.code', '');
+        if (! in_array($gatewayStatusCode, ['00', '0'], true)) {
+            $this->failPurchase(
+                $response,
+                $gatewayStatusCode,
+                (string) $fields['tran_id'],
+                'ABA PayWay rejected the checkout request.',
+                array_keys($gatewayResponse),
+                'provider_rejected',
+            );
+        }
+
+        $responseTransactionId = data_get($gatewayResponse, 'status.tran_id');
+        if ($responseTransactionId !== (string) $fields['tran_id']) {
+            $this->failPurchase(
+                $response,
+                $gatewayStatusCode,
+                (string) $fields['tran_id'],
+                'ABA PayWay returned a mismatched transaction identifier.',
+                array_keys($gatewayResponse),
+                'transaction_id_mismatch',
+            );
+        }
+
+        $qrString = $gatewayResponse['qr_string'] ?? $gatewayResponse['qrString'] ?? null;
+        if (! is_string($qrString) || trim($qrString) === '') {
+            $this->failPurchase(
+                $response,
+                $gatewayStatusCode,
+                (string) $fields['tran_id'],
+                'ABA PayWay did not return a usable KHQR payload.',
+                array_keys($gatewayResponse),
+                'qr_payload_missing',
+            );
+        }
+
+        $checkoutQrUrl = $gatewayResponse['checkout_qr_url'] ?? null;
+        $qrUrlScheme = is_string($checkoutQrUrl) ? parse_url($checkoutQrUrl, PHP_URL_SCHEME) : null;
+        $checkoutQrUrl = is_string($checkoutQrUrl)
+            && filter_var($checkoutQrUrl, FILTER_VALIDATE_URL) !== false
+            && strtolower((string) $qrUrlScheme) === 'https'
+                ? $checkoutQrUrl
+                : null;
+        $abaPayDeeplink = $gatewayResponse['abapay_deeplink'] ?? null;
+        $deeplinkScheme = is_string($abaPayDeeplink) ? parse_url($abaPayDeeplink, PHP_URL_SCHEME) : null;
+        $abaPayDeeplink = is_string($abaPayDeeplink)
+            && strtolower((string) $deeplinkScheme) === 'abamobilebank'
+                ? $abaPayDeeplink
+                : null;
+        $safeGatewayResponse = [
+            'status' => ['code' => $gatewayStatusCode],
+            'qr_string' => $qrString,
+        ];
+        if ($checkoutQrUrl !== null) {
+            $safeGatewayResponse['checkout_qr_url'] = $checkoutQrUrl;
+        }
+        if ($abaPayDeeplink !== null) {
+            $safeGatewayResponse['abapay_deeplink'] = $abaPayDeeplink;
         }
 
         return [
             'transaction_id' => $fields['tran_id'],
             'view_type' => $fields['view_type'],
-            'gateway' => $gatewayResponse ?: ['html' => $response->body()],
+            'payment_payload' => ['type' => 'qr_string', 'value' => $qrString],
+            'qr_string' => $qrString,
+            'abapay_deeplink' => $abaPayDeeplink,
+            'checkout_url' => $checkoutQrUrl,
+            'gateway' => $safeGatewayResponse,
         ];
     }
 
-    private function failPurchase(Response $response, string $abaStatusCode, string $message): never
-    {
+    private function failPurchase(
+        Response $response,
+        string $abaStatusCode,
+        string $transactionId,
+        string $message,
+        array $responseKeys = [],
+        string $reasonCode = 'provider_rejected',
+    ): never {
         $message = $this->redactSecrets($message);
         $httpStatus = $response->status();
+        $gatewayResponse = $response->json();
+        $responseFieldTypes = [];
+        foreach (['status.code', 'status.tran_id', 'qr_string', 'qrString', 'qrImage', 'abapay_deeplink', 'checkout_qr_url'] as $path) {
+            $value = is_array($gatewayResponse) ? data_get($gatewayResponse, $path) : null;
+            $responseFieldTypes[$path] = $value === null ? 'missing' : get_debug_type($value);
+        }
 
         Log::error('ABA PayWay purchase rejected', [
-            'endpoint' => config('services.payway.purchase_url'),
+            'tran_id' => $transactionId,
             'http_status' => $httpStatus,
-            'aba_status_code' => $abaStatusCode !== '' ? $abaStatusCode : null,
-            'response_body' => $this->redactSecrets($response->body()),
+            'status_code' => $abaStatusCode !== '' ? $abaStatusCode : null,
+            'reason_code' => $reasonCode,
+            'content_type' => $response->header('Content-Type'),
+            'response_field_types' => $responseFieldTypes,
+            'response_keys' => array_values(array_filter(
+                $responseKeys,
+                fn (string|int $key): bool => ! preg_match('/key|secret|hash|signature|token/i', (string) $key),
+            )),
         ]);
 
         throw new AbaPayWayException($message, [
             'aba' => [
                 'status_code' => $abaStatusCode !== '' ? $abaStatusCode : null,
                 'http_status' => $httpStatus,
+                'reason_code' => $reasonCode,
                 'message' => $message,
             ],
         ]);
@@ -127,8 +245,8 @@ class AbaPayWayService
     {
         return str_replace(
             array_filter([
-                (string) config('services.payway.merchant_id'),
-                (string) config('services.payway.api_key'),
+                (string) config('aba_payway.merchant_id'),
+                (string) config('aba_payway.api_key'),
             ]),
             '[REDACTED]',
             $value,
@@ -147,30 +265,50 @@ class AbaPayWayService
             ],
             'currency' => ['USD', 'KHR'],
             'methods' => [
-                ['key' => 'aba_payway', 'enabled' => $this->isConfigured(), 'options' => ['abapay_khqr', 'cards']],
+                ['key' => 'aba_payway', 'enabled' => $this->isConfigured(), 'options' => ['abapay_khqr_deeplink', 'abapay_khqr', 'cards']],
                 ['key' => 'cod', 'enabled' => true],
             ],
         ];
     }
 
-    public function check(string $transactionId): array
+    public function check(string $transactionId, bool $allowNotFound = false): array
     {
         $this->ensureConfigured();
         $reqTime = now('UTC')->format('YmdHis');
         $payload = [
             'req_time' => $reqTime,
-            'merchant_id' => config('services.payway.merchant_id'),
+            'merchant_id' => config('aba_payway.merchant_id'),
             'tran_id' => $transactionId,
         ];
         $payload['hash'] = $this->hash($reqTime.$payload['merchant_id'].$transactionId);
 
-        $response = Http::acceptJson()
+        $response = Http::retry(2, 200, fn (\Throwable $exception): bool => $exception instanceof ConnectionException)
+            ->acceptJson()
             ->timeout(20)
-            ->post(config('services.payway.check_url'), $payload);
+            ->post(config('aba_payway.check_url'), $payload);
 
-        $this->throwIfGatewayFailed($response);
+        $this->throwIfGatewayFailed($response, $allowNotFound);
 
         return $response->json() ?? [];
+    }
+
+    public function transactionDetails(array $response): array
+    {
+        $details = data_get($response, 'data.data');
+        if (! is_array($details)) {
+            $details = data_get($response, 'data');
+        }
+        if (! is_array($details)) {
+            $details = $response;
+        }
+
+        return [
+            'tran_id' => $details['tran_id'] ?? $details['transaction_id'] ?? null,
+            'payment_status_code' => $details['payment_status_code'] ?? $details['status_code'] ?? null,
+            'payment_status' => $details['payment_status'] ?? null,
+            'payment_amount' => $details['payment_amount'] ?? $details['amount'] ?? null,
+            'payment_currency' => $details['payment_currency'] ?? $details['currency'] ?? null,
+        ];
     }
 
     /**
@@ -189,13 +327,16 @@ class AbaPayWayService
 
         $reqTime = now('UTC')->format('YmdHis');
         $transactionId = 'CONNECTION'.now('UTC')->format('YmdHis').Str::upper(Str::random(4));
-        $merchantId = config('services.payway.merchant_id');
-        $response = Http::acceptJson()->timeout(20)->post(config('services.payway.check_url'), [
-            'req_time' => $reqTime,
-            'merchant_id' => $merchantId,
-            'tran_id' => $transactionId,
-            'hash' => $this->hash($reqTime.$merchantId.$transactionId),
-        ]);
+        $merchantId = config('aba_payway.merchant_id');
+        $response = Http::retry(2, 200, fn (\Throwable $exception): bool => $exception instanceof ConnectionException)
+            ->acceptJson()
+            ->timeout(20)
+            ->post(config('aba_payway.check_url'), [
+                'req_time' => $reqTime,
+                'merchant_id' => $merchantId,
+                'tran_id' => $transactionId,
+                'hash' => $this->hash($reqTime.$merchantId.$transactionId),
+            ]);
 
         $payload = $response->json() ?? [];
         $gatewayStatus = $payload['status'] ?? $payload['data']['status'] ?? [];
@@ -211,12 +352,7 @@ class AbaPayWayService
 
     public function verifyCallback(array $payload, ?string $signature): bool
     {
-        if (! $signature || ! config('services.payway.api_key')) {
-            Log::warning('PayWay callback verification failed: missing signature or API key', [
-                'has_signature' => (bool) $signature,
-                'has_api_key' => (bool) config('services.payway.api_key'),
-            ]);
-
+        if (! $signature || ! config('aba_payway.api_key')) {
             return false;
         }
 
@@ -228,14 +364,6 @@ class AbaPayWayService
 
         $computedHash = $this->hash($input);
         $isValid = hash_equals($computedHash, $signature);
-
-        if (! $isValid) {
-            Log::warning('PayWay callback signature verification failed', [
-                'tran_id' => $payload['tran_id'] ?? 'unknown',
-                'expected_hash' => substr($computedHash, 0, 20).'...',
-                'received_hash' => substr($signature, 0, 20).'...',
-            ]);
-        }
 
         return $isValid;
     }
@@ -249,7 +377,7 @@ class AbaPayWayService
 
     private function hash(string $input): string
     {
-        return base64_encode(hash_hmac('sha512', $input, config('services.payway.api_key'), true));
+        return base64_encode(hash_hmac('sha512', $input, config('aba_payway.api_key'), true));
     }
 
     private function ensureConfigured(): void
@@ -259,10 +387,40 @@ class AbaPayWayService
         }
     }
 
-    private function throwIfGatewayFailed(Response $response): void
+    private function throwIfGatewayFailed(Response $response, bool $allowNotFound = false): void
     {
         if ($response->failed()) {
-            throw new RuntimeException('ABA PayWay request failed with HTTP '.$response->status().'.');
+            throw new AbaPayWayException('ABA PayWay transaction check failed.', [
+                'aba' => [
+                    'reason_code' => 'check_http_error',
+                    'http_status' => $response->status(),
+                ],
+            ]);
+        }
+
+        $contentType = strtolower(trim(explode(';', (string) $response->header('Content-Type'))[0]));
+        $gatewayResponse = $response->json();
+        if ($contentType !== 'application/json' || ! is_array($gatewayResponse)) {
+            throw new AbaPayWayException('ABA PayWay returned an unexpected transaction-check response.', [
+                'aba' => ['reason_code' => 'check_unexpected_response'],
+            ]);
+        }
+
+        $statusCode = (string) data_get($gatewayResponse, 'status.code', '');
+        if ($statusCode === '') {
+            throw new AbaPayWayException('ABA PayWay transaction-check status is missing.', [
+                'aba' => ['reason_code' => 'check_status_missing'],
+            ]);
+        }
+
+        if (! in_array($statusCode, ['00', '0'], true)
+            && ! ($allowNotFound && $statusCode === '6')) {
+            throw new AbaPayWayException('ABA PayWay rejected the transaction status request.', [
+                'aba' => [
+                    'reason_code' => 'check_provider_rejected',
+                    'status_code' => $statusCode,
+                ],
+            ]);
         }
     }
 }

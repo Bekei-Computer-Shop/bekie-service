@@ -7,7 +7,6 @@ use App\Http\Requests\Api\Client\V1\StoreOrderRequest;
 use App\Http\Requests\Api\Client\V1\UpdateCartItemRequest;
 use App\Http\Resources\Api\Client\V1\CartResource;
 use App\Http\Resources\Api\Client\V1\OrderResource;
-use App\Models\Address;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Order;
@@ -15,6 +14,7 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingMethod;
+use App\Services\CustomerAddressService;
 use App\Services\ProductSerialService;
 use App\Services\TaxCalculator;
 use Illuminate\Http\Request;
@@ -323,7 +323,7 @@ class CartController extends BaseApiController
      * }
      * @response 404 Cart not found
      */
-    public function checkout(StoreOrderRequest $request)
+    public function checkout(StoreOrderRequest $request, CustomerAddressService $addressService)
     {
         $cart = Cart::where('user_id', $request->user()->id)->firstOrFail();
 
@@ -333,7 +333,7 @@ class CartController extends BaseApiController
 
         $shippingMethod = ShippingMethod::active()->findOrFail($request->shipping_method_id);
 
-        $addressSnapshot = $this->resolveAddressSnapshot($request);
+        $shippingAddress = $addressService->resolveCheckoutAddress($request->user(), $request->validated());
 
         try {
             app(ProductSerialService::class)->assertCartSerialsAvailable($cart->items, $request->input('serial_numbers', []));
@@ -350,13 +350,13 @@ class CartController extends BaseApiController
         $taxBreakdown = app(TaxCalculator::class)->calculate(
             (float) $cart->subtotal,
             (float) $cart->discount_total,
-            $request->country,
+            $shippingAddress['country'],
         );
         $shippingTotal = $shippingMethod->calculateCost($shippingWeight);
 
         $order = Order::create([
             'user_id' => $cart->user_id,
-            'address_id' => $request->address_id,
+            'address_id' => $shippingAddress['address_id'],
             'order_number' => $this->generateOrderNumber(),
             'subtotal' => $cart->subtotal,
             'discount_total' => $cart->discount_total,
@@ -376,7 +376,7 @@ class CartController extends BaseApiController
                 'email' => $request->email,
                 'phone' => $request->phone,
             ],
-            'address_snapshot' => $addressSnapshot,
+            'address_snapshot' => $shippingAddress['snapshot'],
             'metadata' => $request->input('metadata', []),
         ]);
 
@@ -449,40 +449,6 @@ class CartController extends BaseApiController
     protected function generateOrderNumber(): string
     {
         return 'ORD-'.now()->format('YmdHis').'-'.Str::upper(Str::random(5));
-    }
-
-    protected function resolveAddressSnapshot(StoreOrderRequest $request): array
-    {
-        if ($request->filled('address_id')) {
-            $address = Address::query()
-                ->whereKey($request->address_id)
-                ->where('user_id', $request->user()?->id)
-                ->first();
-
-            return $address ? $address->only([
-                'full_name',
-                'phone',
-                'email',
-                'company',
-                'address_line_1',
-                'address_line_2',
-                'city',
-                'state',
-                'postal_code',
-                'country',
-            ]) : [];
-        }
-
-        return [
-            'recipient_name' => $request->recipient_name,
-            'phone' => $request->phone,
-            'address_line_1' => $request->address_line_1,
-            'address_line_2' => $request->address_line_2,
-            'city' => $request->city,
-            'state' => $request->state,
-            'postal_code' => $request->postal_code,
-            'country' => $request->country,
-        ];
     }
 
     protected function calculateCartWeight(Cart $cart): float

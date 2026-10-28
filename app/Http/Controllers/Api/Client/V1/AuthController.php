@@ -11,6 +11,7 @@ use App\Models\ApiToken;
 use App\Models\User;
 use App\Services\AdminNotificationService;
 use App\Services\AuthService;
+use App\Services\CustomerAddressService;
 use App\Services\OtpService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +49,10 @@ class AuthController extends BaseApiController
             ]);
 
             $user->assignRole('user');
+
+            if (isset($data['address'])) {
+                app(CustomerAddressService::class)->create($user, $data['address']);
+            }
 
             return $user;
         });

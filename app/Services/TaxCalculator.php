@@ -69,13 +69,16 @@ class TaxCalculator
     private function rateConfigurationForCountry(array $rates, string $country): array
     {
         $internationalRate = null;
+        $legacyCountryName = strtoupper($country) === 'KH' ? 'Cambodia' : $country;
 
         foreach ($rates as $taxRate) {
             if (! is_array($taxRate) || ! isset($taxRate['region'], $taxRate['rate'])) {
                 continue;
             }
 
-            if (strcasecmp((string) $taxRate['region'], $country) === 0) {
+            if (strcasecmp((string) $taxRate['region'], $country) === 0
+                || strcasecmp((string) $taxRate['region'], $legacyCountryName) === 0
+                || strcasecmp((string) ($taxRate['country_code'] ?? ''), $country) === 0) {
                 return $taxRate;
             }
 

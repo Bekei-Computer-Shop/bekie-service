@@ -41,6 +41,7 @@ class OrderResource extends JsonResource
                 'name' => $this->user?->name,
                 'email' => $this->user?->email,
                 'phone' => $this->user?->phone,
+                'avatar' => $this->user?->avatar,
             ],
             // Snapshot captured at checkout is the source of truth. Orders that
             // never captured one (legacy rows, seeded data) fall back to the

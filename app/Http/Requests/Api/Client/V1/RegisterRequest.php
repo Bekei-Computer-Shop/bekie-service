@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\Client\V1;
 
+use App\Support\ShippingAddressRules;
 use Illuminate\Foundation\Http\FormRequest;
 
 class RegisterRequest extends FormRequest
@@ -25,7 +26,30 @@ class RegisterRequest extends FormRequest
 
             // Credentials.
             'password' => 'required|string|min:8|confirmed',
+            'address' => ['sometimes', 'array:full_name,phone,email,company,address_line_1,address_line_2,city,state,postal_code,country,label,delivery_note'],
+            ...ShippingAddressRules::rules('address.', required: false, requiredWith: 'required_with:address'),
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $address = $this->input('address');
+
+        if (! is_array($address)) {
+            return;
+        }
+
+        foreach ($address as $key => $value) {
+            if (is_string($value)) {
+                $address[$key] = trim($value);
+            }
+        }
+
+        if (isset($address['country'])) {
+            $address['country'] = strtoupper($address['country']);
+        }
+
+        $this->merge(['address' => $address]);
     }
 
     public function messages(): array

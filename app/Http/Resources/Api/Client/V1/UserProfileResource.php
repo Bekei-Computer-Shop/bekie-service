@@ -9,7 +9,7 @@ class UserProfileResource extends JsonResource
 {
     public function toArray($request): array
     {
-        $avatar = $this->avatar ? Storage::disk('public')->url($this->avatar) : null;
+        $avatar = $this->resolveAvatar($this->avatar);
 
         return [
             'id' => $this->id,
@@ -25,5 +25,14 @@ class UserProfileResource extends JsonResource
             'created_at' => $this->created_at?->toDateTimeString(),
             'updated_at' => $this->updated_at?->toDateTimeString(),
         ];
+    }
+
+    private function resolveAvatar(?string $avatar): ?string
+    {
+        if ($avatar === null || $avatar === '' || preg_match('#^(https?://|data:|//)#i', $avatar) === 1) {
+            return $avatar;
+        }
+
+        return Storage::disk('public')->url($avatar);
     }
 }

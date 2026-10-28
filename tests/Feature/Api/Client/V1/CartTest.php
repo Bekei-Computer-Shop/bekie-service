@@ -287,12 +287,51 @@ class CartTest extends TestCase
                 'recipient_name' => 'John Doe',
                 'address_line_1' => '123 Main St',
                 'city' => 'New York',
-                'country' => 'United States',
+                'postal_code' => '10001',
+                'country' => 'US',
             ]);
 
         $response->assertUnprocessable()
             ->assertJsonPath('message', 'Selected shipping method does not support the cart weight.');
 
         $this->assertDatabaseMissing('orders', ['user_id' => $this->user->id]);
+    }
+
+    public function test_cart_checkout_rejects_another_customers_address(): void
+    {
+        $product = Product::factory()->create(['weight' => 1, 'track_inventory' => false]);
+        CartItem::create([
+            'cart_id' => $this->cart->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'unit_price' => 100,
+            'sale_price' => 100,
+            'cost_price' => 50,
+            'subtotal' => 100,
+            'discount' => 0,
+            'total' => 100,
+            'product_name' => $product->name,
+            'product_sku' => $product->sku,
+        ]);
+        $shippingMethod = ShippingMethod::factory()->active()->create();
+        $otherUser = User::factory()->create();
+        $foreignAddress = $otherUser->addresses()->create([
+            'type' => 'shipping',
+            'full_name' => 'Foreign Customer',
+            'address_line_1' => '1 Other Street',
+            'city' => 'Other City',
+            'postal_code' => '10000',
+            'country' => 'US',
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+
+        $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
+            ->postJson('/api/v1/cart/checkout', [
+                'cart_id' => $this->cart->id,
+                'shipping_method_id' => $shippingMethod->id,
+                'address_id' => $foreignAddress->id,
+            ])
+            ->assertNotFound();
     }
 }

@@ -56,6 +56,38 @@ function viewedTrackingOrder(string $source = 'web'): Order
     return $order;
 }
 
+test('order list includes customer name email and avatar', function (): void {
+    $admin = User::factory()->superAdmin()->create();
+    $customer = User::factory()->create([
+        'first_name' => 'Dara',
+        'last_name' => 'Sok',
+        'email' => 'dara@example.test',
+        'avatar' => '/storage/avatars/dara.jpg',
+        'is_admin' => false,
+    ]);
+    $order = Order::create([
+        'user_id' => $customer->id,
+        'order_number' => 'CUSTOMER-IDENTITY-001',
+        'status' => 'pending',
+        'currency' => 'USD',
+        'payment_method' => 'cod',
+        'payment_status' => 'pending',
+        'subtotal' => 10,
+        'discount_total' => 0,
+        'tax_total' => 0,
+        'shipping_total' => 0,
+        'grand_total' => 10,
+    ]);
+
+    $response = viewedTrackingAs($admin)->getJson('/api/v1/admin/orders');
+
+    $response->assertOk();
+    $listedOrder = collect($response->json('data.items'))->firstWhere('id', $order->uuid);
+    expect($listedOrder['customer']['name'])->toBe('Dara Sok')
+        ->and($listedOrder['customer']['email'])->toBe('dara@example.test')
+        ->and($listedOrder['customer']['avatar'])->toBe('/storage/avatars/dara.jpg');
+});
+
 test('lists the uuids of orders this admin has not viewed yet', function (): void {
     $admin = User::factory()->superAdmin()->create();
     $first = viewedTrackingOrder();
