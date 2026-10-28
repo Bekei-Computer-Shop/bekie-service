@@ -20,6 +20,6 @@ class ContactController extends BaseApiController
             return $this->error('Unable to send your message right now.', 503);
         }
 
-        return $this->success(message: 'Your message has been sent.');
+        return $this->success(message: 'Your message has been queued for delivery.');
     }
 }

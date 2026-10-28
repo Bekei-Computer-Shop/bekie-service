@@ -19,7 +19,9 @@ class PasswordResetController extends BaseApiController
         try {
             $this->passwordResets->requestOtp($request->string('email')->toString());
         } catch (TooManyRequestsHttpException $exception) {
-            return $this->error($exception->getMessage(), 429);
+            return $this->success(message: 'If the account exists, password reset instructions have been sent.');
+        } catch (\Throwable) {
+            return $this->error('Unable to send password reset instructions right now. Please try again.', 503);
         }
 
         return $this->success(message: 'If the account exists, password reset instructions have been sent.');

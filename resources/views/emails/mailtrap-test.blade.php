@@ -5,12 +5,12 @@ Hello,
 
 This is a test message from **{{ config('app.name') }}**.
 
-Your application successfully connected to its configured email service and delivered this message.
+Your application successfully submitted this message to its configured email service.
 
 <x-mail::panel>
 **Delivery check passed**
 
-The message was accepted by your configured mail transport.
+The configured mail transport accepted the message for delivery.
 </x-mail::panel>
 
 If you weren't expecting this test, no action is needed.

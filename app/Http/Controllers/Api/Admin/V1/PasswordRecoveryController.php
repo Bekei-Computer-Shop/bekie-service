@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\OtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
@@ -32,8 +33,10 @@ class PasswordRecoveryController extends BaseAdminController
         if ($user) {
             try {
                 $recoveryEmail = strtolower((string) ($user->recovery_email ?: $user->email));
-                $issued = $this->otps->issue($user, $recoveryEmail, 'admin_password_reset');
-                Mail::to($recoveryEmail)->queue(new AdminPasswordRecoveryOtpMail($issued['code'], (int) config('otp.expires_minutes')));
+                DB::transaction(function () use ($user, $recoveryEmail): void {
+                    $issued = $this->otps->issue($user, $recoveryEmail, 'admin_password_reset');
+                    Mail::to($recoveryEmail)->queue(new AdminPasswordRecoveryOtpMail($issued['code'], (int) config('otp.expires_minutes')));
+                });
             } catch (TooManyRequestsHttpException) {
                 // Keep this response generic to prevent account enumeration.
             } catch (\Throwable $exception) {

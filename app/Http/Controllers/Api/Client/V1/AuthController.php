@@ -60,12 +60,15 @@ class AuthController extends BaseApiController
         app(AdminNotificationService::class)->newCustomer($user);
 
         if ($email) {
-            $issued = app(OtpService::class)->issue($user, $email, 'customer_email_verification');
-
+            $message = 'Registration successful. Verify your email to continue.';
             try {
-                Mail::to($email)->queue(new CustomerVerificationOtpMail($issued['code'], (int) config('otp.expires_minutes')));
+                DB::transaction(function () use ($user, $email): void {
+                    $issued = app(OtpService::class)->issue($user, $email, 'customer_email_verification');
+                    Mail::to($email)->queue(new CustomerVerificationOtpMail($issued['code'], (int) config('otp.expires_minutes')));
+                });
             } catch (\Throwable $exception) {
                 Log::error('Customer verification email could not be queued.', ['exception' => $exception::class]);
+                $message = 'Registration successful, but the verification email could not be queued. Request a new code to continue.';
             }
 
             return $this->created([
@@ -82,7 +85,7 @@ class AuthController extends BaseApiController
                     'is_active' => (bool) $user->is_active,
                     'is_banned' => (bool) $user->is_banned,
                 ],
-            ], 'Registration successful. Verify your email to continue.');
+            ], $message);
         }
 
         $tokenPair = $this->authService->createToken($user, $request);

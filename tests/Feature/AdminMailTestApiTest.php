@@ -31,7 +31,7 @@ test('all email templates render with their expected content', function (): void
         [new ContactMessageMail('Contact Tester', 'tester@example.com', 'Order question', 'A package arrived damaged.'), ['Contact Tester', 'tester@example.com', 'Order question', 'A package arrived damaged.']],
         [new CustomerVerificationOtpMail('verify-code-456', 15), ['Verify your email', 'verify-code-456', '15 minutes']],
         [new PasswordResetOtpMail('reset-code-789', 20), ['Password Reset Request', 'reset-code-789', '20 minutes']],
-        [new MailtrapTestMail, ['Email delivery test', 'Delivery check passed', 'successfully connected', 'no action is needed']],
+        [new MailtrapTestMail, ['Email delivery test', 'Delivery check passed', 'successfully submitted', 'accepted the message for delivery', 'no action is needed']],
     ];
 
     foreach ($mailables as [$mailable, $expectedContent]) {
@@ -40,6 +40,8 @@ test('all email templates render with their expected content', function (): void
         foreach ($expectedContent as $content) {
             $this->assertStringContainsString($content, $rendered);
         }
+
+        $this->assertStringContainsString('#f0cf6a', $rendered);
     }
 });
 
@@ -83,4 +85,17 @@ test('the mail configuration test validates its recipient', function (): void {
         ->assertJsonValidationErrors('email');
 
     Mail::assertNothingSent();
+});
+
+test('the mail configuration test returns a controlled error when delivery fails', function (): void {
+    $admin = User::factory()->superAdmin()->create();
+    $adminToken = (new AdminAuthService)->createAdminToken($admin)['access_token'];
+    $mailer = Mockery::mock();
+    $mailer->shouldReceive('send')->once()->andThrow(new RuntimeException('SMTP unavailable'));
+    Mail::shouldReceive('to')->once()->with('recipient@example.com')->andReturn($mailer);
+
+    $this->withToken($adminToken)
+        ->postJson('/api/v1/admin/mail/test', ['email' => 'recipient@example.com'])
+        ->assertStatus(503)
+        ->assertJsonPath('message', 'Unable to send the test email right now.');
 });
