@@ -64,11 +64,20 @@ class EmailVerificationController extends BaseApiController
 
         try {
             $issued = $this->otps->issue($user, $email, 'customer_email_verification');
-            Mail::to($email)->queue(new CustomerVerificationOtpMail($issued['code'], (int) config('otp.expires_minutes')));
         } catch (TooManyRequestsHttpException $exception) {
             return $this->error($exception->getMessage(), 429);
+        }
+
+        try {
+            Mail::to($email)->queue(new CustomerVerificationOtpMail($issued['code'], (int) config('otp.expires_minutes')));
         } catch (\Throwable $exception) {
-            Log::error('Customer verification email could not be queued.', ['exception' => $exception::class]);
+            Log::error('Customer verification email could not be queued.', [
+                'exception' => $exception::class,
+                'code' => $exception->getCode(),
+            ]);
+            $issued['challenge']->forceFill(['last_sent_at' => null])->save();
+
+            return $this->error('Verification email could not be queued. Please try again.', 503);
         }
 
         return $this->success(message: 'If the account can receive verification mail, a new code has been sent.');

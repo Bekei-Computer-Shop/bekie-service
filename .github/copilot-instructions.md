@@ -1,0 +1,1 @@
+When working on email OTP functionality in `bekie-service`, first read the relevant documentation in `context/bekie-service-context/features/email-otp/`. Treat application source as authoritative and update the context docs when OTP behavior changes.

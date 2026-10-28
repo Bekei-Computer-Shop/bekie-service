@@ -127,13 +127,27 @@ services:
       - key: SESSION_SAME_SITE
         value: lax
 
-      # Swap to a transactional provider (Resend/Postmark/SES) when the
-      # first mail-sending feature ships — see DEPLOYMENT.md "Mail".
+      # Mailtrap Email Sending SMTP settings from .env.example.
       - key: MAIL_MAILER
-        value: log
+        value: smtp
+
+      - key: MAIL_SCHEME
+        value: smtp
+
+      - key: MAIL_HOST
+        value: live.smtp.mailtrap.io
+
+      - key: MAIL_PORT
+        value: "587"
+
+      - key: MAIL_USERNAME
+        value: api
+
+      - key: MAIL_PASSWORD
+        sync: false
 
       - key: MAIL_FROM_ADDRESS
-        sync: false
+        value: noreply@demomailtrap.co
 
       - key: MAIL_FROM_NAME
         sync: false
@@ -158,13 +172,77 @@ services:
       php artisan db:seed --class=AdminPermissionsSeeder --force &&
       php artisan db:seed --class=AdminUserSeeder --force &&
       php artisan db:seed --class=PreProductionSeeder --force
-
     startCommand: >
       php artisan optimize:clear &&
       php artisan config:cache &&
       php artisan route:cache &&
       php artisan view:cache &&
       /usr/local/bin/railway-entrypoint apache2-foreground
+
+  - type: worker
+    name: laravel-queue
+    runtime: docker
+    region: singapore
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    startCommand: >
+      /usr/local/bin/railway-entrypoint php artisan queue:work redis --sleep=3 --tries=3 --timeout=90
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        sync: false
+      - key: RUN_MIGRATIONS
+        value: "false"
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SSLMODE
+        value: require
+      - key: REDIS_CLIENT
+        value: phpredis
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        value: "6379"
+      - key: REDIS_PASSWORD
+        sync: false
+      - key: CACHE_STORE
+        value: redis
+      - key: SESSION_DRIVER
+        value: redis
+      - key: QUEUE_CONNECTION
+        value: redis
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: MAIL_MAILER
+        value: smtp
+      - key: MAIL_SCHEME
+        value: smtp
+      - key: MAIL_HOST
+        value: live.smtp.mailtrap.io
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_USERNAME
+        value: api
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM_ADDRESS
+        value: noreply@demomailtrap.co
+      - key: MAIL_FROM_NAME
+        sync: false
 
 # Provision the database and Redis in the Render dashboard (or via
 # render.yaml infra blocks). The Starter plan is sufficient for both.

@@ -7,6 +7,7 @@ use App\Models\OtpChallenge;
 use App\Models\User;
 use App\Services\OtpService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\PendingMail;
 use Illuminate\Support\Facades\Mail;
 
 uses(RefreshDatabase::class);
@@ -40,6 +41,71 @@ test('customer email registration queues an OTP and does not issue a token', fun
         ->assertJsonMissingPath('data.access_token');
     Mail::assertQueued(CustomerVerificationOtpMail::class);
     expect(OtpChallenge::where('purpose', 'customer_email_verification')->count())->toBe(1);
+});
+
+test('customer verification OTP has six digits and is stored as a hash', function (): void {
+    $user = User::factory()->unverified()->create(['email' => 'customer@example.com']);
+    $issued = app(OtpService::class)->issue($user, $user->email, 'customer_email_verification');
+
+    expect($issued['code'])->toMatch('/^\d{6}$/');
+    expect($issued['challenge']->code_hash)->not->toBe($issued['code']);
+});
+
+test('registration reports a verification email queue failure', function (): void {
+    $pendingMail = Mockery::mock(PendingMail::class);
+    $pendingMail->shouldReceive('queue')
+        ->once()
+        ->andThrow(new RuntimeException('Private SMTP failure details'));
+    Mail::shouldReceive('to')
+        ->once()
+        ->with('customer@example.com')
+        ->andReturn($pendingMail);
+
+    $response = $this->postJson('/api/v1/auth/register', [
+        'email' => 'customer@example.com',
+        'first_name' => 'Customer',
+        'password' => 'SecurePassword123',
+        'password_confirmation' => 'SecurePassword123',
+    ]);
+
+    $response->assertStatus(503)
+        ->assertJsonPath('status', 'error')
+        ->assertJsonPath('message', 'Registration succeeded, but the verification email could not be queued. Use the resend verification endpoint to try again.')
+        ->assertDontSee('Private SMTP failure details');
+
+    expect(User::query()->where('email', 'customer@example.com')->exists())->toBeTrue();
+    expect(OtpChallenge::query()->firstOrFail()->last_sent_at)->toBeNull();
+});
+
+test('resend reports a verification email queue failure', function (): void {
+    $user = User::factory()->unverified()->create(['email' => 'customer@example.com']);
+    $pendingMail = Mockery::mock(PendingMail::class);
+    $pendingMail->shouldReceive('queue')
+        ->once()
+        ->andThrow(new RuntimeException('Private SMTP failure details'));
+    Mail::shouldReceive('to')
+        ->once()
+        ->with($user->email)
+        ->andReturn($pendingMail);
+
+    $this->postJson('/api/v1/auth/resend-email-otp', ['email' => $user->email])
+        ->assertStatus(503)
+        ->assertJsonPath('status', 'error')
+        ->assertDontSee('Private SMTP failure details');
+
+    expect(OtpChallenge::query()->firstOrFail()->last_sent_at)->toBeNull();
+});
+
+test('resending invalidates the previously issued customer OTP', function (): void {
+    Mail::fake();
+    $user = User::factory()->unverified()->create(['email' => 'customer@example.com']);
+    $first = app(OtpService::class)->issue($user, $user->email, 'customer_email_verification');
+    $first['challenge']->update(['last_sent_at' => now()->subMinute()]);
+
+    $this->postJson('/api/v1/auth/resend-email-otp', ['email' => $user->email])->assertOk();
+
+    expect($first['challenge']->fresh()->used_at)->not->toBeNull();
+    Mail::assertQueued(CustomerVerificationOtpMail::class, 1);
 });
 
 test('correct customer OTP verifies email and OTP cannot be reused', function (): void {

@@ -60,7 +60,16 @@ class AuthController extends BaseApiController
             try {
                 Mail::to($email)->queue(new CustomerVerificationOtpMail($issued['code'], (int) config('otp.expires_minutes')));
             } catch (\Throwable $exception) {
-                Log::error('Customer verification email could not be queued.', ['exception' => $exception::class]);
+                Log::error('Customer verification email could not be queued.', [
+                    'exception' => $exception::class,
+                    'code' => $exception->getCode(),
+                ]);
+                $issued['challenge']->forceFill(['last_sent_at' => null])->save();
+
+                return $this->error(
+                    'Registration succeeded, but the verification email could not be queued. Use the resend verification endpoint to try again.',
+                    503,
+                );
             }
 
             return $this->created([
