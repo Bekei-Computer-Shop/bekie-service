@@ -18,10 +18,10 @@ function requestPasswordResetOtp(string $email): void
     test()->postJson('/api/v1/auth/forgot-password', ['email' => $email])->assertOk();
 }
 
-function queuedPasswordResetOtp(): string
+function sentPasswordResetOtp(): string
 {
     $otp = '';
-    Mail::assertQueued(PasswordResetOtpMail::class, function (PasswordResetOtpMail $mail) use (&$otp): bool {
+    Mail::assertSent(PasswordResetOtpMail::class, function (PasswordResetOtpMail $mail) use (&$otp): bool {
         $otp = $mail->otp;
 
         return true;
@@ -30,7 +30,7 @@ function queuedPasswordResetOtp(): string
     return $otp;
 }
 
-test('forgot password queues a hashed OTP for an existing account', function (): void {
+test('forgot password sends a hashed OTP for an existing account', function (): void {
     Mail::fake();
     $user = User::factory()->create(['email' => 'customer@example.com']);
 
@@ -39,19 +39,19 @@ test('forgot password queues a hashed OTP for an existing account', function ():
         ->assertJsonPath('message', 'If the account exists, password reset instructions have been sent.');
 
     $challenge = PasswordResetOtp::query()->firstOrFail();
-    Mail::assertQueued(PasswordResetOtpMail::class, fn (PasswordResetOtpMail $mail): bool => Hash::check($mail->otp, $challenge->otp_hash)
+    Mail::assertSent(PasswordResetOtpMail::class, fn (PasswordResetOtpMail $mail): bool => Hash::check($mail->otp, $challenge->otp_hash)
     );
     expect($challenge->otp_hash)->not->toBe('');
 });
 
-test('forgot password returns the same response and queues no mail for an unknown account', function (): void {
+test('forgot password returns the same response and sends no mail for an unknown account', function (): void {
     Mail::fake();
     $user = User::factory()->create(['email' => 'customer@example.com']);
     $existingResponse = $this->postJson('/api/v1/auth/forgot-password', ['email' => $user->email]);
     $unknownResponse = $this->postJson('/api/v1/auth/forgot-password', ['email' => 'unknown@example.com']);
 
     $unknownResponse->assertOk()->assertExactJson($existingResponse->json());
-    Mail::assertQueued(PasswordResetOtpMail::class, 1);
+    Mail::assertSent(PasswordResetOtpMail::class, 1);
 });
 
 test('correct OTP returns a reset token', function (): void {
@@ -59,7 +59,7 @@ test('correct OTP returns a reset token', function (): void {
     User::factory()->create(['email' => 'customer@example.com']);
 
     $this->postJson('/api/v1/auth/forgot-password', ['email' => 'customer@example.com'])->assertOk();
-    $otp = queuedPasswordResetOtp();
+    $otp = sentPasswordResetOtp();
 
     $this->postJson('/api/v1/auth/verify-otp', [
         'email' => 'customer@example.com',
@@ -93,7 +93,7 @@ test('expired OTP is rejected', function (): void {
 
     $this->postJson('/api/v1/auth/verify-otp', [
         'email' => 'customer@example.com',
-        'otp' => queuedPasswordResetOtp(),
+        'otp' => sentPasswordResetOtp(),
     ])->assertUnprocessable();
 });
 
@@ -122,7 +122,7 @@ test('password reset revokes API tokens and makes the reset token single use', f
     ]);
 
     $this->postJson('/api/v1/auth/forgot-password', ['email' => $user->email])->assertOk();
-    $otp = queuedPasswordResetOtp();
+    $otp = sentPasswordResetOtp();
     $verify = $this->postJson('/api/v1/auth/verify-otp', ['email' => $user->email, 'otp' => $otp])->assertOk();
     $resetToken = $verify->json('data.reset_token');
 
