@@ -47,12 +47,15 @@ class PasswordResetOtpService
         }
 
         try {
-            Mail::to($email)->queue(new PasswordResetOtpMail(
+            Mail::to($email)->send(new PasswordResetOtpMail(
                 $otp,
                 (int) config('auth.otp.expires_minutes'),
             ));
         } catch (\Throwable $exception) {
-            Log::error('Password reset OTP email could not be queued.', ['exception' => $exception::class]);
+            Log::error('Password reset OTP email could not be sent.', [
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
         }
     }
 
