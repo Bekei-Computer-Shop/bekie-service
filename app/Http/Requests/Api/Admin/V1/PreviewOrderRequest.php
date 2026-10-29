@@ -28,6 +28,7 @@ class PreviewOrderRequest extends FormRequest
             ...Arr::only((new StoreOrderRequest)->rules(), [
                 'items',
                 'items.*.product_id',
+                'items.*.product_variant_id',
                 'items.*.qty',
                 'items.*.unit_price',
             ]),

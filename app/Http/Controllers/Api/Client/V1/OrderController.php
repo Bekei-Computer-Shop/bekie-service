@@ -6,7 +6,6 @@ use App\Http\Requests\Api\Client\V1\StoreOrderRequest;
 use App\Http\Resources\Api\Client\V1\OrderResource;
 use App\Models\Cart;
 use App\Models\Coupon;
-use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -69,105 +68,107 @@ class OrderController extends BaseApiController
         // any coupon; together they can never exceed the subtotal.
         $promotions = app(ProductPromotionService::class);
         $priced = $promotions->priceCart($cart);
+        $subtotal = round((float) $priced->sum('subtotal'), 2);
+        $couponDiscount = $coupon
+            ? $promotions->couponCodeDiscount($coupon, (int) $cart->user_id, $subtotal)
+            : 0.0;
+        if ($couponDiscount <= 0) {
+            $coupon = null;
+        }
         $discountTotal = round(min(
-            (float) $cart->subtotal,
-            (float) $cart->discount_total + (float) $priced->sum('discount'),
+            $subtotal,
+            $couponDiscount + (float) $priced->sum('discount'),
         ), 2);
 
         $taxBreakdown = $taxCalculator->calculate(
-            (float) $cart->subtotal,
+            $subtotal,
             $discountTotal,
             $shippingAddress['country'],
         );
         $shippingTotal = $shippingMethod->calculateCost($shippingWeight);
 
-        $order = Order::create([
-            'user_id' => $cart->user_id,
-            'address_id' => $shippingAddress['address_id'],
-            'order_number' => $this->generateOrderNumber(),
-            'subtotal' => $cart->subtotal,
-            'discount_total' => $discountTotal,
-            'coupon_id' => $coupon?->id,
-            'coupon_code' => $cart->coupon_code,
-            'tax_total' => $taxBreakdown['tax_total'],
-            'shipping_total' => $shippingTotal,
-            'grand_total' => $taxBreakdown['grand_total'] + $shippingTotal,
-            'currency' => $cart->currency,
-            'payment_method' => $request->input('payment_method', 'manual'),
-            'payment_status' => 'pending',
-            'transaction_id' => null,
-            'status' => 'pending',
-            'shipping_status' => 'pending',
-            'tracking_number' => null,
-            'shipping_provider' => $shippingMethod->name,
-            'customer_snapshot' => [
+        $order = DB::transaction(function () use ($cart, $request, $shippingAddress, $shippingMethod, $subtotal, $discountTotal, $coupon, $couponDiscount, $taxBreakdown, $shippingTotal, $promotions, $priced): Order {
+            $order = Order::create([
                 'user_id' => $cart->user_id,
-                'email' => $request->email,
-                'phone' => $request->phone,
-            ],
-            'address_snapshot' => $shippingAddress['snapshot'],
-            'metadata' => $request->input('metadata', []),
-        ]);
-
-        foreach ($cart->items as $cartItem) {
-            $promotion = $promotions->snapshot($priced[$cartItem->id]);
-
-            OrderItem::create([
-                'order_id' => $order->id,
-                'product_id' => $cartItem->product_id,
-                'product_variant_id' => $cartItem->product_variant_id,
-                'quantity' => $cartItem->quantity,
-                'unit_price' => $cartItem->unit_price,
-                'sale_price' => $cartItem->sale_price,
-                'cost_price' => $cartItem->cost_price,
-                'subtotal' => $cartItem->subtotal,
-                'discount' => (float) $cartItem->discount + $priced[$cartItem->id]['discount'],
-                'tax' => 0,
-                'total' => (float) $cartItem->total - $priced[$cartItem->id]['discount'],
-                'product_name' => $cartItem->product_name,
-                'product_sku' => $cartItem->product_sku,
-                'variant_name' => $cartItem->variant_name,
-                'variant_attributes' => $cartItem->variant_attributes,
-                'quantity_shipped' => 0,
-                'quantity_refunded' => 0,
+                'address_id' => $shippingAddress['address_id'],
+                'order_number' => $this->generateOrderNumber(),
+                'subtotal' => $subtotal,
+                'discount_total' => $discountTotal,
+                'coupon_id' => $coupon?->id,
+                'coupon_code' => $coupon?->code,
+                'tax_total' => $taxBreakdown['tax_total'],
+                'shipping_total' => $shippingTotal,
+                'grand_total' => $taxBreakdown['grand_total'] + $shippingTotal,
+                'currency' => $cart->currency,
+                'payment_method' => $request->input('payment_method', 'manual'),
+                'payment_status' => 'pending',
+                'transaction_id' => null,
                 'status' => 'pending',
-                'metadata' => $promotion
-                    ? [...($cartItem->metadata ?? []), 'promotion' => $promotion]
-                    : $cartItem->metadata,
+                'shipping_status' => 'pending',
+                'tracking_number' => null,
+                'shipping_provider' => $shippingMethod->name,
+                'customer_snapshot' => [
+                    'user_id' => $cart->user_id,
+                    'email' => $request->email,
+                    'phone' => $request->phone,
+                ],
+                'address_snapshot' => $shippingAddress['snapshot'],
+                'metadata' => $request->input('metadata', []),
             ]);
 
-            if ($cartItem->product?->track_inventory) {
-                $previousQuantity = (int) $cartItem->product->stock_quantity;
-                $cartItem->product->decrement('stock_quantity', $cartItem->quantity);
-                $newQuantity = $previousQuantity - (int) $cartItem->quantity;
-                app(AdminNotificationService::class)->inventoryStatus(
-                    $cartItem->product->fresh(),
-                    $previousQuantity,
-                    $newQuantity,
-                );
+            foreach ($cart->items as $cartItem) {
+                $promotion = $promotions->snapshot($priced[$cartItem->id]);
+
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'product_id' => $cartItem->product_id,
+                    'product_variant_id' => $cartItem->product_variant_id,
+                    'quantity' => $cartItem->quantity,
+                    'unit_price' => $priced[$cartItem->id]['unit_price'],
+                    'sale_price' => $cartItem->variant?->sale_price ?? $cartItem->product?->sale_price,
+                    'cost_price' => $cartItem->cost_price,
+                    'subtotal' => $priced[$cartItem->id]['subtotal'],
+                    'discount' => (float) $cartItem->discount + $priced[$cartItem->id]['discount'],
+                    'tax' => 0,
+                    'total' => max(0, $priced[$cartItem->id]['total'] - (float) $cartItem->discount),
+                    'product_name' => $cartItem->product_name,
+                    'product_sku' => $cartItem->product_sku,
+                    'variant_name' => $cartItem->variant_name,
+                    'variant_attributes' => $cartItem->variant_attributes,
+                    'quantity_shipped' => 0,
+                    'quantity_refunded' => 0,
+                    'status' => 'pending',
+                    'metadata' => $promotion
+                        ? [...($cartItem->metadata ?? []), 'promotion' => $promotion]
+                        : $cartItem->metadata,
+                ]);
+
+                if ($cartItem->product?->track_inventory) {
+                    $previousQuantity = (int) $cartItem->product->stock_quantity;
+                    $cartItem->product->decrement('stock_quantity', $cartItem->quantity);
+                    $newQuantity = $previousQuantity - (int) $cartItem->quantity;
+                    app(AdminNotificationService::class)->inventoryStatus(
+                        $cartItem->product->fresh(),
+                        $previousQuantity,
+                        $newQuantity,
+                    );
+                }
+
+                if ($cartItem->variant?->track_inventory) {
+                    $cartItem->variant->decrement('stock_quantity', $cartItem->quantity);
+                }
             }
 
-            if ($cartItem->variant?->track_inventory) {
-                $cartItem->variant->decrement('stock_quantity', $cartItem->quantity);
+            if ($coupon) {
+                $promotions->recordCouponCodeUsage($order, $coupon, $couponDiscount);
             }
-        }
 
-        if ($coupon) {
-            CouponUsage::create([
-                'coupon_id' => $coupon->id,
-                'user_id' => $cart->user_id,
-                'order_id' => $order->id,
-                'coupon_code' => $coupon->code,
-                'discount_amount' => $cart->discount_total,
-                'used_at' => now(),
-            ]);
+            $promotions->recordUsage($order, $priced);
 
-            $coupon->incrementUsage();
-        }
+            $cart->update(['status' => 'converted']);
 
-        $promotions->recordUsage($order, $priced);
-
-        $cart->update(['status' => 'converted']);
+            return $order;
+        });
 
         app(ProductSerialService::class)->reserveForOrder($request->input('serial_numbers', []), (int) $cart->user_id, (int) $order->id);
 

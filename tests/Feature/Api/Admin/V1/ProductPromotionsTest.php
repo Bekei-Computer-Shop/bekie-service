@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\Category;
 use App\Models\Coupon;
+use App\Models\CustomerGroup;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\AdminAuthService;
@@ -48,6 +49,7 @@ function promoCoupon(string $code, array $attributes = []): Coupon
         'type' => 'percentage',
         'value' => 10,
         'is_active' => true,
+        'target_type' => Coupon::TARGET_PRODUCTS,
     ], $attributes));
 }
 
@@ -157,6 +159,37 @@ test('a soft-deleted promotion is rejected and stops being returned', function (
 
     asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->id, [
         'promotion_ids' => [$a->id],
+    ])->assertStatus(422)->assertJsonValidationErrors('promotion_ids.0');
+});
+
+test('promotion targeting rejects inactive target records', function (): void {
+    $inactiveCategory = Category::factory()->create(['is_active' => false]);
+    $inactiveGroup = CustomerGroup::create(['name' => 'Disabled', 'slug' => 'disabled', 'is_active' => false]);
+    $payload = [
+        'name' => 'Invalid targeting',
+        'code' => 'INVALID-TARGETS',
+        'type' => 'percentage',
+        'value' => 10,
+        'starts_at' => now()->toIso8601String(),
+    ];
+
+    asPromoAdmin()->postJson('/api/v1/admin/promotions', $payload + [
+        'target_type' => 'categories',
+        'category_ids' => [$inactiveCategory->id],
+    ])->assertUnprocessable()->assertJsonValidationErrors('category_ids.0');
+
+    asPromoAdmin()->postJson('/api/v1/admin/promotions', $payload + [
+        'target_type' => 'customer_groups',
+        'customer_group_ids' => [$inactiveGroup->id],
+    ])->assertUnprocessable()->assertJsonValidationErrors('customer_group_ids.0');
+});
+
+test('the product form only attaches product-targeted promotions', function (): void {
+    $product = promoProduct();
+    $categoryPromotion = promoCoupon('CAT-ONLY', ['target_type' => Coupon::TARGET_CATEGORIES]);
+
+    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->id, [
+        'promotion_ids' => [$categoryPromotion->id],
     ])->assertStatus(422)->assertJsonValidationErrors('promotion_ids.0');
 });
 

@@ -7,6 +7,7 @@ namespace App\Http\Requests\Api\Admin\V1\Product;
 use App\Http\Requests\Api\Admin\V1\Product\Concerns\ValidatesProductImages;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Coupon;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use Illuminate\Foundation\Http\FormRequest;
@@ -83,7 +84,7 @@ class UpdateProductRequest extends FormRequest
             // Promotions applied to this product. Validated against `coupons`:
             // the admin promotions API is coupon-backed (PromotionController).
             'promotion_ids' => ['sometimes', 'array'],
-            'promotion_ids.*' => ['integer', Rule::exists('coupons', 'id')->whereNull('deleted_at')],
+            'promotion_ids.*' => ['integer', Rule::exists('coupons', 'id')->whereNull('deleted_at')->where('target_type', Coupon::TARGET_PRODUCTS)],
 
             // Variant array. When `replace_variants` is omitted or true, the
             // submitted set replaces the existing set. When false, the

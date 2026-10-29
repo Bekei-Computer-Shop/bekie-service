@@ -62,6 +62,11 @@ class Category extends Model
         return $this->hasMany(Product::class);
     }
 
+    public function promotions()
+    {
+        return $this->belongsToMany(Coupon::class, 'coupon_category');
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

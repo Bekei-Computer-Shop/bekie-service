@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\Admin\V1;
 
+use App\Http\Requests\Api\Admin\V1\Concerns\ValidatesPromotionTargets;
 use App\Models\Coupon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdatePromotionRequest extends FormRequest
 {
+    use ValidatesPromotionTargets;
+
     public function authorize(): bool
     {
         return true;
@@ -25,6 +28,9 @@ class UpdatePromotionRequest extends FormRequest
             'kind' => ['sometimes', 'nullable', Rule::in(Coupon::KINDS)],
             'value' => ['sometimes', 'numeric', 'min:0'],
             'min_order_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'max_discount_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'include_subcategories' => ['sometimes', 'boolean'],
+            ...$this->targetRules($this->route('promotion')),
             'starts_at' => ['sometimes', 'date'],
             'expires_at' => ['sometimes', 'nullable', 'date', 'after_or_equal:starts_at'],
             'usage_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
@@ -33,5 +39,11 @@ class UpdatePromotionRequest extends FormRequest
             'description' => ['sometimes', 'nullable', 'string'],
             'banner_image' => ['sometimes', 'nullable', 'string', 'max:2048'],
         ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return $this->targetMessages();
     }
 }

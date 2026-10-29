@@ -331,6 +331,7 @@ class OrderController extends BaseAdminController
                 ?? throw (new ModelNotFoundException)->setModel(Product::class, [$item['product_id']]),
             'quantity' => (int) $item['qty'],
             'unit_price' => (float) $item['unit_price'],
+            'variant_id' => isset($item['product_variant_id']) ? (int) $item['product_variant_id'] : null,
         ]);
     }
 
