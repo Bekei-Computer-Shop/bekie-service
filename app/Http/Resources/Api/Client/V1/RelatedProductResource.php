@@ -23,6 +23,10 @@ class RelatedProductResource extends JsonResource
             'promotion' => $this->promotionSummary(),
             'thumbnail' => $this->thumbnail,
             'is_featured' => (bool) $this->is_featured,
+            'in_stock' => (bool) $this->in_stock,
+            // Approved reviews only; present where the controller aggregated them.
+            'average_rating' => $this->when($this->resource->hasAttribute('average_rating'), fn (): float => round((float) $this->average_rating, 1)),
+            'reviews_count' => $this->when($this->resource->hasAttribute('reviews_count'), fn (): int => (int) $this->reviews_count),
             'category' => $this->whenLoaded('category', fn (): ?array => $this->category ? [
                 'id' => $this->category->id,
                 'name' => $this->category->name,

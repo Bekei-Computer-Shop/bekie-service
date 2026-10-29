@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Api\Admin\V1\Product;
 
 use App\Http\Requests\Api\Admin\V1\Product\Concerns\ValidatesProductImages;
+use App\Http\Requests\Api\Admin\V1\Product\Concerns\ValidatesVariantRows;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Coupon;
@@ -13,7 +14,7 @@ use Illuminate\Validation\Rule;
 
 class StoreProductRequest extends FormRequest
 {
-    use ValidatesProductImages;
+    use ValidatesProductImages, ValidatesVariantRows;
 
     public function authorize(): bool
     {
@@ -62,6 +63,9 @@ class StoreProductRequest extends FormRequest
             'promotion_ids.*' => ['integer', Rule::exists('coupons', 'id')->whereNull('deleted_at')->where('target_type', Coupon::TARGET_PRODUCTS)],
 
             // Nested variants (replaces the existing pattern of separate endpoints).
+            // Omitted or empty: the API creates one "Standard" default variant.
+            // Otherwise mark at most one row `is_default`; with none marked, the
+            // first active row becomes the default.
             'variants' => ['nullable', 'array'],
             'variants.*.name' => ['required_with:variants', 'string', 'max:191'],
             'variants.*.slug' => ['nullable', 'string', 'max:191'],
@@ -100,12 +104,8 @@ class StoreProductRequest extends FormRequest
     }
 
     /**
-     * Cross-field validation: variant SKU must be unique per product. The
-     * `Rule::unique` validator doesn't know the parent product id at
-     * request time, so we defer uniqueness to the controller after the
-     * product has been created and re-validate inside the transaction.
-     *
-     * Sale-price-greater-than-price check also runs in the controller.
+     * Cross-field validation: sale price vs price, a single primary image, and
+     * the variant rows — SKU / slug / barcode clashes and at most one default.
      */
     public function withValidator($validator): void
     {
@@ -117,6 +117,8 @@ class StoreProductRequest extends FormRequest
             }
 
             $this->validateSinglePrimaryImage($v);
+            $this->validateVariantRows($v);
+            $this->validateSingleDefaultVariant($v);
         });
     }
 

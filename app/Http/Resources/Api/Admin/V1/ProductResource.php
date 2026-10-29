@@ -61,6 +61,11 @@ class ProductResource extends JsonResource
             'variants' => $product->relationLoaded('variants')
                 ? ProductVariantResource::collection($product->variants)->resolve($request)
                 : $this->whenCounted('variants'),
+            // The variant flagged `is_default`; only where variants are loaded.
+            'default_variant_id' => $this->when(
+                $product->relationLoaded('variants'),
+                fn () => $product->variants->firstWhere('is_default', true)?->id,
+            ),
             'images' => $product->relationLoaded('images')
                 ? ProductImageResource::collection($product->images)->resolve($request)
                 : $this->whenCounted('images'),

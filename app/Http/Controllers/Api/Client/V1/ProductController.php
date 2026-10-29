@@ -3,16 +3,19 @@
 namespace App\Http\Controllers\Api\Client\V1;
 
 use App\Http\Requests\Api\Client\V1\ListNewProductsRequest;
+use App\Http\Requests\Api\Client\V1\ListProductReviewsRequest;
 use App\Http\Requests\Api\Client\V1\ListProductsRequest;
 use App\Http\Resources\Api\Client\V1\ContentPageResource;
 use App\Http\Resources\Api\Client\V1\ProductImageResource;
 use App\Http\Resources\Api\Client\V1\ProductListResource;
 use App\Http\Resources\Api\Client\V1\ProductResource;
+use App\Http\Resources\Api\Client\V1\ProductReviewResource;
 use App\Http\Resources\Api\Client\V1\ProductSpecificationsResource;
 use App\Http\Resources\Api\Client\V1\ProductVariantResource;
 use App\Http\Resources\Api\Client\V1\RelatedProductResource;
 use App\Models\ContentItem;
 use App\Models\Product;
+use App\Models\Review;
 use App\Services\ProductPromotionService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -272,6 +275,9 @@ class ProductController extends BaseApiController
             ->where('is_active', true)
             ->where('id', '!=', $product->id)
             ->with(['category:id,name', 'brand:id,name'])
+            // Star rating for each related product's card, from approved reviews only.
+            ->withCount(['reviews as reviews_count' => fn (Builder $reviews) => $reviews->approved()])
+            ->withAvg(['reviews as average_rating' => fn (Builder $reviews) => $reviews->approved()], 'rating')
             ->where(function (Builder $related) use ($product, $hasCategory, $hasBrand): void {
                 if ($hasCategory) {
                     $related->where('category_id', $product->category_id);
@@ -302,6 +308,56 @@ class ProductController extends BaseApiController
         return $this->success([
             'items' => RelatedProductResource::collection($products)->resolve(),
             'meta' => ['limit' => $limit, 'count' => $products->count()],
+        ]);
+    }
+
+    /**
+     * Approved customer reviews of a product, with its rating summary.
+     *
+     * `summary` always covers every approved review, whatever the `rating` or
+     * `verified_only` filter, so the star breakdown stays stable while a
+     * shopper filters the list beneath it.
+     */
+    public function reviews(Product $product, ListProductReviewsRequest $request): JsonResponse
+    {
+        $this->assertClientVisible($product);
+
+        $perPage = (int) $request->input('per_page', 10);
+        $page = (int) $request->input('page', 1);
+        [$column, $direction] = match ($request->input('sort', 'newest')) {
+            'oldest' => ['created_at', 'asc'],
+            'highest' => ['rating', 'desc'],
+            'lowest' => ['rating', 'asc'],
+            'most_helpful' => ['helpful_count', 'desc'],
+            default => ['created_at', 'desc'],
+        };
+
+        $query = Review::query()
+            ->approved()
+            ->forProduct((string) $product->id)
+            ->when($request->filled('rating'), fn (Builder $query) => $query->where('rating', (int) $request->input('rating')))
+            ->when($request->boolean('verified_only'), fn (Builder $query) => $query->verified());
+
+        $total = (clone $query)->count();
+        $items = $query
+            ->with('user:id,first_name,last_name,avatar')
+            ->orderBy($column, $direction)
+            ->orderByDesc('id')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get();
+
+        return $this->success([
+            'product_id' => $product->id,
+            'summary' => $this->reviewSummary($product),
+            'items' => ProductReviewResource::collection($items)->resolve($request),
+            'pagination' => [
+                'total' => $total,
+                'per_page' => $perPage,
+                'current_page' => $page,
+                'last_page' => max(1, (int) ceil($total / $perPage)),
+                'count' => $items->count(),
+            ],
         ]);
     }
 
@@ -336,6 +392,36 @@ class ProductController extends BaseApiController
             'policy_source' => $policy ? 'store' : null,
             'warranty_and_returns_policy' => $policy ? (new ContentPageResource($policy))->resolve() : null,
         ]);
+    }
+
+    /**
+     * Average, count and per-star breakdown of a product's approved reviews, in
+     * one grouped query.
+     *
+     * @return array{average_rating: float, total_reviews: int, rating_breakdown: list<array{rating: int, count: int, percentage: float}>}
+     */
+    private function reviewSummary(Product $product): array
+    {
+        $counts = Review::query()
+            ->approved()
+            ->forProduct((string) $product->id)
+            ->selectRaw('rating, COUNT(*) as aggregate')
+            ->groupBy('rating')
+            ->pluck('aggregate', 'rating')
+            ->mapWithKeys(fn ($count, $rating): array => [(int) $rating => (int) $count]);
+
+        $total = (int) $counts->sum();
+        $stars = $counts->reduce(fn (int $carry, int $count, int $rating): int => $carry + $rating * $count, 0);
+
+        return [
+            'average_rating' => $total > 0 ? round($stars / $total, 1) : 0.0,
+            'total_reviews' => $total,
+            'rating_breakdown' => array_map(fn (int $rating): array => [
+                'rating' => $rating,
+                'count' => $counts->get($rating, 0),
+                'percentage' => $total > 0 ? round($counts->get($rating, 0) * 100 / $total, 1) : 0.0,
+            ], [5, 4, 3, 2, 1]),
+        ];
     }
 
     private function assertClientVisible(Product $product): void
