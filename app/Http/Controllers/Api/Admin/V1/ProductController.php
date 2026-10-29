@@ -84,6 +84,11 @@ class ProductController extends BaseAdminController
             $query->whereColumn('stock_quantity', '<=', 'min_stock_alert');
         }
 
+        // Opt-in for the promotion picker: only active variants can be targeted.
+        if ($request->boolean('with_variants_count')) {
+            $query->withCount(['variants' => fn ($variants) => $variants->where('is_active', true)]);
+        }
+
         $total = (clone $query)->count();
         $items = $query->orderBy($sort, $direction)
             ->skip(($page - 1) * $perPage)

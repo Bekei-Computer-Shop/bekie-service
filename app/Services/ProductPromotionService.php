@@ -38,6 +38,9 @@ use Illuminate\Validation\ValidationException;
  */
 class ProductPromotionService
 {
+    /** @var Collection<int, Coupon>|null */
+    private ?Collection $storefrontPromotions = null;
+
     /**
      * @param  Collection<array-key, array{product: ?Product, quantity: int, unit_price: float, variant_id?: ?int}>  $lines  keyed by the caller; keys are preserved
      * @param  list<int>  $exceptCouponIds  promotions to skip, e.g. a coupon already applied by code
@@ -129,6 +132,93 @@ class ProductPromotionService
             ?? $item->product?->price
             ?? $item->unit_price
         );
+    }
+
+    /**
+     * Product ids and category ids reached by live public promotions, for
+     * finding products to list as on promotion.
+     *
+     * @return array{product_ids: list<string>, category_ids: list<int>}
+     */
+    public function storefrontTargets(): array
+    {
+        $promotions = $this->storefrontPromotions();
+
+        return [
+            'product_ids' => $promotions->flatMap(fn (Coupon $promotion) => $promotion->products->pluck('id')
+                ->merge($promotion->variants->pluck('product_id')))->unique()->values()->all(),
+            'category_ids' => $promotions->flatMap(fn (Coupon $promotion) => $promotion->storefront_category_ids)
+                ->unique()->values()->all(),
+        ];
+    }
+
+    /**
+     * Sets `activePromotion` and `promotion_discount` on each product: the live
+     * public promotion worth the most on one unit at its current price, or null.
+     * A variant target counts for its product.
+     *
+     * @param  iterable<Product>  $products
+     */
+    public function attachStorefrontPromotions(iterable $products): void
+    {
+        $promotions = $this->storefrontPromotions();
+
+        foreach ($products as $product) {
+            $unitPrice = (float) ($product->sale_price ?? $product->price);
+            $best = $promotions
+                ->filter(fn (Coupon $promotion): bool => $promotion->products->contains('id', $product->id)
+                    || $promotion->variants->contains('product_id', $product->id)
+                    || in_array((int) $product->category_id, $promotion->storefront_category_ids, true))
+                ->sortByDesc(fn (Coupon $promotion): float => $this->amountFor($promotion, $unitPrice, 1))
+                ->first();
+
+            $product->setRelation('activePromotion', $best);
+            $product->promotion_discount = $best ? $this->amountFor($best, $unitPrice, 1) : null;
+        }
+    }
+
+    /**
+     * Live promotions any shopper could get: active, inside their window,
+     * under their usage limit, targeted at products, variants or categories,
+     * and not limited to customer groups. Memoised for the request.
+     *
+     * @return Collection<int, Coupon>
+     */
+    private function storefrontPromotions(): Collection
+    {
+        return $this->storefrontPromotions ??= Coupon::query()
+            ->active()
+            ->valid()
+            ->where(fn ($query) => $query->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit'))
+            ->whereDoesntHave('customerGroups')
+            ->where(fn ($query) => $query->has('products')->orHas('variants')->orHas('categories'))
+            ->with(['products:id', 'variants:id,product_id', 'categories:id'])
+            ->get()
+            ->each(function (Coupon $promotion): void {
+                $promotion->storefront_category_ids = $this->reachedCategoryIds($promotion);
+            });
+    }
+
+    /**
+     * The categories a promotion names, plus all their descendants when it
+     * includes subcategories.
+     *
+     * @return list<int>
+     */
+    private function reachedCategoryIds(Coupon $promotion): array
+    {
+        $ids = $promotion->categories->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        $frontier = $promotion->include_subcategories ? $ids : [];
+
+        while ($frontier !== []) {
+            $frontier = array_values(array_diff(
+                Category::query()->whereIn('parent_id', $frontier)->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+                $ids,
+            ));
+            $ids = array_merge($ids, $frontier);
+        }
+
+        return $ids;
     }
 
     /**
@@ -406,7 +496,7 @@ class ProductPromotionService
             ->exists();
     }
 
-    private function amountFor(Coupon $promotion, float $lineSubtotal, int $quantity): float
+    public function amountFor(Coupon $promotion, float $lineSubtotal, int $quantity): float
     {
         $value = (float) $promotion->value;
 

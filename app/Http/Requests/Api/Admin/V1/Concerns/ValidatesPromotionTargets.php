@@ -38,18 +38,23 @@ trait ValidatesPromotionTargets
             'customer_group_ids.*' => ['integer', Rule::exists('customer_groups', 'id')->where('is_active', true)],
         ];
 
+        // A product promotion may target only specific variants, so it needs a
+        // product or a variant; the other types need their primary field.
+        $hasVariants = $targetType === Coupon::TARGET_PRODUCTS && filled($this->input('variant_ids'));
+
         foreach (Coupon::TARGET_FIELDS as $type => $typeFields) {
             foreach (array_keys($typeFields) as $field) {
                 $isPrimary = Coupon::PRIMARY_TARGET_FIELDS[$type] === $field;
                 $selected = $targetType === $type;
+                $mustFill = $touched && $selected && $isPrimary && ! $hasVariants;
 
                 $rules[$field] = array_values(array_filter([
-                    Rule::requiredIf($touched && $selected && $isPrimary),
+                    Rule::requiredIf($mustFill),
                     // A missing or empty array passes `prohibited`, so a client
                     // may still send `[]` for the target types it is not using.
                     Rule::prohibitedIf($targetType !== null && ! $selected),
                     'array',
-                    $selected && $isPrimary ? 'min:1' : null,
+                    $mustFill ? 'min:1' : null,
                 ]));
             }
         }
@@ -63,8 +68,8 @@ trait ValidatesPromotionTargets
         return [
             'target_type.required' => 'Choose what this promotion targets: products, categories, or customer groups.',
             'target_type.in' => 'Choose what this promotion targets: products, categories, or customer groups.',
-            'product_ids.required' => 'Select at least one product.',
-            'product_ids.min' => 'Select at least one product.',
+            'product_ids.required' => 'Select at least one product or variant.',
+            'product_ids.min' => 'Select at least one product or variant.',
             'category_ids.required' => 'Select at least one category.',
             'category_ids.min' => 'Select at least one category.',
             'customer_group_ids.required' => 'Select at least one customer group.',

@@ -4,25 +4,33 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Http\Requests\Api\Admin\V1\StoreOrderRequest;
 use App\Http\Requests\Api\Admin\V1\UpdateOrderRequest;
+use App\Models\Coupon;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\User;
+use App\Services\ProductPromotionService;
+use App\Services\TaxCalculator;
+use Database\Seeders\Support\DemoData;
+use Database\Seeders\Support\DemoOrderBuilder;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 
 /**
  * Sample orders for developing/demoing the admin Orders screen.
  *
- * The buyers are the shoppers CustomerSeeder creates — this seeder makes no
- * users of its own. Every non-admin user is a customer as far as
- * CustomerController is concerned, so a second set of buyers would show up on
- * the Customers screen as duplicates of the ones already there.
- * Run CustomerSeeder first; DatabaseSeeder already orders them that way.
+ * The buyers are the shoppers CustomerSeeder and CustomerGroupSeeder create —
+ * this seeder makes no users of its own. Every non-admin user is a customer as
+ * far as CustomerController is concerned, so a second set of buyers would show
+ * up on the Customers screen as duplicates of the ones already there.
+ * Run those (and PromotionSeeder) first; DatabaseSeeder already orders them so.
  *
  * Every row it creates is tagged with metadata->seeded_by so demo data can be
- * told apart from real orders and removed again (see the class docblock note at
- * the bottom of this file for the delete statement).
+ * told apart from real orders; `php artisan demo:reset` removes and rebuilds it.
+ * Orders go through DemoOrderBuilder, so totals, promotion discounts, usage
+ * counters, payments and serial numbers match what checkout would produce.
  *
  * Re-running is safe: if tagged orders already exist it reports and does
  * nothing rather than duplicating them.
@@ -31,29 +39,23 @@ use Illuminate\Database\Seeder;
  */
 class DemoOrderSeeder extends Seeder
 {
-    private const TAG = 'demo-order-seeder';
+    public const TAG = 'demo-order-seeder';
 
-    private const ORDER_COUNT = 30;
-
-    /** Products supplied by ProductCatalogSeeder and used for demo order line items. */
-    private const ORDER_PRODUCT_SKUS = [
-        'AS-ZEPH-G16',
-        'SAM-990PRO',
-        'KIN-FURY-DDR5',
-        'LOG-MXM3S',
-        'DEL-ULTRA-4K',
-        'SNY-WH1000XM5',
-        'APL-IP15PM',
-        'ANK-PWREXP8',
-    ];
+    private const ORDER_COUNT = 90;
 
     /** The canonical statuses — see UpdateOrderRequest::STATUSES. */
     private const STATUSES = UpdateOrderRequest::STATUSES;
 
-    private const METHODS = ['cod', 'bank_transfer', 'stripe', 'paypal'];
+    /** The methods checkout accepts — see StoreOrderRequest::PAYMENT_METHODS. */
+    private const METHODS = StoreOrderRequest::PAYMENT_METHODS;
+
+    /** Every few orders the shopper types a code at checkout as well. */
+    private const CODES = [6 => 'WELCOME10', 9 => 'BIGSPEND50', 13 => 'OLDCODE20'];
 
     public function run(): void
     {
+        DemoData::ensureAllowed(self::class);
+
         $this->warnAboutLegacyBuyers();
 
         // withTrashed: orders soft-delete, and a soft-deleted row still holds
@@ -62,15 +64,15 @@ class DemoOrderSeeder extends Seeder
         $existing = Order::query()->withTrashed()->where('metadata->seeded_by', self::TAG)->count();
         if ($existing > 0) {
             $this->command->warn("Skipped: {$existing} seeded demo orders already exist (including any soft-deleted ones).");
-            $this->command->line('Remove them for good if you want a fresh set:');
-            $this->command->line("  delete from order_items where order_id in (select id from orders where metadata->>'seeded_by' = '".self::TAG."');");
-            $this->command->line("  delete from orders where metadata->>'seeded_by' = '".self::TAG."';");
+            $this->command->line('Regenerate them, with their usage counters, payments and serials: php artisan demo:reset');
 
             return;
         }
 
         $products = Product::query()
-            ->whereIn('sku', self::ORDER_PRODUCT_SKUS)
+            ->where('is_active', true)
+            ->whereHas('variants', fn ($query) => $query->where('is_active', true))
+            ->with(['variants' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order')])
             ->orderBy('sku')
             ->get();
         if ($products->isEmpty()) {
@@ -86,72 +88,26 @@ class DemoOrderSeeder extends Seeder
             return;
         }
 
+        $builder = new DemoOrderBuilder(app(ProductPromotionService::class), app(TaxCalculator::class), PromotionSeeder::codes());
+        $codes = Coupon::query()->whereIn('code', self::CODES)->get()->keyBy('code');
         $created = 0;
 
         for ($i = 1; $i <= self::ORDER_COUNT; $i++) {
-            $customer = $customers[$i % $customers->count()];
-            $status = self::STATUSES[$i % count(self::STATUSES)];
-            $method = self::METHODS[$i % count(self::METHODS)];
+            $code = collect(self::CODES)->first(fn (string $code, int $every): bool => $i % $every === 0);
 
-            // Spread over roughly five months so the month filter has options.
-            $placedAt = now()->subDays($i * 4)->setTime(8 + ($i % 10), ($i * 13) % 60);
-
-            $lines = $this->lines($products, $i);
-            $subtotal = round(array_sum(array_column($lines, 'total')), 2);
-            $discount = $i % 5 === 0 ? round($subtotal * 0.10, 2) : 0.0;
-            $tax = round(($subtotal - $discount) * 0.10, 2);
-            $shipping = $subtotal > 1000 ? 0.0 : 7.50;
-            $grandTotal = round($subtotal - $discount + $tax + $shipping, 2);
-
-            $order = Order::create([
+            // Priced by DemoOrderBuilder as checkout would have on that day.
+            // Spread over a year so the reports' month and year filters have data.
+            $builder->create([
+                'tag' => self::TAG,
                 'order_number' => 'ORD-'.str_pad((string) (1000 + $i), 6, '0', STR_PAD_LEFT),
-                'user_id' => $customer->id,
-                'status' => $status,
-                'currency' => 'USD',
-                'payment_method' => $method,
-                'payment_status' => $this->paymentStatus($status),
-                'transaction_id' => in_array($method, ['stripe', 'paypal'], true) ? 'txn_'.uniqid() : null,
-                'subtotal' => $subtotal,
-                'discount_total' => $discount,
-                'tax_total' => $tax,
-                'shipping_total' => $shipping,
-                'grand_total' => $grandTotal,
-                'shipping_status' => $this->shippingStatus($status),
-                'tracking_number' => in_array($status, ['processing', 'completed'], true) ? 'TRK'.mt_rand(10000000, 99999999) : null,
-                'shipping_provider' => in_array($status, ['processing', 'completed'], true) ? 'J&T Express' : null,
-                // NOTE: no `notes` here. OrderResource and both order requests
-                // reference a `notes` field, but the orders table has no such
-                // column and it is not in Order::$fillable — the app silently
-                // discards it. Seeding would hard-fail because db:seed unguards
-                // models. Flagged separately; nothing to write here yet.
-                'customer_snapshot' => [
-                    'name' => $customer->name,
-                    'email' => $customer->email,
-                    'phone' => $customer->phone,
-                ],
-                'metadata' => ['seeded_by' => self::TAG],
+                'customer' => $customers[$i % $customers->count()],
+                'placed_at' => now()->subDays($i * 4)->setTime(8 + ($i % 10), ($i * 13) % 60),
+                'status' => self::STATUSES[$i % count(self::STATUSES)],
+                'payment_method' => self::METHODS[$i % count(self::METHODS)],
+                'lines' => $this->lines($products, $i),
+                'coupon' => $code !== null ? $codes->get($code) : null,
+                'skip_promotions' => PromotionSeeder::SCENARIO_CODES,
             ]);
-
-            // created_at is not fillable, so the placement date is forced after.
-            $order->forceFill(array_merge(
-                ['created_at' => $placedAt, 'updated_at' => $placedAt],
-                $this->lifecycleTimestamps($status, $placedAt),
-            ))->saveQuietly();
-
-            foreach ($lines as $line) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $line['product']->id,
-                    'quantity' => $line['qty'],
-                    'unit_price' => $line['unit'],
-                    'subtotal' => $line['total'],
-                    'discount' => 0,
-                    'tax' => 0,
-                    'total' => $line['total'],
-                    'product_name' => $line['product']->name,
-                    'product_sku' => $line['product']->sku,
-                ]);
-            }
 
             $created++;
         }
@@ -181,15 +137,17 @@ class DemoOrderSeeder extends Seeder
     }
 
     /**
-     * The buyers: CustomerSeeder's shoppers, in seed order.
+     * The buyers: CustomerSeeder's shoppers, then CustomerGroupSeeder's, in
+     * seed order.
      *
-     * Only the ones that seeder already gives order history to — it leaves one
-     * customer at zero orders on purpose, and adding demo orders for them would
-     * erase that empty-spend row from the Customers list.
+     * Only the ones CustomerSeeder already gives order history to — it leaves
+     * one customer at zero orders on purpose, and adding demo orders for them
+     * would erase that empty-spend row from the Customers list. The grouped
+     * shoppers bring group promotions and the VIP discount into the orders.
      */
     private function customers()
     {
-        $emails = CustomerSeeder::buyerEmails();
+        $emails = [...CustomerSeeder::buyerEmails(), ...CustomerGroupSeeder::buyerEmails()];
 
         return User::query()
             ->whereIn('email', $emails)
@@ -201,75 +159,24 @@ class DemoOrderSeeder extends Seeder
     }
 
     /**
-     * One to three line items built from real product prices.
+     * One to three line items, each one of the product's own variants.
      *
-     * @return array<int, array{product: Product, qty: int, unit: float, total: float}>
+     * @return list<array{variant: ProductVariant, quantity: int}>
      */
-    private function lines($products, int $i): array
+    private function lines(Collection $products, int $i): array
     {
-        $count = 1 + ($i % 3);
         $lines = [];
 
-        for ($k = 0; $k < $count; $k++) {
-            $product = $products[($i + $k) % $products->count()];
-            $qty = 1 + (($i + $k) % 2);
-            $unit = (float) ($product->price ?? 99.00);
+        for ($k = 0; $k < 1 + ($i % 3); $k++) {
+            // A stride walks the whole catalog instead of the first few rows.
+            $product = $products[($i * 7 + $k * 13) % $products->count()];
+
             $lines[] = [
-                'product' => $product,
-                'qty' => $qty,
-                'unit' => $unit,
-                'total' => round($qty * $unit, 2),
+                'variant' => $product->variants[($i + $k) % $product->variants->count()],
+                'quantity' => 1 + (($i + $k) % 2),
             ];
         }
 
         return $lines;
-    }
-
-    private function paymentStatus(string $status): string
-    {
-        return match ($status) {
-            'pending' => 'pending',
-            'cancelled' => 'failed',
-            default => 'paid',
-        };
-    }
-
-    /**
-     * shipping_status is its own column with its own vocabulary, so it is
-     * derived from the order status rather than mirroring it.
-     */
-    private function shippingStatus(string $status): string
-    {
-        return match ($status) {
-            'processing' => 'shipped',
-            'completed' => 'delivered',
-            'cancelled' => 'cancelled',
-            default => 'pending',
-        };
-    }
-
-    /**
-     * Keeps paid_at/shipped_at/... consistent with the order status.
-     *
-     * @return array<string, mixed>
-     */
-    private function lifecycleTimestamps(string $status, $placedAt): array
-    {
-        $stamps = [];
-
-        if (! in_array($status, ['pending', 'cancelled'], true)) {
-            $stamps['paid_at'] = (clone $placedAt)->addMinutes(12);
-        }
-        if (in_array($status, ['processing', 'completed'], true)) {
-            $stamps['shipped_at'] = (clone $placedAt)->addDay();
-        }
-        if ($status === 'completed') {
-            $stamps['delivered_at'] = (clone $placedAt)->addDays(3);
-        }
-        if ($status === 'cancelled') {
-            $stamps['cancelled_at'] = (clone $placedAt)->addHours(5);
-        }
-
-        return $stamps;
     }
 }

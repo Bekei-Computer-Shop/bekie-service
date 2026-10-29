@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\CustomerGroup;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\User;
 use App\Services\AdminAuthService;
 use App\Services\ProductPromotionService;
@@ -114,6 +115,49 @@ test('a target type without any selected target is rejected', function (string $
     'categories' => ['categories', 'category_ids'],
     'customer groups' => ['customer_groups', 'customer_group_ids'],
 ]);
+
+test('a product promotion may target only specific variants', function (): void {
+    $product = Product::factory()->create(['is_active' => true]);
+    $variant = ProductVariant::create([
+        'product_id' => $product->id, 'name' => '32GB', 'slug' => '32gb', 'sku' => 'RAM-32',
+        'price' => 120, 'in_stock' => true, 'stock_quantity' => 4, 'is_active' => true,
+    ]);
+
+    $id = targetingAdmin()->postJson('/api/v1/admin/promotions', targetingPayload([
+        'target_type' => 'products',
+        'product_ids' => [],
+        'variant_ids' => [$variant->id],
+    ]))->assertCreated()
+        ->assertJsonPath('data.target_type', 'products')
+        ->json('data.id');
+
+    $promotion = Coupon::findOrFail($id);
+    expect($promotion->products()->count())->toBe(0)
+        ->and($promotion->variants()->pluck('product_variants.id')->all())->toBe([$variant->id]);
+
+    targetingAdmin()->postJson('/api/v1/admin/promotions', targetingPayload([
+        'target_type' => 'products', 'product_ids' => [], 'variant_ids' => [],
+    ]))->assertUnprocessable()
+        ->assertJsonValidationErrors(['product_ids' => 'Select at least one product or variant.']);
+});
+
+test('the product picker can ask for active variant counts', function (): void {
+    $product = Product::factory()->create(['is_active' => true]);
+    foreach ([['A', true], ['B', true], ['C', false]] as [$name, $active]) {
+        ProductVariant::create([
+            'product_id' => $product->id, 'name' => $name, 'slug' => strtolower($name), 'sku' => "SKU-{$name}",
+            'price' => 10, 'in_stock' => true, 'stock_quantity' => 1, 'is_active' => $active,
+        ]);
+    }
+
+    targetingAdmin()->getJson('/api/v1/admin/products?with_variants_count=1')
+        ->assertOk()
+        ->assertJsonPath('data.items.0.variants', 2);
+
+    targetingAdmin()->getJson('/api/v1/admin/products')
+        ->assertOk()
+        ->assertJsonMissingPath('data.items.0.variants');
+});
 
 test('mixed target types are rejected', function (): void {
     $product = Product::factory()->create(['is_active' => true]);

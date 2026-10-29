@@ -2,10 +2,13 @@
 
 namespace App\Http\Resources\Api\Client\V1;
 
+use App\Http\Resources\Api\Client\V1\Concerns\SummarizesPromotion;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class ProductListResource extends JsonResource
 {
+    use SummarizesPromotion;
+
     public function toArray($request): array
     {
         return [
@@ -34,6 +37,7 @@ class ProductListResource extends JsonResource
             'sort_order' => $this->sort_order,
             'average_rating' => $this->average_rating ?? 0,
             'reviews_count' => $this->reviews_count ?? 0,
+            'promotion' => $this->promotionSummary(),
         ];
     }
 }
