@@ -11,6 +11,7 @@ use App\Http\Resources\Api\Admin\V1\ProductResource;
 use App\Models\Product;
 use App\Models\ProductSerial;
 use App\Models\ProductVariant;
+use App\Services\ProductDefaultVariantService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,9 @@ use Illuminate\Validation\ValidationException;
  *
  * `Product::getRouteKeyName()` returns `uuid`, so route-model binding
  * resolves via the `uuid` column.
+ *
+ * Every product keeps exactly one default variant (`is_default`); see
+ * ProductDefaultVariantService for how it is picked or generated.
  */
 class ProductController extends BaseAdminController
 {
@@ -37,6 +41,8 @@ class ProductController extends BaseAdminController
     private const CLEARABLE_VARIANT_COLUMNS = [
         'barcode', 'sale_price', 'cost_price', 'weight', 'length', 'width', 'height', 'image',
     ];
+
+    public function __construct(protected ProductDefaultVariantService $defaultVariants) {}
 
     public function index(IndexProductsRequest $request): JsonResponse
     {
@@ -132,6 +138,15 @@ class ProductController extends BaseAdminController
         return $this->success(new ProductResource($product));
     }
 
+    /**
+     * Create a product.
+     *
+     * Without `variants` (or with an empty array) the product gets one generated
+     * default variant, "Standard", SKU `{sku}-DEFAULT`, priced and stocked like
+     * the product. With variants, the row marked `is_default: true` becomes the
+     * default; when none is marked, the first active row does. Marking more than
+     * one is a 422.
+     */
     public function store(StoreProductRequest $request): JsonResponse
     {
         $data = $request->validated();
@@ -146,9 +161,15 @@ class ProductController extends BaseAdminController
         $product = DB::transaction(function () use ($data, $variants, $images, $promotionIds, $thumbnailWasSent): Product {
             $product = Product::create($data);
 
+            $preferredDefaultId = null;
             foreach ($variants as $row) {
-                $this->createVariant($product, $row);
+                $variant = $this->createVariant($product, $row);
+                if ($this->rowIsDefault($row)) {
+                    $preferredDefaultId = $variant->id;
+                }
             }
+
+            $this->defaultVariants->ensureDefault($product, $preferredDefaultId);
 
             $this->syncImages($product, $images, $thumbnailWasSent);
             $product->promotions()->sync($this->uniqueIds($promotionIds));
@@ -161,6 +182,14 @@ class ProductController extends BaseAdminController
         return $this->created(new ProductResource($product));
     }
 
+    /**
+     * Update a product.
+     *
+     * The default variant is kept unless a submitted row is marked
+     * `is_default: true`. If it is removed, the first remaining active variant
+     * takes over; if every variant is removed, a "Standard" one is generated. An
+     * update that leaves out `variants` never creates one.
+     */
     public function update(UpdateProductRequest $request, Product $product): JsonResponse
     {
         $data = $request->validated();
@@ -196,16 +225,26 @@ class ProductController extends BaseAdminController
                 $product->save();
             }
 
+            $preferredDefaultId = null;
+
             if ($variants !== null) {
                 if ($replaceVariants) {
                     $product->variants()->delete();
                     foreach ($variants as $row) {
-                        $this->createVariant($product, $row);
+                        $variant = $this->createVariant($product, $row);
+                        if ($this->rowIsDefault($row)) {
+                            $preferredDefaultId = $variant->id;
+                        }
                     }
                 } else {
-                    $this->syncVariants($product, $variants, $removeMissingVariants);
+                    $preferredDefaultId = $this->syncVariants($product, $variants, $removeMissingVariants);
                 }
             }
+
+            // Only an update that touched the variants may generate one: a product
+            // saved before variants were required keeps selling at product level
+            // (its serial numbers carry no variant) until an admin adds variants.
+            $this->defaultVariants->ensureDefault($product, $preferredDefaultId, createIfMissing: $variants !== null);
 
             if ($images !== null) {
                 $this->syncImages($product, $images, $thumbnailWasSent);
@@ -385,14 +424,17 @@ class ProductController extends BaseAdminController
      * SKU (what clients did before ids existed) and otherwise creates a new one.
      * When `$removeMissing` is set, variants the rows leave out are removed.
      *
+     * Returns the id of the variant whose row is marked `is_default`, if any.
+     *
      * @param  list<array<string, mixed>>  $rows
      */
-    private function syncVariants(Product $product, array $rows, bool $removeMissing): void
+    private function syncVariants(Product $product, array $rows, bool $removeMissing): ?int
     {
         $existing = $product->variants()->get();
         $byId = $existing->keyBy('id');
         $bySku = $existing->keyBy('sku');
         $kept = [];
+        $defaultId = null;
 
         foreach ($rows as $row) {
             $hasId = isset($row['id']) && $row['id'] !== '';
@@ -405,11 +447,22 @@ class ProductController extends BaseAdminController
             }
 
             $kept[] = $variant->id;
+            if ($this->rowIsDefault($row)) {
+                $defaultId = $variant->id;
+            }
         }
 
         if ($removeMissing) {
             $existing->whereNotIn('id', $kept)->each(fn (ProductVariant $variant) => $this->removeVariant($variant));
         }
+
+        return $defaultId;
+    }
+
+    /** @param  array<string, mixed>  $row */
+    private function rowIsDefault(array $row): bool
+    {
+        return filter_var($row['is_default'] ?? false, FILTER_VALIDATE_BOOLEAN);
     }
 
     /**

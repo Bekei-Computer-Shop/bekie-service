@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use App\Models\Concerns\TracksInventory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ProductVariant extends Model
 {
-    use SoftDeletes, TracksInventory;
+    use HasFactory, SoftDeletes, TracksInventory;
 
     protected $fillable = [
         'product_id',

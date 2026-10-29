@@ -81,6 +81,7 @@ Route::prefix('v1')->group(function () {
     Route::get('products/{product}', [ProductController::class, 'show']);
     Route::get('products/{product}/gallery', [ProductController::class, 'gallery']);
     Route::get('products/{product}/related', [ProductController::class, 'related']);
+    Route::get('products/{product}/reviews', [ProductController::class, 'reviews']);
     Route::get('products/{product}/specifications', [ProductController::class, 'specifications']);
     Route::get('products/{product}/warranty-policies', [ProductController::class, 'warrantyPolicies']);
     Route::get('products/{product}/variants', [ProductController::class, 'variants']);
