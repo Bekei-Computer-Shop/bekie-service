@@ -4,13 +4,33 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Models\Category;
 use App\Models\Coupon;
+use App\Models\CouponUsage;
+use App\Models\CustomerGroup;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use Database\Seeders\Support\DemoData;
 use Illuminate\Database\Seeder;
+use RuntimeException;
 
 class PromotionSeeder extends Seeder
 {
     /**
-     * Seed 10 discount codes for the admin "Promotions & Campaigns" screen.
+     * Promotions with tight usage limits that PromotionUsageOrderSeeder fills
+     * on purpose. Every other demo order leaves them alone, so they end up
+     * exhausted by exactly the orders meant to exhaust them.
+     */
+    public const SCENARIO_CODES = ['RAMFLASH24', 'VIPWORK100', 'STORAGEDEAL5'];
+
+    /** A product promotion must name this many products (inclusive). */
+    private const MIN_PRODUCTS = 10;
+
+    private const MAX_PRODUCTS = 20;
+
+    /**
+     * Seed the promotions for the admin "Promotions & Campaigns" screen and
+     * the storefront discount display.
      *
      * The screen reads `Coupon` through PromotionController — not the older
      * `Promotion` model, which is no longer wired to any admin route. Column
@@ -18,17 +38,30 @@ class PromotionSeeder extends Seeder
      * closes at `expires_at`, and `type` is constrained by a CHECK to exactly
      * 'percentage' or 'fixed'.
      *
+     * Every promotion has exactly one target type, the rule
+     * ValidatesPromotionTargets enforces: products (optionally refined by
+     * variants), categories, or customer groups. The few with no target are
+     * plain codes, which only apply when typed in at checkout. Targets are
+     * restricted to active rows, so each promotion can be opened and saved in
+     * the admin form without tripping its `exists` rules.
+     *
      * The set covers every status the list derives in `promotionFromApi`
-     * (see `src/services/promotions.js` in the frontend): active, paused via
-     * `is_active`, expired by `expires_at`, and expired by usage cap — plus
-     * open-ended and uncapped rows, and one with no banner so the gradient
-     * fallback has something to show.
+     * (see `src/services/promotions.js` in the frontend): active, scheduled,
+     * paused via `is_active`, expired by `expires_at`, and exhausted by usage
+     * cap — plus open-ended and uncapped rows, and one with no banner so the
+     * gradient fallback has something to show.
+     *
+     * `used_count` is never written from here: it is recounted from
+     * `coupon_usages`, which the demo order seeders write as they apply each
+     * promotion, so the counter always matches the usage rows behind it.
      *
      * Idempotent: re-running updates the row for a code rather than stacking
      * duplicates or tripping the unique index.
      */
     public function run(): void
     {
+        DemoData::ensureAllowed(self::class);
+
         foreach ($this->promotions() as $promotion) {
             $coupon = Coupon::withTrashed()->firstOrNew(['code' => $promotion['code']]);
             $coupon->fill([
@@ -44,14 +77,152 @@ class PromotionSeeder extends Seeder
                 'expires_at' => $promotion['expires_at'],
                 'usage_limit' => $promotion['usage_limit'],
                 'user_limit' => $promotion['user_limit'],
-                'used_count' => $promotion['used_count'],
                 'is_active' => $promotion['is_active'],
+                'include_subcategories' => $promotion['target']['include_subcategories'] ?? false,
             ]);
+            if (! $coupon->exists) {
+                $coupon->used_count = 0;
+            }
             $coupon->save();
 
             if ($coupon->trashed()) {
                 $coupon->restore();
             }
+
+            $this->syncTargets($coupon, $promotion['target']);
+        }
+
+        self::syncUsageCounts();
+
+        $this->command?->info(sprintf('Seeded %d targeted promotions.', count($this->promotions())));
+    }
+
+    /** @return list<string> */
+    public static function codes(): array
+    {
+        return array_column((new self)->promotions(), 'code');
+    }
+
+    /**
+     * Sets each demo promotion's `used_count` to the usage rows recorded for
+     * it. Only this seeder's codes are touched.
+     */
+    public static function syncUsageCounts(): void
+    {
+        $counts = CouponUsage::query()
+            ->selectRaw('coupon_id, count(*) as uses')
+            ->groupBy('coupon_id')
+            ->pluck('uses', 'coupon_id');
+
+        Coupon::withTrashed()
+            ->whereIn('code', self::codes())
+            ->get()
+            ->each(function (Coupon $coupon) use ($counts): void {
+                $uses = (int) ($counts[$coupon->id] ?? 0);
+                if ((int) $coupon->used_count !== $uses) {
+                    Coupon::withTrashed()->whereKey($coupon->id)->update(['used_count' => $uses]);
+                }
+            });
+    }
+
+    /**
+     * Writes the one target type a promotion has and clears the others, so a
+     * promotion that changed target type between runs is never left with two.
+     *
+     * @param  array<string, mixed>|null  $target
+     */
+    private function syncTargets(Coupon $coupon, ?array $target): void
+    {
+        $products = [];
+        $variants = [];
+        $categories = [];
+        $groups = [];
+        $type = $target['type'] ?? null;
+
+        if ($type === Coupon::TARGET_PRODUCTS) {
+            $products = $this->productIds($coupon->code, $target['categories'], $target['limit'] ?? self::MAX_PRODUCTS);
+            $variants = isset($target['variants']) ? $this->variantIds($target['variants']) : [];
+        } elseif ($type === Coupon::TARGET_CATEGORIES) {
+            $categories = Category::query()->whereIn('slug', $target['categories'])->pluck('id')->all();
+            $this->assertFound($coupon->code, 'categories', $target['categories'], $categories);
+        } elseif ($type === Coupon::TARGET_CUSTOMER_GROUPS) {
+            $groups = CustomerGroup::query()->whereIn('slug', $target['groups'])->pluck('id')->all();
+            $this->assertFound($coupon->code, 'customer groups', $target['groups'], $groups);
+        }
+
+        Coupon::withTrashed()->whereKey($coupon->id)->update(['target_type' => $type]);
+        $coupon->products()->sync($products);
+        $coupon->variants()->sync($variants);
+        $coupon->categories()->sync($categories);
+        $coupon->customerGroups()->sync($groups);
+    }
+
+    /**
+     * Active products in the given categories, in a stable order. Fails the
+     * seed rather than writing a product promotion outside the 10-20 range.
+     *
+     * @param  list<string>  $categorySlugs
+     * @return list<string>
+     */
+    private function productIds(string $code, array $categorySlugs, int $limit): array
+    {
+        $ids = Product::query()
+            ->where('is_active', true)
+            ->whereHas('category', fn ($query) => $query->whereIn('slug', $categorySlugs))
+            ->orderBy('sku')
+            ->limit(min($limit, self::MAX_PRODUCTS))
+            ->pluck('id')
+            ->map(fn ($id): string => (string) $id)
+            ->all();
+
+        if (count($ids) < self::MIN_PRODUCTS) {
+            throw new RuntimeException(sprintf(
+                'Promotion %s needs at least %d active products in [%s] but found %d. Run ProductCatalogSeeder, StockAlertSeeder and DemoCatalogSeeder first.',
+                $code,
+                self::MIN_PRODUCTS,
+                implode(', ', $categorySlugs),
+                count($ids),
+            ));
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Active variants of active products in a category whose attribute
+     * matches, e.g. every 32GB laptop configuration.
+     *
+     * @param  array{category: string, attribute: string, value: string}  $filter
+     * @return list<int>
+     */
+    private function variantIds(array $filter): array
+    {
+        return ProductVariant::query()
+            ->where('is_active', true)
+            ->where('attributes->'.$filter['attribute'], $filter['value'])
+            ->whereHas('product', fn ($query) => $query
+                ->where('is_active', true)
+                ->whereHas('category', fn ($category) => $category->where('slug', $filter['category'])))
+            ->orderBy('sku')
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    /**
+     * @param  list<string>  $wanted
+     * @param  list<int>  $found
+     */
+    private function assertFound(string $code, string $what, array $wanted, array $found): void
+    {
+        if (count($found) !== count($wanted)) {
+            throw new RuntimeException(sprintf(
+                'Promotion %s targets %s [%s] but only %d exist. Run CategorySeeder and CustomerGroupSeeder first.',
+                $code,
+                $what,
+                implode(', ', $wanted),
+                count($found),
+            ));
         }
     }
 
@@ -86,7 +257,29 @@ class PromotionSeeder extends Seeder
         return $images[$seed] ?? 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1600&q=80';
     }
 
+    /** @return array{type: string, categories: list<string>, limit?: int, variants?: array<string, string>} */
+    private static function products(array $categories, int $limit = self::MAX_PRODUCTS): array
+    {
+        return ['type' => Coupon::TARGET_PRODUCTS, 'categories' => $categories, 'limit' => $limit];
+    }
+
+    /** @return array{type: string, categories: list<string>, include_subcategories: bool} */
+    private static function categories(array $slugs, bool $includeSubcategories = false): array
+    {
+        return ['type' => Coupon::TARGET_CATEGORIES, 'categories' => $slugs, 'include_subcategories' => $includeSubcategories];
+    }
+
+    /** @return array{type: string, groups: list<string>} */
+    private static function groups(array $slugs): array
+    {
+        return ['type' => Coupon::TARGET_CUSTOMER_GROUPS, 'groups' => $slugs];
+    }
+
     /**
+     * The 20 original campaign codes, unchanged apart from their targets and
+     * the two usage caps the scenario orders now fill, followed by the codes
+     * added for cases the originals did not cover.
+     *
      * @return array<int, array<string, mixed>>
      */
     private function promotions(): array
@@ -106,8 +299,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(6),
                 'usage_limit' => 220,
                 'user_limit' => 1,
-                'used_count' => 164,
                 'is_active' => true,
+                'target' => self::products(['graphics-cards', 'desktop-computers']),
             ],
             [
                 'name' => 'Laptop Upgrade Bonus',
@@ -123,8 +316,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(32),
                 'usage_limit' => 500,
                 'user_limit' => 2,
-                'used_count' => 138,
                 'is_active' => true,
+                'target' => self::categories(['laptops']),
             ],
             [
                 'name' => 'Monitor Delivery Saver',
@@ -140,8 +333,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => null,
                 'usage_limit' => null,
                 'user_limit' => null,
-                'used_count' => 760,
                 'is_active' => true,
+                'target' => self::categories(['monitors']),
             ],
             [
                 'name' => 'Gaming PC Combo Deal',
@@ -157,8 +350,10 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(18),
                 'usage_limit' => 280,
                 'user_limit' => 1,
-                'used_count' => 93,
                 'is_active' => true,
+                // Shares the desktops with RTX4070LAUNCH: same rate, lower cap,
+                // so the RTX deal wins on any desktop over $1,200.
+                'target' => self::products(['desktop-computers', 'keyboards', 'mice']),
             ],
             [
                 'name' => 'Custom PC Build Promo',
@@ -174,8 +369,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(210),
                 'usage_limit' => 1800,
                 'user_limit' => 1,
-                'used_count' => 7,
                 'is_active' => true,
+                'target' => self::categories(['pc-components'], includeSubcategories: true),
             ],
             [
                 'name' => 'SSD Summer Clearance',
@@ -191,8 +386,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->subDays(15),
                 'usage_limit' => null,
                 'user_limit' => null,
-                'used_count' => 570,
                 'is_active' => true,
+                'target' => self::categories(['storage'], includeSubcategories: true),
             ],
             [
                 'name' => '24-Hour RAM Flash Sale',
@@ -206,10 +401,11 @@ class PromotionSeeder extends Seeder
                 'max_discount_amount' => 150.00,
                 'starts_at' => now()->subDays(5),
                 'expires_at' => now()->subDays(3),
-                'usage_limit' => 120,
+                // Filled by PromotionUsageOrderSeeder: expired and exhausted.
+                'usage_limit' => 3,
                 'user_limit' => 1,
-                'used_count' => 120,
                 'is_active' => true,
+                'target' => self::categories(['memory-ram']),
             ],
             [
                 'name' => 'VIP Workstation Upgrade',
@@ -223,10 +419,11 @@ class PromotionSeeder extends Seeder
                 'max_discount_amount' => null,
                 'starts_at' => now()->subDays(90),
                 'expires_at' => null,
-                'usage_limit' => 40,
+                // Filled by PromotionUsageOrderSeeder: running but exhausted.
+                'usage_limit' => 3,
                 'user_limit' => 1,
-                'used_count' => 40,
                 'is_active' => true,
+                'target' => self::groups([CustomerGroup::VIP_SLUG]),
             ],
             [
                 'name' => 'Weekend Monitor Drop',
@@ -242,8 +439,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(4),
                 'usage_limit' => 320,
                 'user_limit' => 1,
-                'used_count' => 228,
                 'is_active' => true,
+                'target' => self::products(['monitors', 'webcams']),
             ],
             [
                 'name' => 'Office Desk Setup Bundle',
@@ -259,8 +456,9 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(28),
                 'usage_limit' => 210,
                 'user_limit' => 2,
-                'used_count' => 119,
                 'is_active' => true,
+                // Overlaps WEEKENDMON15 on monitors: 40% (min $500) beats 15%.
+                'target' => self::products(['monitors', 'keyboards', 'mice']),
             ],
             [
                 'name' => 'Gaming Setup Bundle Bonus',
@@ -276,8 +474,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(52),
                 'usage_limit' => 180,
                 'user_limit' => 1,
-                'used_count' => 82,
                 'is_active' => true,
+                'target' => self::products(['laptops', 'desktop-computers']),
             ],
             [
                 'name' => 'Student Laptop Savings',
@@ -293,8 +491,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(65),
                 'usage_limit' => 520,
                 'user_limit' => 1,
-                'used_count' => 190,
                 'is_active' => true,
+                'target' => self::groups(['students']),
             ],
             [
                 'name' => 'Desktop Delivery Deal',
@@ -310,8 +508,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(90),
                 'usage_limit' => null,
                 'user_limit' => null,
-                'used_count' => 624,
                 'is_active' => true,
+                'target' => self::categories(['desktop-computers']),
             ],
             [
                 'name' => 'Starter PC Kit Offer',
@@ -327,8 +525,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(12),
                 'usage_limit' => 380,
                 'user_limit' => 1,
-                'used_count' => 116,
                 'is_active' => true,
+                'target' => self::products(['keyboards', 'mice', 'webcams', 'speakers']),
             ],
             [
                 'name' => 'Trade-In Desktop Bonus',
@@ -344,8 +542,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(72),
                 'usage_limit' => 110,
                 'user_limit' => 1,
-                'used_count' => 61,
                 'is_active' => true,
+                'target' => self::categories(['laptops', 'desktop-computers']),
             ],
             [
                 'name' => 'Memory & Storage Upgrade',
@@ -361,8 +559,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(26),
                 'usage_limit' => 500,
                 'user_limit' => 2,
-                'used_count' => 316,
                 'is_active' => true,
+                'target' => self::categories(['memory-ram', 'storage'], includeSubcategories: true),
             ],
             [
                 'name' => 'Accessory Gift with Purchase',
@@ -370,6 +568,8 @@ class PromotionSeeder extends Seeder
                 'kind' => 'free_gift',
                 'description' => 'Receive a bonus accessory pack with premium keyboard, mouse, or headset orders.',
                 'banner_image' => $this->banner('bekie-accessory-gift'),
+                // A $0 promotion: listed on the products but never the best
+                // discount, so it never reaches an order total.
                 'type' => 'fixed',
                 'value' => 0.00,
                 'min_order_amount' => 700.00,
@@ -378,8 +578,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(85),
                 'usage_limit' => 260,
                 'user_limit' => 1,
-                'used_count' => 176,
                 'is_active' => true,
+                'target' => self::products(['keyboards', 'mice', 'headphones-headsets']),
             ],
             [
                 'name' => 'Buy 2 Get 1 Accessory',
@@ -395,8 +595,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(55),
                 'usage_limit' => 240,
                 'user_limit' => 1,
-                'used_count' => 147,
                 'is_active' => true,
+                'target' => self::products(['cables-adapters', 'power-banks-chargers', 'external-storage', 'webcams', 'networking']),
             ],
             [
                 'name' => 'Audio & Peripherals Bundle',
@@ -412,8 +612,8 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(22),
                 'usage_limit' => 160,
                 'user_limit' => 1,
-                'used_count' => 89,
                 'is_active' => true,
+                'target' => self::products(['headphones-headsets', 'speakers', 'keyboards']),
             ],
             [
                 'name' => 'Weekend Desktop Delivery',
@@ -429,8 +629,194 @@ class PromotionSeeder extends Seeder
                 'expires_at' => now()->addDays(5),
                 'usage_limit' => 600,
                 'user_limit' => 1,
-                'used_count' => 230,
                 'is_active' => true,
+                'target' => self::groups(['gamers-club']),
+            ],
+
+            /*
+            | Added for cases the original 20 did not cover.
+            */
+            [
+                'name' => 'GPU & CPU Drop (Coming Soon)',
+                'code' => 'GPUDROP12',
+                'kind' => 'flash_sale',
+                'description' => '12% off graphics cards and processors when the drop opens.',
+                'banner_image' => $this->banner('bekie-rtx4070'),
+                'type' => 'percentage',
+                'value' => 12.00,
+                'min_order_amount' => null,
+                'max_discount_amount' => 150.00,
+                // Scheduled: active, but its window has not opened yet.
+                'starts_at' => now()->addDays(3),
+                'expires_at' => now()->addDays(10),
+                'usage_limit' => 300,
+                'user_limit' => 1,
+                'is_active' => true,
+                'target' => self::products(['graphics-cards', 'processors']),
+            ],
+            [
+                'name' => 'CPU + Motherboard Bundle',
+                'code' => 'CPUBUNDLE10',
+                'kind' => 'bundle',
+                'description' => '$10 off each processor and motherboard. Paused while stock is recounted.',
+                'banner_image' => $this->banner('bekie-memory-storage'),
+                'type' => 'fixed',
+                'value' => 10.00,
+                'min_order_amount' => null,
+                'max_discount_amount' => null,
+                'starts_at' => now()->subDays(20),
+                'expires_at' => now()->addDays(40),
+                'usage_limit' => null,
+                'user_limit' => null,
+                // Paused: inside its window but switched off.
+                'is_active' => false,
+                'target' => self::products(['processors', 'motherboards']),
+            ],
+            [
+                'name' => 'Upgrade to 32GB',
+                'code' => 'UPGRADE32GB',
+                'kind' => null,
+                'description' => '8% off RAM and SSD upgrades, plus every 32GB laptop configuration.',
+                'banner_image' => null,
+                'type' => 'percentage',
+                'value' => 8.00,
+                'min_order_amount' => null,
+                'max_discount_amount' => 120.00,
+                'starts_at' => now()->subDays(10),
+                'expires_at' => now()->addDays(50),
+                'usage_limit' => null,
+                'user_limit' => 2,
+                'is_active' => true,
+                // The variant list reaches laptops that are not in the product
+                // list, so only their 32GB configurations are discounted.
+                'target' => self::products(['memory-ram', 'internal-ssds']) + [
+                    'variants' => ['category' => 'laptops', 'attribute' => 'ram', 'value' => '32GB'],
+                ],
+            ],
+            [
+                'name' => 'Storage Deal (Limited)',
+                'code' => 'STORAGEDEAL5',
+                'kind' => 'flash_sale',
+                'description' => '$5 off SSDs, hard drives, and portable storage — first two orders only.',
+                'banner_image' => $this->banner('bekie-ssd-clearance'),
+                'type' => 'fixed',
+                'value' => 5.00,
+                'min_order_amount' => null,
+                'max_discount_amount' => null,
+                'starts_at' => now()->subDays(14),
+                'expires_at' => now()->addDays(14),
+                // Filled by PromotionUsageOrderSeeder: a product promotion
+                // that is running but exhausted.
+                'usage_limit' => 2,
+                'user_limit' => 1,
+                'is_active' => true,
+                'target' => self::products(['internal-ssds', 'hard-drives', 'external-storage']),
+            ],
+            [
+                'name' => 'Components Direct Discount',
+                'code' => 'COMPONENTS7',
+                'kind' => null,
+                'description' => '7% off items filed directly under PC Components (not its subcategories).',
+                'banner_image' => null,
+                'type' => 'percentage',
+                'value' => 7.00,
+                'min_order_amount' => null,
+                'max_discount_amount' => null,
+                'starts_at' => now()->subDays(5),
+                'expires_at' => now()->addDays(30),
+                'usage_limit' => null,
+                'user_limit' => null,
+                'is_active' => true,
+                // Every component sits in a subcategory, so with subcategories
+                // excluded this matches nothing — an edge case on purpose.
+                'target' => self::categories(['pc-components']),
+            ],
+            [
+                'name' => 'Dormant Group Offer',
+                'code' => 'DORMANTGROUP5',
+                'kind' => null,
+                'description' => '5% off for a customer group that has been switched off.',
+                'banner_image' => null,
+                'type' => 'percentage',
+                'value' => 5.00,
+                'min_order_amount' => null,
+                'max_discount_amount' => null,
+                'starts_at' => now()->subDays(30),
+                'expires_at' => now()->addDays(30),
+                'usage_limit' => null,
+                'user_limit' => null,
+                'is_active' => true,
+                // The group is inactive, so its members never receive this.
+                'target' => self::groups(['inactive-promo-group']),
+            ],
+            [
+                'name' => 'B2B Bulk Pricing',
+                'code' => 'B2BBULK12',
+                'kind' => 'bundle',
+                'description' => '12% off for business and wholesale accounts, capped at $300 per item.',
+                'banner_image' => $this->banner('bekie-desk-set'),
+                'type' => 'percentage',
+                'value' => 12.00,
+                'min_order_amount' => 1000.00,
+                'max_discount_amount' => 300.00,
+                'starts_at' => now()->subDays(60),
+                'expires_at' => null,
+                'usage_limit' => null,
+                'user_limit' => null,
+                'is_active' => true,
+                'target' => self::groups(['b2b-wholesale']),
+            ],
+            [
+                'name' => 'Welcome Code',
+                'code' => 'WELCOME10',
+                'kind' => null,
+                'description' => '10% off your order, up to $50, when you enter WELCOME10 at checkout.',
+                'banner_image' => null,
+                'type' => 'percentage',
+                'value' => 10.00,
+                'min_order_amount' => 50.00,
+                'max_discount_amount' => 50.00,
+                'starts_at' => now()->subDays(120),
+                'expires_at' => null,
+                'usage_limit' => null,
+                'user_limit' => 1,
+                'is_active' => true,
+                // No target: applies to the whole order, by code only.
+                'target' => null,
+            ],
+            [
+                'name' => 'Big Spender Code',
+                'code' => 'BIGSPEND50',
+                'kind' => null,
+                'description' => '$50 off orders of $1,500 or more with code BIGSPEND50.',
+                'banner_image' => null,
+                'type' => 'fixed',
+                'value' => 50.00,
+                'min_order_amount' => 1500.00,
+                'max_discount_amount' => null,
+                'starts_at' => now()->subDays(30),
+                'expires_at' => now()->addDays(60),
+                'usage_limit' => 500,
+                'user_limit' => 3,
+                'is_active' => true,
+                'target' => null,
+            ],
+            [
+                'name' => 'Last Season Code',
+                'code' => 'OLDCODE20',
+                'kind' => null,
+                'description' => 'An expired code, for the "this code has expired" message.',
+                'banner_image' => null,
+                'type' => 'percentage',
+                'value' => 20.00,
+                'min_order_amount' => null,
+                'max_discount_amount' => 100.00,
+                'starts_at' => now()->subDays(200),
+                'expires_at' => now()->subDays(100),
+                'usage_limit' => null,
+                'user_limit' => null,
+                'is_active' => true,
+                'target' => null,
             ],
         ];
     }

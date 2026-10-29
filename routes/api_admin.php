@@ -128,6 +128,7 @@ Route::prefix('admin')->group(function () {
         });
 
         Route::middleware('permission:promotions.view')->group(function () {
+            Route::get('promotions/targeting/customer-groups', [PromotionController::class, 'customerGroups']);
             Route::get('promotions', [PromotionController::class, 'index']);
             Route::get('promotions/{promotion}', [PromotionController::class, 'show']);
         });

@@ -30,11 +30,47 @@ class Coupon extends Model
         'free_gift',
     ];
 
+    /**
+     * What a promotion targets: exactly one of these. Null is a legacy
+     * untargeted coupon applied to the whole order by code.
+     */
+    public const TARGET_PRODUCTS = 'products';
+
+    public const TARGET_CATEGORIES = 'categories';
+
+    public const TARGET_CUSTOMER_GROUPS = 'customer_groups';
+
+    public const TARGET_TYPES = [
+        self::TARGET_PRODUCTS,
+        self::TARGET_CATEGORIES,
+        self::TARGET_CUSTOMER_GROUPS,
+    ];
+
+    /**
+     * Request field => relation, per target type. Variants are an optional
+     * refinement of a product target, so they belong to it.
+     *
+     * @var array<string, array<string, string>>
+     */
+    public const TARGET_FIELDS = [
+        self::TARGET_PRODUCTS => ['product_ids' => 'products', 'variant_ids' => 'variants'],
+        self::TARGET_CATEGORIES => ['category_ids' => 'categories'],
+        self::TARGET_CUSTOMER_GROUPS => ['customer_group_ids' => 'customerGroups'],
+    ];
+
+    /** The field that must name at least one target, per target type. */
+    public const PRIMARY_TARGET_FIELDS = [
+        self::TARGET_PRODUCTS => 'product_ids',
+        self::TARGET_CATEGORIES => 'category_ids',
+        self::TARGET_CUSTOMER_GROUPS => 'customer_group_ids',
+    ];
+
     protected $fillable = [
         'name',
         'code',
         'type',
         'kind',
+        'target_type',
         'value',
         'usage_limit',
         'used_count',
@@ -43,6 +79,7 @@ class Coupon extends Model
         'expires_at',
         'min_order_amount',
         'max_discount_amount',
+        'include_subcategories',
         'is_active',
         'applicable_products',
         'applicable_categories',
@@ -64,6 +101,7 @@ class Coupon extends Model
         'expires_at' => 'datetime',
 
         'is_active' => 'boolean',
+        'include_subcategories' => 'boolean',
 
         'applicable_products' => 'array',
         'applicable_categories' => 'array',
@@ -102,7 +140,7 @@ class Coupon extends Model
             return false;
         }
 
-        if ($this->usage_limit && $this->used_count >= $this->usage_limit) {
+        if ($this->usage_limit !== null && $this->used_count >= $this->usage_limit) {
             return false;
         }
 
@@ -119,7 +157,7 @@ class Coupon extends Model
 
     public function canBeUsedByUser(int $userUsageCount): bool
     {
-        if ($this->user_limit && $userUsageCount >= $this->user_limit) {
+        if ($this->user_limit !== null && $userUsageCount >= $this->user_limit) {
             return false;
         }
 
@@ -136,7 +174,7 @@ class Coupon extends Model
             ? $this->value
             : ($orderTotal * ($this->value / 100));
 
-        if ($this->max_discount_amount) {
+        if ($this->max_discount_amount !== null) {
             $discount = min($discount, $this->max_discount_amount);
         }
 
@@ -161,6 +199,16 @@ class Coupon extends Model
         // Explicit pivot keys: the related pivot key would otherwise be
         // derived as `product_uuid` from Product's key name.
         return $this->belongsToMany(Product::class, 'coupon_product', 'coupon_id', 'product_id');
+    }
+
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class, 'coupon_category');
+    }
+
+    public function variants(): BelongsToMany
+    {
+        return $this->belongsToMany(ProductVariant::class, 'coupon_product_variant', 'coupon_id', 'product_variant_id');
     }
 
     public function incrementUsage(): void

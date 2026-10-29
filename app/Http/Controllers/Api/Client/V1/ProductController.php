@@ -13,6 +13,7 @@ use App\Http\Resources\Api\Client\V1\ProductVariantResource;
 use App\Http\Resources\Api\Client\V1\RelatedProductResource;
 use App\Models\ContentItem;
 use App\Models\Product;
+use App\Services\ProductPromotionService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ use Illuminate\Support\Facades\DB;
 
 class ProductController extends BaseApiController
 {
-    public function bestSelling(Request $request): JsonResponse
+    public function bestSelling(Request $request, ProductPromotionService $pricing): JsonResponse
     {
         $limit = min(max((int) $request->query('limit', 8), 1), 24);
         $sales = DB::table('order_items')
@@ -50,17 +51,28 @@ class ProductController extends BaseApiController
             ->orderBy('products.id')
             ->limit($limit)
             ->get();
+        $pricing->attachStorefrontPromotions($products);
 
         return $this->success(ProductListResource::collection($products));
     }
 
-    public function onPromotion(Request $request): JsonResponse
+    /**
+     * Products with a lower sale price, or targeted by a live promotion through
+     * the product, one of its variants or its category. Promotions limited to
+     * customer groups are left out: this list is public, not per shopper.
+     */
+    public function onPromotion(Request $request, ProductPromotionService $pricing): JsonResponse
     {
         $limit = min(max((int) $request->query('limit', 8), 1), 24);
+        ['product_ids' => $productIds, 'category_ids' => $categoryIds] = $pricing->storefrontTargets();
+
         $products = Product::query()
             ->where('is_active', true)
-            ->whereNotNull('sale_price')
-            ->whereColumn('sale_price', '<', 'price')
+            ->where(function (Builder $query) use ($productIds, $categoryIds): void {
+                $query->where(fn (Builder $sale) => $sale->whereNotNull('sale_price')->whereColumn('sale_price', '<', 'price'))
+                    ->orWhereIn('id', $productIds)
+                    ->orWhereIn('category_id', $categoryIds);
+            })
             ->addSelect([
                 'average_rating' => DB::table('reviews')
                     ->select(DB::raw('COALESCE(ROUND(AVG(rating), 1), 0)'))
@@ -69,15 +81,18 @@ class ProductController extends BaseApiController
                     ->whereNull('deleted_at'),
             ])
             ->withCount(['approvedReviews as reviews_count'])
-            ->orderByRaw('(price - sale_price) DESC')
+            ->orderByRaw('CASE WHEN sale_price < price THEN price - sale_price ELSE 0 END DESC')
+            ->orderByDesc('is_featured')
             ->orderBy('id')
             ->limit($limit)
             ->get();
 
+        $pricing->attachStorefrontPromotions($products);
+
         return $this->success(ProductListResource::collection($products));
     }
 
-    public function newProducts(ListNewProductsRequest $request): JsonResponse
+    public function newProducts(ListNewProductsRequest $request, ProductPromotionService $pricing): JsonResponse
     {
         $validated = $request->validated();
         $now = now();
@@ -99,11 +114,12 @@ class ProductController extends BaseApiController
                 perPage: (int) ($validated['limit'] ?? 20),
                 page: (int) ($validated['page'] ?? 1)
             );
+        $pricing->attachStorefrontPromotions($products);
 
         return $this->success(ProductListResource::collection($products));
     }
 
-    public function index(ListProductsRequest $request)
+    public function index(ListProductsRequest $request, ProductPromotionService $pricing)
     {
         $query = Product::where('is_active', true)
             ->addSelect([
@@ -178,11 +194,12 @@ class ProductController extends BaseApiController
             perPage: (int) $request->query('per_page', 18),
             page: (int) $request->query('page', 1)
         );
+        $pricing->attachStorefrontPromotions($products);
 
         return $this->success(ProductListResource::collection($products));
     }
 
-    public function show(Product $product)
+    public function show(Product $product, ProductPromotionService $pricing)
     {
         abort_unless($product->is_active, 404);
 
@@ -202,6 +219,7 @@ class ProductController extends BaseApiController
         }
 
         $product->increment('views_count');
+        $pricing->attachStorefrontPromotions([$product]);
 
         return $this->success(new ProductResource($product));
     }
@@ -232,7 +250,7 @@ class ProductController extends BaseApiController
         ]);
     }
 
-    public function related(Product $product, Request $request): JsonResponse
+    public function related(Product $product, Request $request, ProductPromotionService $pricing): JsonResponse
     {
         $this->assertClientVisible($product);
         $validated = $request->validate([
@@ -279,6 +297,7 @@ class ProductController extends BaseApiController
             ->orderBy('name')
             ->limit($limit)
             ->get();
+        $pricing->attachStorefrontPromotions($products);
 
         return $this->success([
             'items' => RelatedProductResource::collection($products)->resolve(),

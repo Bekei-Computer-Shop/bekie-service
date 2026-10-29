@@ -7,9 +7,13 @@ namespace Database\Seeders;
 use App\Http\Resources\Api\Admin\V1\CustomerResource;
 use App\Models\CustomerGroup;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\User;
+use App\Services\ProductPromotionService;
+use App\Services\TaxCalculator;
+use Database\Seeders\Support\DemoData;
+use Database\Seeders\Support\DemoOrderBuilder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -28,7 +32,7 @@ use Illuminate\Support\Facades\Hash;
  */
 class CustomerSeeder extends Seeder
 {
-    private const TAG = 'customer-seeder';
+    public const TAG = 'customer-seeder';
 
     /** Products supplied by ProductCatalogSeeder and used for customer order history. */
     private const ORDER_PRODUCT_SKUS = [
@@ -38,9 +42,11 @@ class CustomerSeeder extends Seeder
         'LOG-MXM3S',
         'DEL-ULTRA-4K',
         'SNY-WH1000XM5',
-        'APL-IP15PM',
+        'LOG-BRIO4K',
         'ANK-PWREXP8',
     ];
+
+    private ?DemoOrderBuilder $orders = null;
 
     /**
      * first, last, phone suffix, status, [line 1, district, city, postcode],
@@ -115,10 +121,15 @@ class CustomerSeeder extends Seeder
 
     public function run(): void
     {
+        DemoData::ensureAllowed(self::class);
+
         $products = Product::query()
             ->whereIn('sku', self::ORDER_PRODUCT_SKUS)
+            ->whereHas('variants')
+            ->with('variants')
             ->orderBy('sku')
             ->get();
+        $this->orders = new DemoOrderBuilder(app(ProductPromotionService::class), app(TaxCalculator::class), PromotionSeeder::codes());
         if ($products->isEmpty()) {
             $this->command->warn('No products found — customers will be created without orders. Run ProductCatalogSeeder first for spend totals.');
         }
@@ -180,9 +191,8 @@ class CustomerSeeder extends Seeder
         $this->seedLoginUser();
 
         $this->command->info("Seeded {$created} customers with {$orders} completed orders.");
-        $this->command->line('Remove them again with:');
-        $this->command->line("  delete from order_items where order_id in (select id from orders where metadata->>'seeded_by' = '".self::TAG."');");
-        $this->command->line("  delete from orders where metadata->>'seeded_by' = '".self::TAG."';");
+        $this->command->line('Regenerate the demo orders (and their usage counters) with: php artisan demo:reset');
+        $this->command->line('Remove the shoppers themselves with:');
         $this->command->line("  delete from users where email like 'customer.%@bekie.test';");
         $this->command->line("  delete from users where email = 'oun.pav125@gmail.com';");
     }
@@ -269,67 +279,27 @@ class CustomerSeeder extends Seeder
         }
 
         for ($n = 1; $n <= $count; $n++) {
-            $placedAt = now()->subDays(($index * 7) + ($n * 11))->setTime(9 + ($n % 8), ($n * 17) % 60);
-
-            $lines = $this->lines($products, $index + $n);
-            $subtotal = round(array_sum(array_column($lines, 'total')), 2);
-            $tax = round($subtotal * 0.10, 2);
-            $shipping = $subtotal > 1000 ? 0.0 : 7.50;
-            $grandTotal = round($subtotal + $tax + $shipping, 2);
-
-            $order = Order::create([
+            // Priced by DemoOrderBuilder as checkout would have on that day:
+            // promotions, tax and shipping included, usage recorded.
+            $this->orders->create([
+                'tag' => self::TAG,
                 'order_number' => 'CUS-'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT).'-'.str_pad((string) $n, 3, '0', STR_PAD_LEFT),
-                'user_id' => $customer->id,
+                'customer' => $customer,
+                'placed_at' => now()->subDays(($index * 7) + ($n * 11))->setTime(9 + ($n % 8), ($n * 17) % 60),
                 'status' => 'completed',
-                'currency' => 'USD',
-                'payment_method' => $n % 2 === 0 ? 'stripe' : 'cod',
-                'payment_status' => 'paid',
-                'subtotal' => $subtotal,
-                'discount_total' => 0,
-                'tax_total' => $tax,
-                'shipping_total' => $shipping,
-                'grand_total' => $grandTotal,
-                'shipping_status' => 'delivered',
-                'customer_snapshot' => [
-                    'name' => $customer->name,
-                    'email' => $customer->email,
-                    'phone' => $customer->phone,
-                ],
-                'metadata' => ['seeded_by' => self::TAG],
+                'payment_method' => $n % 2 === 0 ? 'aba_payway' : 'cod',
+                'lines' => $this->lines($products, $index + $n),
+                'skip_promotions' => PromotionSeeder::SCENARIO_CODES,
             ]);
-
-            // created_at is not fillable, so the placement date is forced after.
-            $order->forceFill([
-                'created_at' => $placedAt,
-                'updated_at' => $placedAt,
-                'paid_at' => (clone $placedAt)->addMinutes(9),
-                'shipped_at' => (clone $placedAt)->addDay(),
-                'delivered_at' => (clone $placedAt)->addDays(3),
-            ])->saveQuietly();
-
-            foreach ($lines as $line) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $line['product']->id,
-                    'quantity' => $line['qty'],
-                    'unit_price' => $line['unit'],
-                    'subtotal' => $line['total'],
-                    'discount' => 0,
-                    'tax' => 0,
-                    'total' => $line['total'],
-                    'product_name' => $line['product']->name,
-                    'product_sku' => $line['product']->sku,
-                ]);
-            }
         }
 
         return $count;
     }
 
     /**
-     * One to three line items built from real product prices.
+     * One to three line items, each one of the product's own variants.
      *
-     * @return array<int, array{product: Product, qty: int, unit: float, total: float}>
+     * @return list<array{variant: ProductVariant, quantity: int}>
      */
     private function lines($products, int $seed): array
     {
@@ -337,14 +307,10 @@ class CustomerSeeder extends Seeder
 
         for ($k = 0; $k < 1 + ($seed % 3); $k++) {
             $product = $products[($seed + $k) % $products->count()];
-            $qty = 1 + (($seed + $k) % 2);
-            $unit = (float) ($product->price ?? 99.00);
 
             $lines[] = [
-                'product' => $product,
-                'qty' => $qty,
-                'unit' => $unit,
-                'total' => round($qty * $unit, 2),
+                'variant' => $product->variants[($seed + $k) % $product->variants->count()],
+                'quantity' => 1 + (($seed + $k) % 2),
             ];
         }
 

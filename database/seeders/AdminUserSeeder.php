@@ -10,19 +10,27 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class AdminUserSeeder extends Seeder
 {
     use WithoutModelEvents;
 
+    /** Used only when SEED_ADMIN_PASSWORD is unset in the local environment. */
+    private const LOCAL_FALLBACK_PASSWORD = 'password';
+
     public function run(): void
     {
+        // Resolved before anything is written, so a missing password in a
+        // shared environment leaves every account as it was.
+        $password = Hash::make($this->password());
+
         $admin = User::updateOrCreate(
             ['email' => 'admin@example.com'],
             [
                 'first_name' => 'Admin',
                 'last_name' => 'User',
-                'password' => Hash::make('password'),
+                'password' => $password,
                 'role' => 'admin',
                 'is_admin' => true,
                 'is_active' => true,
@@ -76,7 +84,7 @@ class AdminUserSeeder extends Seeder
             [
                 'first_name' => 'Staff',
                 'last_name' => 'User',
-                'password' => Hash::make('password'),
+                'password' => $password,
                 'role' => 'staff',
                 'is_admin' => true,
                 'is_active' => true,
@@ -98,7 +106,7 @@ class AdminUserSeeder extends Seeder
             [
                 'first_name' => 'Manager',
                 'last_name' => 'User',
-                'password' => Hash::make('password'),
+                'password' => $password,
                 'role' => 'manager',
                 'is_admin' => true,
                 'is_active' => true,
@@ -113,5 +121,28 @@ class AdminUserSeeder extends Seeder
                 $manager->assignRole($managerRole);
             }
         }
+    }
+
+    /**
+     * SEED_ADMIN_PASSWORD (config `seeding.admin_password`), or the documented
+     * fallback in the local environment only. The value is never echoed.
+     */
+    private function password(): string
+    {
+        $configured = (string) config('seeding.admin_password', '');
+
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        if (app()->environment('local')) {
+            $this->command?->warn('SEED_ADMIN_PASSWORD is not set; using the local fallback password documented in .env.example.');
+
+            return self::LOCAL_FALLBACK_PASSWORD;
+        }
+
+        throw new RuntimeException(
+            'SEED_ADMIN_PASSWORD must be set to seed admin accounts outside the local environment. No accounts were changed.'
+        );
     }
 }

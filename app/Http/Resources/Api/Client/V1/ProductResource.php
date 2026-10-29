@@ -2,10 +2,13 @@
 
 namespace App\Http\Resources\Api\Client\V1;
 
+use App\Http\Resources\Api\Client\V1\Concerns\SummarizesPromotion;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class ProductResource extends JsonResource
 {
+    use SummarizesPromotion;
+
     public function toArray($request): array
     {
         return [
@@ -18,6 +21,7 @@ class ProductResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price,
             'sale_price' => $this->sale_price,
+            'promotion' => $this->promotionSummary(),
             'is_serialized' => (bool) $this->is_serialized,
             'in_stock' => $this->in_stock,
             'weight' => $this->weight,

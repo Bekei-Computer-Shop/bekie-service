@@ -63,6 +63,11 @@ class ProductVariant extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function promotions()
+    {
+        return $this->belongsToMany(Coupon::class, 'coupon_product_variant', 'product_variant_id', 'coupon_id');
+    }
+
     public function stockMovements()
     {
         // Explicit morph keys for consistency with Product::stockMovements().

@@ -6,6 +6,8 @@ namespace Tests\Feature\Api\Client\V1;
 
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Coupon;
+use App\Models\CustomerGroup;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -142,6 +144,72 @@ class ProductsTest extends TestCase
             ->assertJsonPath('data.0.id', $promoted->id)
             ->assertJsonPath('data.0.price', 100)
             ->assertJsonPath('data.0.sale_price', 80);
+    }
+
+    public function test_on_promotion_products_include_live_targeted_promotions(): void
+    {
+        $parent = Category::factory()->create(['is_active' => true]);
+        $child = Category::factory()->create(['is_active' => true, 'parent_id' => $parent->id]);
+        $direct = Product::factory()->create(['is_active' => true, 'price' => 200, 'sale_price' => null]);
+        $inSubcategory = Product::factory()->create(['is_active' => true, 'price' => 50, 'sale_price' => null, 'category_id' => $child->id]);
+        $groupOnly = Product::factory()->create(['is_active' => true, 'price' => 100, 'sale_price' => null]);
+        $expiredOnly = Product::factory()->create(['is_active' => true, 'price' => 100, 'sale_price' => null]);
+
+        $this->promotion(['target_type' => Coupon::TARGET_PRODUCTS, 'value' => 10])->products()->attach($direct->id);
+        $this->promotion(['target_type' => Coupon::TARGET_CATEGORIES, 'type' => 'fixed', 'value' => 5, 'include_subcategories' => true])
+            ->categories()->attach($parent->id);
+        $grouped = $this->promotion(['target_type' => Coupon::TARGET_PRODUCTS]);
+        $grouped->products()->attach($groupOnly->id);
+        $grouped->customerGroups()->attach(CustomerGroup::create(['name' => 'Members', 'slug' => 'members', 'is_active' => true])->id);
+        $this->promotion(['target_type' => Coupon::TARGET_PRODUCTS, 'expires_at' => now()->subDay()])->products()->attach($expiredOnly->id);
+
+        $data = collect($this->getJson('/api/v1/products/on-promotion')->assertOk()->json('data'))->keyBy('id');
+
+        expect($data->keys()->sort()->values()->all())->toBe(collect([$direct->id, $inSubcategory->id])->sort()->values()->all())
+            ->and($data[$direct->id]['promotion']['discount_amount'])->toEqual(20)
+            ->and($data[$direct->id]['promotion']['final_price'])->toEqual(180)
+            ->and($data[$inSubcategory->id]['promotion']['type'])->toBe('fixed')
+            ->and($data[$inSubcategory->id]['promotion']['final_price'])->toEqual(45);
+    }
+
+    public function test_product_list_and_detail_show_the_live_promotion(): void
+    {
+        $promoted = Product::factory()->create(['is_active' => true, 'price' => 100, 'sale_price' => 80]);
+        $viaVariant = Product::factory()->create(['is_active' => true, 'price' => 40, 'sale_price' => null]);
+        $plain = Product::factory()->create(['is_active' => true, 'price' => 100, 'sale_price' => null]);
+        $variant = ProductVariant::create([
+            'product_id' => $viaVariant->id, 'name' => 'Blue', 'slug' => 'blue', 'sku' => 'PROMO-BLUE',
+            'price' => 40, 'in_stock' => true, 'stock_quantity' => 3, 'is_active' => true,
+        ]);
+        $promotion = $this->promotion(['name' => 'Ten Off', 'target_type' => Coupon::TARGET_PRODUCTS, 'value' => 10]);
+        $promotion->products()->attach($promoted->id);
+        $promotion->variants()->attach($variant->id);
+
+        $list = collect($this->getJson('/api/v1/products')->assertOk()->json('data'))->keyBy('id');
+
+        expect($list[$promoted->id]['promotion'])->toMatchArray([
+            'name' => 'Ten Off', 'discount_amount' => 8, 'discount_percentage' => 10, 'final_price' => 72,
+        ])
+            ->and($list[$viaVariant->id]['promotion']['final_price'])->toEqual(36)
+            ->and($list[$plain->id]['promotion'])->toBeNull();
+
+        $this->getJson("/api/v1/products/{$promoted->id}")
+            ->assertOk()
+            ->assertJsonPath('data.promotion.name', 'Ten Off')
+            ->assertJsonPath('data.promotion.final_price', 72);
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function promotion(array $attributes): Coupon
+    {
+        return Coupon::create(array_merge([
+            'name' => 'Promo',
+            'code' => uniqid('PROMO-'),
+            'type' => 'percentage',
+            'value' => 10,
+            'starts_at' => now()->subDay(),
+            'is_active' => true,
+        ], $attributes));
     }
 
     private function recordPaidSale(Product $product, int $quantity, string $paymentStatus = 'paid'): void

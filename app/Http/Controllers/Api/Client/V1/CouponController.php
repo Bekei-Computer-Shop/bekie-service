@@ -6,6 +6,7 @@ use App\Http\Requests\Api\Client\V1\ApplyCouponRequest;
 use App\Http\Resources\Api\Client\V1\CartResource;
 use App\Models\Cart;
 use App\Models\Coupon;
+use App\Services\ProductPromotionService;
 
 class CouponController extends BaseApiController
 {
@@ -32,7 +33,15 @@ class CouponController extends BaseApiController
             abort(403, 'You do not have access to this cart.');
         }
 
-        $amount = $coupon->calculateDiscount($cart->subtotal);
+        $amount = app(ProductPromotionService::class)->couponCodeDiscount(
+            $coupon,
+            (int) $request->user()->id,
+            (float) $cart->subtotal,
+        );
+
+        if ($amount <= 0) {
+            return $this->error('Coupon code is not eligible for this customer or cart.', 422);
+        }
 
         // Persist the coupon on the cart so checkout (OrderController@store) can
         // stamp it onto the order and record the usage. Without this the apply

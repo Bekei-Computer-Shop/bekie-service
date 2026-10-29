@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\CustomerGroup;
 use App\Models\Order;
@@ -156,7 +157,7 @@ test('checkout charges a variant sale price instead of its regular price', funct
     ]);
 });
 
-test('admin orders apply a selected product promotion below its minimum spend', function (): void {
+test('admin orders reject product promotions below their minimum spend', function (): void {
     $admin = User::factory()->superAdmin()->create();
     $customer = User::factory()->create();
     $product = Product::factory()->create(['price' => 34]);
@@ -178,10 +179,10 @@ test('admin orders apply a selected product promotion below its minimum spend', 
     $this->withHeaders($headers)
         ->postJson('/api/v1/admin/orders/preview', ['items' => $items])
         ->assertOk()
-        ->assertJsonPath('data.items.0.discount', '6.80')
-        ->assertJsonPath('data.items.0.total', '27.20')
-        ->assertJsonPath('data.promotion_discount', '6.80')
-        ->assertJsonPath('data.total', '27.20');
+        ->assertJsonPath('data.items.0.discount', '0.00')
+        ->assertJsonPath('data.items.0.total', '34.00')
+        ->assertJsonPath('data.promotion_discount', '0.00')
+        ->assertJsonPath('data.total', '34.00');
 
     $orderId = $this->withHeaders($headers)
         ->postJson('/api/v1/admin/orders', [
@@ -191,16 +192,85 @@ test('admin orders apply a selected product promotion below its minimum spend', 
         ])
         ->assertCreated()
         ->assertJsonPath('data.subtotal', '34.00')
-        ->assertJsonPath('data.discount_total', '6.80')
-        ->assertJsonPath('data.total', '27.20')
+        ->assertJsonPath('data.discount_total', '0.00')
+        ->assertJsonPath('data.total', '34.00')
         ->json('data.id');
 
     $this->assertDatabaseHas('order_items', [
         'order_id' => Order::where('uuid', $orderId)->value('id'),
         'product_id' => $product->id,
-        'discount' => 6.8,
-        'total' => 27.2,
+        'discount' => 0,
+        'total' => 34,
     ]);
+});
+
+test('promotion eligibility combines product and category targets with customer groups', function (): void {
+    $admin = User::factory()->superAdmin()->create();
+    $customer = User::factory()->create();
+    $selectedGroup = CustomerGroup::create(['name' => 'Early Access', 'slug' => 'early-access', 'is_active' => true]);
+    $otherGroup = CustomerGroup::create(['name' => 'Partners', 'slug' => 'partners', 'is_active' => true]);
+    $customer->customerGroups()->attach([$selectedGroup->id, $otherGroup->id]);
+
+    $parent = Category::factory()->create();
+    $child = Category::factory()->create(['parent_id' => $parent->id]);
+    $product = Product::factory()->create(['category_id' => $child->id, 'price' => 100]);
+    $categoryPromotion = Coupon::create([
+        'name' => 'Category group offer', 'code' => 'CATGROUP', 'type' => 'percentage', 'value' => 20,
+        'is_active' => true, 'starts_at' => now()->subDay(), 'expires_at' => now()->addDay(),
+        'include_subcategories' => true,
+    ]);
+    $categoryPromotion->categories()->attach($parent->id);
+    $categoryPromotion->customerGroups()->attach($selectedGroup->id);
+
+    $productPromotion = Coupon::create([
+        'name' => 'Product offer', 'code' => 'PRODUCT15', 'type' => 'percentage', 'value' => 15,
+        'is_active' => true, 'starts_at' => now()->subDay(), 'expires_at' => now()->addDay(),
+    ]);
+    $productPromotion->products()->attach($product->id);
+
+    $groupRestrictedProductPromotion = Coupon::create([
+        'name' => 'Wrong group offer', 'code' => 'WRONGGROUP', 'type' => 'percentage', 'value' => 90,
+        'is_active' => true, 'starts_at' => now()->subDay(), 'expires_at' => now()->addDay(),
+    ]);
+    $groupRestrictedProductPromotion->products()->attach($product->id);
+    $groupRestrictedProductPromotion->customerGroups()->attach(CustomerGroup::create([
+        'name' => 'Wholesale', 'slug' => 'wholesale', 'is_active' => true,
+    ])->id);
+
+    $this->withHeaders(adminHeaders($admin))
+        ->postJson('/api/v1/admin/orders/preview', [
+            'customer_id' => $customer->id,
+            'items' => [['product_id' => $product->id, 'qty' => 1, 'unit_price' => 100]],
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.items.0.discount', '20.00')
+        ->assertJsonPath('data.items.0.promotion.code', 'CATGROUP');
+});
+
+test('a variant-targeted promotion applies only to its selected variant', function (): void {
+    $admin = User::factory()->superAdmin()->create();
+    $product = Product::factory()->create(['price' => 100]);
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'name' => 'Configured model',
+        'slug' => 'configured-model',
+        'sku' => 'PROMO-VARIANT',
+        'price' => 100,
+        'is_active' => true,
+    ]);
+    $promotion = Coupon::create([
+        'name' => 'Variant offer', 'code' => 'VARIANT20', 'type' => 'percentage', 'value' => 20,
+        'is_active' => true, 'starts_at' => now()->subDay(), 'expires_at' => now()->addDay(),
+    ]);
+    $promotion->variants()->attach($variant->id);
+
+    $this->withHeaders(adminHeaders($admin))
+        ->postJson('/api/v1/admin/orders/preview', [
+            'items' => [['product_id' => $product->id, 'product_variant_id' => $variant->id, 'qty' => 1, 'unit_price' => 100]],
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.items.0.discount', '20.00')
+        ->assertJsonPath('data.items.0.promotion.code', 'VARIANT20');
 });
 
 test('VIP customers receive five percent only on products without an applicable promotion', function (): void {

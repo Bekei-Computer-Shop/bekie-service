@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\Coupon;
+use App\Models\CustomerGroup;
 use App\Models\User;
 use App\Services\AdminAuthService;
 use Database\Seeders\AdminPermissionsSeeder;
@@ -22,7 +23,11 @@ test('admin promotions manage storefront coupons', function (): void {
     $tokens = (new AdminAuthService)->createAdminToken($user);
     $headers = ['Authorization' => 'Bearer '.$tokens['access_token']];
 
+    $group = CustomerGroup::create(['name' => 'Members', 'slug' => 'members', 'is_active' => true]);
+
     $payload = [
+        'target_type' => 'customer_groups',
+        'customer_group_ids' => [$group->id],
         'name' => 'Summer sale',
         'code' => 'SUMMER20',
         'type' => 'percentage',

@@ -27,6 +27,7 @@ class IndexProductsRequest extends FormRequest
             'low_stock' => ['nullable', 'boolean'],
             'with_trashed' => ['nullable', 'boolean'],
             'only_trashed' => ['nullable', 'boolean'],
+            'with_variants_count' => ['nullable', 'boolean'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
             'page' => ['nullable', 'integer', 'min:1'],
             'sort' => ['nullable', 'string', 'in:id,name,price,created_at,updated_at,stock_quantity'],
