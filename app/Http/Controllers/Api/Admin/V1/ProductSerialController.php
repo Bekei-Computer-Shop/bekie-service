@@ -10,7 +10,7 @@ use App\Models\ProductSerial;
 use App\Services\ProductSerialService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\ResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class ProductSerialController extends BaseAdminController
 {
@@ -59,7 +59,14 @@ class ProductSerialController extends BaseAdminController
     public function show(ProductSerial $productSerial): JsonResponse
     {
         return $this->success(new ProductSerialResource(
-            $productSerial->load(['product', 'variant', 'customer', 'order', 'history.actor', 'history.order'])
+            $productSerial->load([
+                'product.variants:id,product_id,name,sku',
+                'variant',
+                'customer',
+                'order',
+                'history.actor',
+                'history.order',
+            ])
         ));
     }
 
@@ -78,14 +85,27 @@ class ProductSerialController extends BaseAdminController
         $data = $request->validated();
         $note = $data['notes'] ?? null;
         try {
-            if (isset($data['status'])) {
-                $productSerial = $this->serials->transition($productSerial, $data['status'], $request->user()->id, null, $note);
-                unset($data['status']);
-            }
-            unset($data['notes']);
-            if ($data !== []) {
-                $productSerial->update($data);
-            }
+            // One transaction: a number change must not stick when the status
+            // change sent with it is then refused.
+            $productSerial = DB::transaction(function () use ($request, $productSerial, $data, $note): ProductSerial {
+                if (isset($data['serial_number'])) {
+                    $productSerial = $this->serials->renumber($productSerial, $data['serial_number'], $request->user()->id, $note);
+                    unset($data['serial_number']);
+                }
+                if (isset($data['status'])) {
+                    $productSerial = $this->serials->transition($productSerial, $data['status'], $request->user()->id, null, $note);
+                    unset($data['status']);
+                }
+                if (array_key_exists('product_variant_id', $data) && $productSerial->status === ProductSerial::CANCELLED) {
+                    throw new \InvalidArgumentException('A cancelled serial variant cannot be edited.');
+                }
+                unset($data['notes']);
+                if ($data !== []) {
+                    $productSerial->update($data);
+                }
+
+                return $productSerial;
+            });
         } catch (\InvalidArgumentException $exception) {
             return $this->error($exception->getMessage(), 422);
         }

@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingMethod;
 use App\Services\CustomerAddressService;
+use App\Services\ProductPromotionService;
 use App\Services\ProductSerialService;
 use App\Services\TaxCalculator;
 use Illuminate\Http\Request;
@@ -189,8 +190,8 @@ class CartController extends BaseApiController
         }
 
         $quantity = $request->quantity;
-        $unitPrice = $variant?->price ?? $product->sale_price ?? $product->price;
         $salePrice = $variant?->sale_price ?? $product->sale_price;
+        $unitPrice = $salePrice ?? $variant?->price ?? $product->price;
         $costPrice = $variant?->cost_price ?? $product->cost_price;
 
         $item = $cart->items()->updateOrCreate(
@@ -347,9 +348,18 @@ class CartController extends BaseApiController
             return $this->error('Selected shipping method does not support the cart weight.', 422);
         }
 
+        // Promotions attached to the products in the cart come off on top of
+        // any coupon; together they can never exceed the subtotal.
+        $promotions = app(ProductPromotionService::class);
+        $priced = $promotions->priceCart($cart);
+        $discountTotal = round(min(
+            (float) $cart->subtotal,
+            (float) $cart->discount_total + (float) $priced->sum('discount'),
+        ), 2);
+
         $taxBreakdown = app(TaxCalculator::class)->calculate(
             (float) $cart->subtotal,
-            (float) $cart->discount_total,
+            $discountTotal,
             $shippingAddress['country'],
         );
         $shippingTotal = $shippingMethod->calculateCost($shippingWeight);
@@ -359,7 +369,7 @@ class CartController extends BaseApiController
             'address_id' => $shippingAddress['address_id'],
             'order_number' => $this->generateOrderNumber(),
             'subtotal' => $cart->subtotal,
-            'discount_total' => $cart->discount_total,
+            'discount_total' => $discountTotal,
             'tax_total' => $taxBreakdown['tax_total'],
             'shipping_total' => $shippingTotal,
             'grand_total' => $taxBreakdown['grand_total'] + $shippingTotal,
@@ -381,6 +391,8 @@ class CartController extends BaseApiController
         ]);
 
         foreach ($cart->items as $cartItem) {
+            $promotion = $promotions->snapshot($priced[$cartItem->id]);
+
             OrderItem::create([
                 'order_id' => $order->id,
                 'product_id' => $cartItem->product_id,
@@ -390,9 +402,9 @@ class CartController extends BaseApiController
                 'sale_price' => $cartItem->sale_price,
                 'cost_price' => $cartItem->cost_price,
                 'subtotal' => $cartItem->subtotal,
-                'discount' => $cartItem->discount,
+                'discount' => (float) $cartItem->discount + $priced[$cartItem->id]['discount'],
                 'tax' => 0,
-                'total' => $cartItem->total,
+                'total' => (float) $cartItem->total - $priced[$cartItem->id]['discount'],
                 'product_name' => $cartItem->product_name,
                 'product_sku' => $cartItem->product_sku,
                 'variant_name' => $cartItem->variant_name,
@@ -400,7 +412,9 @@ class CartController extends BaseApiController
                 'quantity_shipped' => 0,
                 'quantity_refunded' => 0,
                 'status' => 'pending',
-                'metadata' => $cartItem->metadata,
+                'metadata' => $promotion
+                    ? [...($cartItem->metadata ?? []), 'promotion' => $promotion]
+                    : $cartItem->metadata,
             ]);
 
             if ($cartItem->product?->track_inventory) {
@@ -411,6 +425,8 @@ class CartController extends BaseApiController
                 $cartItem->variant->decrement('stock_quantity', $cartItem->quantity);
             }
         }
+
+        $promotions->recordUsage($order, $priced);
 
         $cart->update(['status' => 'converted']);
 

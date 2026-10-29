@@ -18,8 +18,9 @@ class Coupon extends Model
      * calculateDiscount(). A kind says what the campaign IS; the type says how
      * its money is worked out. A null kind is an ordinary discount.
      *
-     * Note that nothing in checkout acts on these yet: a 'free_shipping' coupon
-     * still discounts the subtotal by its type and value like any other.
+     * A coupon applied by code discounts the subtotal by its type and value.
+     * When attached to a product, the same configured discount applies to
+     * that product's order lines.
      */
     public const KINDS = [
         'flash_sale',

@@ -14,6 +14,7 @@ use App\Models\ProductVariant;
 use App\Models\ShippingMethod;
 use App\Services\AdminNotificationService;
 use App\Services\CustomerAddressService;
+use App\Services\ProductPromotionService;
 use App\Services\ProductSerialService;
 use App\Services\TaxCalculator;
 use Illuminate\Http\Request;
@@ -64,9 +65,18 @@ class OrderController extends BaseApiController
             ? Coupon::where('code', $cart->coupon_code)->first()
             : null;
 
+        // Promotions attached to the products in the cart come off on top of
+        // any coupon; together they can never exceed the subtotal.
+        $promotions = app(ProductPromotionService::class);
+        $priced = $promotions->priceCart($cart);
+        $discountTotal = round(min(
+            (float) $cart->subtotal,
+            (float) $cart->discount_total + (float) $priced->sum('discount'),
+        ), 2);
+
         $taxBreakdown = $taxCalculator->calculate(
             (float) $cart->subtotal,
-            (float) $cart->discount_total,
+            $discountTotal,
             $shippingAddress['country'],
         );
         $shippingTotal = $shippingMethod->calculateCost($shippingWeight);
@@ -76,7 +86,7 @@ class OrderController extends BaseApiController
             'address_id' => $shippingAddress['address_id'],
             'order_number' => $this->generateOrderNumber(),
             'subtotal' => $cart->subtotal,
-            'discount_total' => $cart->discount_total,
+            'discount_total' => $discountTotal,
             'coupon_id' => $coupon?->id,
             'coupon_code' => $cart->coupon_code,
             'tax_total' => $taxBreakdown['tax_total'],
@@ -100,6 +110,8 @@ class OrderController extends BaseApiController
         ]);
 
         foreach ($cart->items as $cartItem) {
+            $promotion = $promotions->snapshot($priced[$cartItem->id]);
+
             OrderItem::create([
                 'order_id' => $order->id,
                 'product_id' => $cartItem->product_id,
@@ -109,9 +121,9 @@ class OrderController extends BaseApiController
                 'sale_price' => $cartItem->sale_price,
                 'cost_price' => $cartItem->cost_price,
                 'subtotal' => $cartItem->subtotal,
-                'discount' => $cartItem->discount,
+                'discount' => (float) $cartItem->discount + $priced[$cartItem->id]['discount'],
                 'tax' => 0,
-                'total' => $cartItem->total,
+                'total' => (float) $cartItem->total - $priced[$cartItem->id]['discount'],
                 'product_name' => $cartItem->product_name,
                 'product_sku' => $cartItem->product_sku,
                 'variant_name' => $cartItem->variant_name,
@@ -119,7 +131,9 @@ class OrderController extends BaseApiController
                 'quantity_shipped' => 0,
                 'quantity_refunded' => 0,
                 'status' => 'pending',
-                'metadata' => $cartItem->metadata,
+                'metadata' => $promotion
+                    ? [...($cartItem->metadata ?? []), 'promotion' => $promotion]
+                    : $cartItem->metadata,
             ]);
 
             if ($cartItem->product?->track_inventory) {
@@ -150,6 +164,8 @@ class OrderController extends BaseApiController
 
             $coupon->incrementUsage();
         }
+
+        $promotions->recordUsage($order, $priced);
 
         $cart->update(['status' => 'converted']);
 

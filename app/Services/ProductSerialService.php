@@ -39,19 +39,6 @@ class ProductSerialService
         }
 
         return DB::transaction(function () use ($serialNumbers, $productId, $variantId, $warehouse, $reference, $actorId, $note): array {
-            if ($variantId !== null) {
-                // Lock the variant so two receives can't both see it as empty.
-                ProductVariant::query()->lockForUpdate()->findOrFail($variantId);
-                $held = ProductSerial::query()->where('product_variant_id', $variantId)->live()->count();
-                if ($held + count($serialNumbers) > ProductVariant::MAX_SERIALS) {
-                    throw new InvalidArgumentException(
-                        $held >= ProductVariant::MAX_SERIALS
-                            ? 'This variant already has a serial number.'
-                            : 'Each variant can have only '.ProductVariant::MAX_SERIALS.' serial number.',
-                    );
-                }
-            }
-
             $created = [];
             foreach ($serialNumbers as $serialNumber) {
                 if (ProductSerial::query()->whereRaw('LOWER(serial_number) = ?', [strtolower($serialNumber)])->lockForUpdate()->exists()) {
@@ -199,6 +186,63 @@ class ProductSerialService
                 ]);
                 $this->history($serial, 'reservation_released', ProductSerial::RESERVED, ProductSerial::AVAILABLE, $actorId, $orderId, null, $note);
             });
+        });
+    }
+
+    /**
+     * Corrects a serial's number (a typo made while receiving, say). The unit
+     * keeps its status, variant, order and warranty; the change is written to its
+     * history so the old number is not lost.
+     *
+     * A cancelled serial is a void record and cannot be edited. The new number
+     * must not belong to any other serial in any status — numbers stay unique
+     * even once cancelled, the same rule receive() applies — compared without
+     * regard to case.
+     */
+    public function renumber(ProductSerial $serial, string $serialNumber, ?int $actorId = null, ?string $note = null): ProductSerial
+    {
+        $serialNumber = trim($serialNumber);
+
+        if ($serialNumber === '') {
+            throw new InvalidArgumentException('A serial number is required.');
+        }
+
+        return DB::transaction(function () use ($serial, $serialNumber, $actorId, $note): ProductSerial {
+            $locked = ProductSerial::query()->lockForUpdate()->findOrFail($serial->id);
+
+            if ($locked->status === ProductSerial::CANCELLED) {
+                throw new InvalidArgumentException('A cancelled serial number cannot be edited.');
+            }
+
+            $previous = $locked->serial_number;
+
+            if ($previous === $serialNumber) {
+                return $locked->fresh(['product', 'variant', 'customer', 'order']);
+            }
+
+            $taken = ProductSerial::query()
+                ->whereRaw('LOWER(serial_number) = ?', [strtolower($serialNumber)])
+                ->whereKeyNot($locked->id)
+                ->lockForUpdate()
+                ->exists();
+
+            if ($taken) {
+                throw new InvalidArgumentException("Serial number {$serialNumber} already exists.");
+            }
+
+            $locked->update(['serial_number' => $serialNumber]);
+            $this->history(
+                $locked,
+                'serial_number_changed',
+                $locked->status,
+                $locked->status,
+                $actorId,
+                null,
+                null,
+                trim("Serial number changed from {$previous} to {$serialNumber}. {$note}"),
+            );
+
+            return $locked->fresh(['product', 'variant', 'customer', 'order']);
         });
     }
 
