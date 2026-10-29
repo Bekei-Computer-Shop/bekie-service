@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\AdminNotificationService;
 use App\Services\ProductPromotionService;
 use App\Services\ProductSerialService;
+use App\Services\TaxCalculator;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -170,9 +171,15 @@ class OrderController extends BaseAdminController
      * while the admin builds the order so the total it shows is the one store()
      * will save. Writes nothing — no order, no promotion usage.
      */
-    public function preview(PreviewOrderRequest $request, ProductPromotionService $promotions): JsonResponse
-    {
+    public function preview(
+        PreviewOrderRequest $request,
+        ProductPromotionService $promotions,
+        TaxCalculator $taxCalculator,
+    ): JsonResponse {
         $validated = $request->validated();
+        $customer = isset($validated['customer_id'])
+            ? User::with('defaultAddress')->findOrFail($validated['customer_id'])
+            : null;
 
         $priced = $promotions->priceLines(
             $this->promotionLines($validated['items']),
@@ -181,6 +188,11 @@ class OrderController extends BaseAdminController
 
         $subtotal = round((float) $priced->sum('subtotal'), 2);
         $promotionDiscount = round((float) $priced->sum('discount'), 2);
+        $tax = $taxCalculator->calculate(
+            $subtotal,
+            $promotionDiscount,
+            $customer?->defaultAddress?->country ?? 'Cambodia',
+        );
 
         return $this->success([
             'items' => $priced->map(fn (array $line, int $index): array => [
@@ -189,10 +201,13 @@ class OrderController extends BaseAdminController
                 'discount' => number_format($line['discount'], 2, '.', ''),
                 'total' => number_format($line['total'], 2, '.', ''),
                 'promotion' => $promotions->snapshot($line),
+                'discount_source' => $line['discount_source'],
             ])->values()->all(),
             'subtotal' => number_format($subtotal, 2, '.', ''),
             'promotion_discount' => number_format($promotionDiscount, 2, '.', ''),
-            'total' => number_format($subtotal - $promotionDiscount, 2, '.', ''),
+            'tax_total' => number_format($tax['tax_total'], 2, '.', ''),
+            'tax_settings' => $tax['tax_settings'],
+            'total' => number_format($tax['grand_total'], 2, '.', ''),
         ]);
     }
 
@@ -201,7 +216,6 @@ class OrderController extends BaseAdminController
         $validated = $request->validated();
 
         $discount = round((float) ($validated['discount_total'] ?? 0), 2);
-        $tax = round((float) ($validated['tax_total'] ?? 0), 2);
         $shipping = round((float) ($validated['shipping_total'] ?? 0), 2);
 
         // Capture the customer's delivery address at creation time so the order
@@ -210,13 +224,19 @@ class OrderController extends BaseAdminController
         $address = $customer->defaultAddress;
 
         // Wrapped so a bad line item cannot leave a half-built order behind.
-        $order = DB::transaction(function () use ($validated, $discount, $tax, $shipping, $customer, $address, $promotions) {
+        $order = DB::transaction(function () use ($validated, $discount, $shipping, $customer, $address, $promotions) {
             // What the promotions on each product take off its line. Priced
             // inside the transaction so the usage it records commits with the
             // order or not at all.
             $lines = $this->promotionLines($validated['items']);
             $priced = $promotions->priceLines($lines, (int) $customer->id);
             $promotionDiscount = round((float) $priced->sum('discount'), 2);
+            $subtotal = round((float) $priced->sum('subtotal'), 2);
+            $tax = app(TaxCalculator::class)->calculate(
+                $subtotal,
+                $discount + $promotionDiscount,
+                $address?->country ?? 'Cambodia',
+            );
 
             $order = Order::create([
                 'order_number' => Str::upper(Str::random(10)),
@@ -246,7 +266,7 @@ class OrderController extends BaseAdminController
                 'transaction_id' => $validated['transaction_id'] ?? null,
                 'subtotal' => 0,
                 'discount_total' => round($discount + $promotionDiscount, 2),
-                'tax_total' => $tax,
+                'tax_total' => $tax['tax_total'],
                 'shipping_total' => $shipping,
                 'grand_total' => 0,
             ]);
@@ -272,8 +292,7 @@ class OrderController extends BaseAdminController
 
             // Line items make the subtotal, before promotions; the discount
             // total is the promotions plus any amount keyed in on the order.
-            $subtotal = round((float) $priced->sum('subtotal'), 2);
-            $grandTotal = round($subtotal - $discount - $promotionDiscount + $tax + $shipping, 2);
+            $grandTotal = round($tax['grand_total'] + $shipping, 2);
 
             $order->update(['subtotal' => $subtotal, 'grand_total' => max(0, $grandTotal)]);
 

@@ -26,10 +26,9 @@ class StoreOrderRequest extends FormRequest
             'notes' => ['sometimes', 'nullable', 'string'],
             'currency' => ['sometimes', 'string', 'in:USD,KHR'],
 
-            // Order-level amounts. Line items drive the subtotal; these adjust
-            // it into the grand total.
+            // Order-level discount and shipping. Tax is calculated from store
+            // tax settings on the server.
             'discount_total' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-            'tax_total' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'shipping_total' => ['sometimes', 'nullable', 'numeric', 'min:0'],
 
             'payment_method' => ['sometimes', 'nullable', 'in:'.implode(',', self::PAYMENT_METHODS)],

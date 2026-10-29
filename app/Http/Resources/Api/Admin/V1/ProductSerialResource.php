@@ -17,6 +17,13 @@ class ProductSerialResource extends JsonResource
                 'id' => $this->product?->id,
                 'name' => $this->product?->name,
                 'sku' => $this->product?->sku,
+                ...($this->product?->relationLoaded('variants') ? [
+                    'variants' => $this->product->variants->map(fn ($variant) => [
+                        'id' => $variant->id,
+                        'name' => $variant->name,
+                        'sku' => $variant->sku,
+                    ])->values(),
+                ] : []),
             ],
             'variant' => [
                 'id' => $this->variant?->id,

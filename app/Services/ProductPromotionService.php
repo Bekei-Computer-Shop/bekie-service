@@ -8,8 +8,10 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Coupon;
 use App\Models\CouponUsage;
+use App\Models\CustomerGroup;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
@@ -21,14 +23,15 @@ use Illuminate\Support\Collection;
  *  - Only the single most valuable promotion applies. They do not stack, so two
  *    overlapping campaigns on a product cannot take it below what the better
  *    one intends.
- *  - A promotion must be active, inside its window, under its usage limits and
- *    a plain price cut (see Coupon::appliesToProductPrice()).
+ *  - A promotion must be active, inside its window and under its usage limits.
+ *    Once attached to a product, its configured discount applies to that
+ *    product's order lines regardless of campaign kind or minimum order amount.
  *  - Percentage promotions take that share of the line subtotal. Fixed ones
  *    take their value off each unit, so buying three takes it three times.
  *  - `max_discount_amount` caps the line's discount; the discount never exceeds
  *    the line subtotal.
- *  - `min_order_amount` is checked against the whole order's subtotal before
- *    any promotion, not the single line — it is an order threshold.
+ *  - VIP customers receive 5% off lines without an applicable product
+ *    promotion. The discounts never stack on the same line.
  *
  * The result is a plain calculation: nothing is written until recordUsage().
  */
@@ -37,24 +40,24 @@ class ProductPromotionService
     /**
      * @param  Collection<array-key, array{product: ?Product, quantity: int, unit_price: float}>  $lines  keyed by the caller; keys are preserved
      * @param  list<int>  $exceptCouponIds  promotions to skip, e.g. a coupon already applied by code
-     * @return Collection<array-key, array{subtotal: float, discount: float, total: float, promotion: ?Coupon}>
+     * @return Collection<array-key, array{subtotal: float, discount: float, total: float, promotion: ?Coupon, discount_source: ?string}>
      */
     public function priceLines(Collection $lines, ?int $userId = null, array $exceptCouponIds = []): Collection
     {
         // One query for every product's promotions rather than one per line.
         (new EloquentCollection($lines->pluck('product')->filter()->all()))->loadMissing('promotions');
 
-        $orderSubtotal = round($lines->sum(fn (array $line): float => $line['quantity'] * $line['unit_price']), 2);
         $userUses = $this->userUsesByCoupon($lines, $userId);
+        $isVipCustomer = $this->isVipCustomer($userId);
 
-        return $lines->map(function (array $line) use ($orderSubtotal, $userUses, $exceptCouponIds): array {
+        return $lines->map(function (array $line) use ($userUses, $exceptCouponIds, $isVipCustomer): array {
             $subtotal = round($line['quantity'] * $line['unit_price'], 2);
             $best = null;
             $bestAmount = 0.0;
 
             foreach ($line['product']?->promotions ?? [] as $promotion) {
                 if (in_array($promotion->id, $exceptCouponIds, true)
-                    || ! $this->isApplicable($promotion, $orderSubtotal, $userUses[$promotion->id] ?? 0)) {
+                    || ! $this->isApplicable($promotion, $userUses[$promotion->id] ?? 0)) {
                     continue;
                 }
 
@@ -66,11 +69,16 @@ class ProductPromotionService
                 }
             }
 
+            if ($best === null && $isVipCustomer) {
+                $bestAmount = round($subtotal * 0.05, 2);
+            }
+
             return [
                 'subtotal' => $subtotal,
                 'discount' => $bestAmount,
                 'total' => round($subtotal - $bestAmount, 2),
                 'promotion' => $best,
+                'discount_source' => $best !== null ? 'promotion' : ($bestAmount > 0 ? 'vip' : null),
             ];
         });
     }
@@ -80,7 +88,7 @@ class ProductPromotionService
      * already applied by code is left out, so one coupon that is also attached
      * to a product is not taken off twice.
      *
-     * @return Collection<int, array{subtotal: float, discount: float, total: float, promotion: ?Coupon}>
+     * @return Collection<int, array{subtotal: float, discount: float, total: float, promotion: ?Coupon, discount_source: ?string}>
      */
     public function priceCart(Cart $cart): Collection
     {
@@ -104,7 +112,7 @@ class ProductPromotionService
      * usage row and one `used_count` per promotion per order, however many
      * lines it discounted.
      *
-     * @param  Collection<array-key, array{subtotal: float, discount: float, total: float, promotion: ?Coupon}>  $priced
+     * @param  Collection<array-key, array{subtotal: float, discount: float, total: float, promotion: ?Coupon, discount_source: ?string}>  $priced
      */
     public function recordUsage(Order $order, Collection $priced): void
     {
@@ -133,7 +141,7 @@ class ProductPromotionService
      * The snapshot stored on the order item, so the line still says which
      * promotion discounted it after the promotion is edited or deleted.
      *
-     * @param  array{promotion: ?Coupon}  $priced
+     * @param  array{promotion: ?Coupon, discount_source?: ?string}  $priced
      * @return array<string, mixed>|null
      */
     public function snapshot(array $priced): ?array
@@ -141,10 +149,18 @@ class ProductPromotionService
         $promotion = $priced['promotion'];
 
         if ($promotion === null) {
-            return null;
+            return ($priced['discount_source'] ?? null) === 'vip'
+                ? [
+                    'source' => 'vip',
+                    'name' => 'VIP Discount',
+                    'type' => 'percentage',
+                    'value' => '5.00',
+                ]
+                : null;
         }
 
         return [
+            'source' => 'promotion',
             'id' => $promotion->id,
             'name' => $promotion->name,
             'code' => $promotion->code,
@@ -153,12 +169,20 @@ class ProductPromotionService
         ];
     }
 
-    private function isApplicable(Coupon $promotion, float $orderSubtotal, int $userUses): bool
+    private function isApplicable(Coupon $promotion, int $userUses): bool
     {
-        return $promotion->appliesToProductPrice()
-            && $promotion->isValid()
-            && $promotion->canBeUsedByUser($userUses)
-            && $orderSubtotal >= (float) ($promotion->min_order_amount ?? 0);
+        return $promotion->isValid()
+            && $promotion->canBeUsedByUser($userUses);
+    }
+
+    private function isVipCustomer(?int $userId): bool
+    {
+        return $userId !== null && User::query()
+            ->whereKey($userId)
+            ->where('is_active', true)
+            ->where('is_banned', false)
+            ->whereHas('customerGroups', fn ($query) => $query->where('slug', CustomerGroup::VIP_SLUG))
+            ->exists();
     }
 
     private function amountFor(Coupon $promotion, float $lineSubtotal, int $quantity): float

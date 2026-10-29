@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\Api\Admin\V1;
 
 use App\Models\Address;
+use App\Models\CustomerGroup;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -24,7 +25,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class CustomerResource extends JsonResource
 {
     /** Group slug that promotes a customer to the VIP badge. */
-    public const VIP_GROUP_SLUG = 'vip';
+    public const VIP_GROUP_SLUG = CustomerGroup::VIP_SLUG;
 
     /**
      * @return array<string, mixed>

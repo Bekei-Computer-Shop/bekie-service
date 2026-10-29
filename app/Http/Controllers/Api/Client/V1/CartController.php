@@ -190,8 +190,8 @@ class CartController extends BaseApiController
         }
 
         $quantity = $request->quantity;
-        $unitPrice = $variant?->price ?? $product->sale_price ?? $product->price;
         $salePrice = $variant?->sale_price ?? $product->sale_price;
+        $unitPrice = $salePrice ?? $variant?->price ?? $product->price;
         $costPrice = $variant?->cost_price ?? $product->cost_price;
 
         $item = $cart->items()->updateOrCreate(

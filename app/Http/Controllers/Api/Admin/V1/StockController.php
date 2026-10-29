@@ -411,9 +411,7 @@ class StockController extends BaseAdminController
                         $item['reference'],
                         $request->user()?->id,
                         $item['reason'],
-                        // A variant holds one serial however much stock moves, so
-                        // its quantity no longer has to match the serial count.
-                        $stockable instanceof ProductVariant ? null : (int) $item['quantity'],
+                        (int) $item['quantity'],
                     );
                 }
 

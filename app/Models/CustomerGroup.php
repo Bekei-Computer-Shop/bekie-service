@@ -10,6 +10,8 @@ class CustomerGroup extends Model
 {
     use HasFactory;
 
+    public const VIP_SLUG = 'vip';
+
     protected $fillable = [
         'name',
         'slug',
