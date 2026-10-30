@@ -73,7 +73,30 @@ class Product extends Model
 
     protected function casts(): array
     {
-        return ['is_serialized' => 'boolean'];
+        return [
+            'is_serialized' => 'boolean',
+            'published_at' => 'datetime',
+        ];
+    }
+
+    /**
+     * Published within the last `products.new_arrival_days` days, boundary
+     * included. Inactive products, products never published and ones with a
+     * publish date still ahead are not new arrivals. Decided per product:
+     * variants have no publish date of their own.
+     */
+    public function isNewArrival(): bool
+    {
+        if (! $this->is_active || $this->published_at === null) {
+            return false;
+        }
+
+        $now = now();
+
+        return $this->published_at->lessThanOrEqualTo($now)
+            && $this->published_at->greaterThanOrEqualTo(
+                $now->copy()->subDays((int) config('products.new_arrival_days'))
+            );
     }
 
     public function serials()
@@ -156,6 +179,14 @@ class Product extends Model
     {
         static::saving(function (self $product) {
             $product->version++;
+
+            // Stamp the first publish only. Later edits, deactivating and
+            // reactivating, or new variants leave it alone, so they cannot
+            // restart the new-arrival period. A new product saved without
+            // `is_active` takes the column's default, which is active.
+            if ($product->published_at === null && ($product->is_active ?? ! $product->exists)) {
+                $product->published_at = now();
+            }
         });
 
         static::saved(function (self $product): void {

@@ -8,8 +8,8 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Arr;
 
 /**
- * The part of an order that decides its promotions: who is buying and which
- * lines. Reuses StoreOrderRequest's line rules so a preview rejects exactly
+ * The part of an order that decides its price: who is buying, which lines and
+ * how it ships. Reuses StoreOrderRequest's rules so a preview rejects exactly
  * what the real order would.
  */
 class PreviewOrderRequest extends FormRequest
@@ -26,6 +26,7 @@ class PreviewOrderRequest extends FormRequest
             // promotion with a per-customer limit then reads as unused.
             'customer_id' => ['sometimes', 'nullable', 'exists:users,id'],
             ...Arr::only((new StoreOrderRequest)->rules(), [
+                'shipping_method_id',
                 'items',
                 'items.*.product_id',
                 'items.*.product_variant_id',

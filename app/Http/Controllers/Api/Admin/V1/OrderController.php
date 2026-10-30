@@ -13,6 +13,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\AdminNotificationService;
+use App\Services\OrderShippingCalculator;
 use App\Services\ProductPromotionService;
 use App\Services\ProductSerialService;
 use App\Services\TaxCalculator;
@@ -166,6 +167,16 @@ class OrderController extends BaseAdminController
     }
 
     /**
+     * The shipping methods the create-order form can offer, before any line
+     * is added. Fees here are for an empty order (the base price); the preview
+     * reprices them once the lines give the order a weight.
+     */
+    public function shippingMethods(OrderShippingCalculator $shipping): JsonResponse
+    {
+        return $this->success($shipping->options(0));
+    }
+
+    /**
      * Prices an order without saving it: what each line costs once the
      * promotions on its product are taken off. The create-order form calls this
      * while the admin builds the order so the total it shows is the one store()
@@ -175,16 +186,29 @@ class OrderController extends BaseAdminController
         PreviewOrderRequest $request,
         ProductPromotionService $promotions,
         TaxCalculator $taxCalculator,
+        OrderShippingCalculator $shipping,
     ): JsonResponse {
         $validated = $request->validated();
         $customer = isset($validated['customer_id'])
             ? User::with('defaultAddress')->findOrFail($validated['customer_id'])
             : null;
 
+        $lines = $this->promotionLines($validated['items']);
         $priced = $promotions->priceLines(
-            $this->promotionLines($validated['items']),
+            $lines,
             isset($validated['customer_id']) ? (int) $validated['customer_id'] : null,
         );
+
+        // Every method repriced for these lines. A selected method that is not
+        // offered, or cannot carry the weight, adds nothing here rather than
+        // failing the preview: store() rejects it, and the form shows why.
+        $weight = $shipping->weight($lines);
+        $shippingOptions = $shipping->options($weight);
+        $selectedShipping = collect($shippingOptions)->first(
+            fn (array $option): bool => $option['available']
+                && $option['id'] === (int) ($validated['shipping_method_id'] ?? 0),
+        );
+        $shippingTotal = round((float) ($selectedShipping['fee'] ?? 0), 2);
 
         $subtotal = round((float) $priced->sum('subtotal'), 2);
         $promotionDiscount = round((float) $priced->sum('discount'), 2);
@@ -207,16 +231,38 @@ class OrderController extends BaseAdminController
             'promotion_discount' => number_format($promotionDiscount, 2, '.', ''),
             'tax_total' => number_format($tax['tax_total'], 2, '.', ''),
             'tax_settings' => $tax['tax_settings'],
-            'total' => number_format($tax['grand_total'], 2, '.', ''),
+            'shipping_weight' => number_format($weight, 2, '.', ''),
+            'shipping_method' => $selectedShipping,
+            'shipping_total' => number_format($shippingTotal, 2, '.', ''),
+            'shipping_options' => $shippingOptions,
+            // Grand total, as store() saves it: tax-inclusive total plus shipping.
+            'total' => number_format($tax['grand_total'] + $shippingTotal, 2, '.', ''),
         ]);
     }
 
-    public function store(StoreOrderRequest $request, ProductPromotionService $promotions): JsonResponse
-    {
+    public function store(
+        StoreOrderRequest $request,
+        ProductPromotionService $promotions,
+        OrderShippingCalculator $shippingCalculator,
+    ): JsonResponse {
         $validated = $request->validated();
 
         $discount = round((float) ($validated['discount_total'] ?? 0), 2);
+        $lines = $this->promotionLines($validated['items']);
+
+        // A chosen method is priced here from the lines' weight; the fee in
+        // the request is never used for it. Without a method the order keeps
+        // the older behaviour: an optional typed shipping_total.
+        $shippingMethod = null;
         $shipping = round((float) ($validated['shipping_total'] ?? 0), 2);
+        if (! empty($validated['shipping_method_id'])) {
+            $quote = $shippingCalculator->quote(
+                (int) $validated['shipping_method_id'],
+                $shippingCalculator->weight($lines),
+            );
+            $shippingMethod = $quote['method'];
+            $shipping = round($quote['fee'], 2);
+        }
 
         // Capture the customer's delivery address at creation time so the order
         // keeps it even if their address changes later.
@@ -224,11 +270,10 @@ class OrderController extends BaseAdminController
         $address = $customer->defaultAddress;
 
         // Wrapped so a bad line item cannot leave a half-built order behind.
-        $order = DB::transaction(function () use ($validated, $discount, $shipping, $customer, $address, $promotions) {
+        $order = DB::transaction(function () use ($validated, $discount, $shipping, $shippingMethod, $lines, $customer, $address, $promotions) {
             // What the promotions on each product take off its line. Priced
             // inside the transaction so the usage it records commits with the
             // order or not at all.
-            $lines = $this->promotionLines($validated['items']);
             $priced = $promotions->priceLines($lines, (int) $customer->id);
             $promotionDiscount = round((float) $priced->sum('discount'), 2);
             $subtotal = round((float) $priced->sum('subtotal'), 2);
@@ -268,6 +313,9 @@ class OrderController extends BaseAdminController
                 'discount_total' => round($discount + $promotionDiscount, 2),
                 'tax_total' => $tax['tax_total'],
                 'shipping_total' => $shipping,
+                // Name and fee are the snapshot; the id links to the live method.
+                'shipping_method_id' => $shippingMethod?->id,
+                'shipping_provider' => $shippingMethod?->name,
                 'grand_total' => 0,
             ]);
 

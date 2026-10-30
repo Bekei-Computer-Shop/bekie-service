@@ -29,6 +29,15 @@ class OrderResource extends JsonResource
             'coupon' => $this->couponPayload(),
             'tax_total' => number_format((float) $this->tax_total, 2, '.', ''),
             'shipping_total' => number_format((float) $this->shipping_total, 2, '.', ''),
+            // The method chosen when the order was placed. `name` and `fee` are
+            // the snapshot taken then, so a later rename or reprice of the
+            // method does not rewrite old orders. Null for orders created
+            // without one.
+            'shipping_method' => $this->shipping_method_id ? [
+                'id' => $this->shipping_method_id,
+                'name' => $this->shipping_provider,
+                'fee' => number_format((float) $this->shipping_total, 2, '.', ''),
+            ] : null,
             'currency' => $this->currency,
             'payment' => [
                 'method' => $this->payment_method,

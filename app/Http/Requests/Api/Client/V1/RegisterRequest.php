@@ -45,8 +45,8 @@ class RegisterRequest extends FormRequest
             }
         }
 
-        if (isset($address['country'])) {
-            $address['country'] = strtoupper($address['country']);
+        if (isset($address['country']) && is_string($address['country'])) {
+            $address['country'] = ShippingAddressRules::normalizeCountry($address['country']);
         }
 
         $this->merge(['address' => $address]);
