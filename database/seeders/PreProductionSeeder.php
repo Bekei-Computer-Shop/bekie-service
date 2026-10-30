@@ -132,13 +132,18 @@ class PreProductionSeeder extends Seeder
         ];
 
         foreach ($userData as $data) {
-            $user = User::firstOrCreate(
+            // withTrashed(): a soft-deleted user still holds its email /
+            // username / phone in the unique indexes.
+            $user = User::withTrashed()->firstOrCreate(
                 ['email' => $data['email']],
                 [
                     ...$data,
                     'password' => bcrypt('password123'),
                 ]
             );
+            if ($user->trashed()) {
+                $user->restore();
+            }
             $this->users[] = $user;
         }
     }
@@ -348,7 +353,9 @@ class PreProductionSeeder extends Seeder
         ];
 
         foreach ($coupons as $couponData) {
-            Coupon::firstOrCreate(['code' => $couponData['code']], $couponData);
+            // withTrashed(): code is globally unique, trashed rows included.
+            // A coupon an admin deleted stays deleted.
+            Coupon::withTrashed()->firstOrCreate(['code' => $couponData['code']], $couponData);
         }
     }
 }

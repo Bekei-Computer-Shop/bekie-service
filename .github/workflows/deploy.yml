@@ -119,8 +119,21 @@ jobs:
               --image ${{ needs.build-and-push.outputs.image-uri }} \
               --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} \
               --args="artisan","db:seed","--class=${SEEDER}","--force"
-            gcloud run jobs execute ${{ env.MIGRATE_JOB_NAME }} \
-              --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} --wait
+            if ! gcloud run jobs execute ${{ env.MIGRATE_JOB_NAME }} \
+              --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} --wait; then
+              # gcloud only says "The execution failed"; pull the container's
+              # own output so the Laravel exception shows up in this log.
+              EXECUTION=$(gcloud run jobs executions list \
+                --job ${{ env.MIGRATE_JOB_NAME }} \
+                --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} \
+                --limit 1 --format='value(metadata.name)')
+              echo "::error::db:seed --class=${SEEDER} failed (execution ${EXECUTION}). Job logs:"
+              gcloud logging read \
+                "resource.type=\"cloud_run_job\" AND labels.\"run.googleapis.com/execution_name\"=\"${EXECUTION}\"" \
+                --project ${{ env.PROJECT_ID }} --limit 200 --order asc \
+                --format='value(textPayload)' || true
+              exit 1
+            fi
             echo "::endgroup::"
           done
 
