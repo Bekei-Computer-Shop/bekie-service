@@ -22,6 +22,7 @@ class Order extends Model
         'coupon_code',
         'tax_total',
         'shipping_total',
+        'shipping_method_id',
         'grand_total',
         'currency',
         'payment_method',
@@ -92,6 +93,15 @@ class Order extends Model
     public function coupon()
     {
         return $this->belongsTo(Coupon::class);
+    }
+
+    /**
+     * The shipping method chosen for the order, while it still exists.
+     * `shipping_provider` and `shipping_total` are the snapshot to trust.
+     */
+    public function shippingMethod()
+    {
+        return $this->belongsTo(ShippingMethod::class)->withTrashed();
     }
 
     public function couponUsages()

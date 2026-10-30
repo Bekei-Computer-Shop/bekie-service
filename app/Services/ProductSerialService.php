@@ -62,6 +62,58 @@ class ProductSerialService
         });
     }
 
+    /**
+     * The serial numbers a checkout reserves for the cart's serialized units.
+     * Customers cannot know a unit's serial, so checkout normally sends none
+     * and the oldest available units of each line's product (and variant) are
+     * picked here. Serials that are sent are checked as before and used as-is.
+     *
+     * Call it again inside the order transaction: the rows are locked there,
+     * so two checkouts cannot pick the same unit.
+     *
+     * @param  array<int, string>  $serialNumbers
+     * @return array<int, string>
+     */
+    public function serialsForCart(iterable $items, array $serialNumbers = []): array
+    {
+        if ($serialNumbers !== []) {
+            $this->assertCartSerialsAvailable($items, $serialNumbers);
+
+            return array_values($serialNumbers);
+        }
+
+        $picked = [];
+        $pickedIds = [];
+        foreach (collect($items) as $item) {
+            if (! ($item->variant?->is_serialized ?? $item->product?->is_serialized)) {
+                continue;
+            }
+
+            $quantity = (int) $item->quantity;
+            $serials = ProductSerial::query()
+                ->where('product_id', (string) $item->product_id)
+                ->when($item->product_variant_id, fn (Builder $query) => $query->where('product_variant_id', $item->product_variant_id))
+                ->where('status', ProductSerial::AVAILABLE)
+                ->whereNotIn('id', $pickedIds)
+                ->orderBy('id')
+                ->limit($quantity)
+                ->lockForUpdate()
+                ->get();
+
+            if ($serials->count() < $quantity) {
+                $name = $item->product_name ?? $item->product?->name ?? 'this product';
+                throw new InvalidArgumentException(
+                    "Only {$serials->count()} unit(s) of {$name} are available. Please reduce the quantity."
+                );
+            }
+
+            array_push($pickedIds, ...$serials->pluck('id')->all());
+            array_push($picked, ...$serials->pluck('serial_number')->all());
+        }
+
+        return $picked;
+    }
+
     /** @param array<int, string> $serialNumbers */
     public function assertCartSerialsAvailable(iterable $items, array $serialNumbers): void
     {

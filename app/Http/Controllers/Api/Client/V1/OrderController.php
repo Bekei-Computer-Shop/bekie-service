@@ -45,8 +45,11 @@ class OrderController extends BaseApiController
         $shippingMethod = ShippingMethod::active()->findOrFail($request->shipping_method_id);
         $shippingAddress = $addressService->resolveCheckoutAddress($request->user(), $request->validated());
 
+        // Fails early when the serialized units the cart needs are not in
+        // stock. The units are picked and reserved again, locked, inside the
+        // order transaction below.
         try {
-            app(ProductSerialService::class)->assertCartSerialsAvailable($cart->items, $request->input('serial_numbers', []));
+            app(ProductSerialService::class)->serialsForCart($cart->items, $request->input('serial_numbers', []));
         } catch (\InvalidArgumentException $exception) {
             return $this->error($exception->getMessage(), 422);
         }
@@ -87,90 +90,102 @@ class OrderController extends BaseApiController
         );
         $shippingTotal = $shippingMethod->calculateCost($shippingWeight);
 
-        $order = DB::transaction(function () use ($cart, $request, $shippingAddress, $shippingMethod, $subtotal, $discountTotal, $coupon, $couponDiscount, $taxBreakdown, $shippingTotal, $promotions, $priced): Order {
-            $order = Order::create([
-                'user_id' => $cart->user_id,
-                'address_id' => $shippingAddress['address_id'],
-                'order_number' => $this->generateOrderNumber(),
-                'subtotal' => $subtotal,
-                'discount_total' => $discountTotal,
-                'coupon_id' => $coupon?->id,
-                'coupon_code' => $coupon?->code,
-                'tax_total' => $taxBreakdown['tax_total'],
-                'shipping_total' => $shippingTotal,
-                'grand_total' => $taxBreakdown['grand_total'] + $shippingTotal,
-                'currency' => $cart->currency,
-                'payment_method' => $request->input('payment_method', 'manual'),
-                'payment_status' => 'pending',
-                'transaction_id' => null,
-                'status' => 'pending',
-                'shipping_status' => 'pending',
-                'tracking_number' => null,
-                'shipping_provider' => $shippingMethod->name,
-                'customer_snapshot' => [
+        try {
+            $order = DB::transaction(function () use ($cart, $request, $shippingAddress, $shippingMethod, $subtotal, $discountTotal, $coupon, $couponDiscount, $taxBreakdown, $shippingTotal, $promotions, $priced): Order {
+                $order = Order::create([
                     'user_id' => $cart->user_id,
-                    'email' => $request->email,
-                    'phone' => $request->phone,
-                ],
-                'address_snapshot' => $shippingAddress['snapshot'],
-                'metadata' => $request->input('metadata', []),
-            ]);
-
-            foreach ($cart->items as $cartItem) {
-                $promotion = $promotions->snapshot($priced[$cartItem->id]);
-
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $cartItem->product_id,
-                    'product_variant_id' => $cartItem->product_variant_id,
-                    'quantity' => $cartItem->quantity,
-                    'unit_price' => $priced[$cartItem->id]['unit_price'],
-                    'sale_price' => $cartItem->variant?->sale_price ?? $cartItem->product?->sale_price,
-                    'cost_price' => $cartItem->cost_price,
-                    'subtotal' => $priced[$cartItem->id]['subtotal'],
-                    'discount' => (float) $cartItem->discount + $priced[$cartItem->id]['discount'],
-                    'tax' => 0,
-                    'total' => max(0, $priced[$cartItem->id]['total'] - (float) $cartItem->discount),
-                    'product_name' => $cartItem->product_name,
-                    'product_sku' => $cartItem->product_sku,
-                    'variant_name' => $cartItem->variant_name,
-                    'variant_attributes' => $cartItem->variant_attributes,
-                    'quantity_shipped' => 0,
-                    'quantity_refunded' => 0,
+                    'address_id' => $shippingAddress['address_id'],
+                    'order_number' => $this->generateOrderNumber(),
+                    'subtotal' => $subtotal,
+                    'discount_total' => $discountTotal,
+                    'coupon_id' => $coupon?->id,
+                    'coupon_code' => $coupon?->code,
+                    'tax_total' => $taxBreakdown['tax_total'],
+                    'shipping_total' => $shippingTotal,
+                    'grand_total' => $taxBreakdown['grand_total'] + $shippingTotal,
+                    'currency' => $cart->currency,
+                    'payment_method' => $request->input('payment_method', 'manual'),
+                    'payment_status' => 'pending',
+                    'transaction_id' => null,
                     'status' => 'pending',
-                    'metadata' => $promotion
-                        ? [...($cartItem->metadata ?? []), 'promotion' => $promotion]
-                        : $cartItem->metadata,
+                    'shipping_status' => 'pending',
+                    'tracking_number' => null,
+                    'shipping_provider' => $shippingMethod->name,
+                    'customer_snapshot' => [
+                        'user_id' => $cart->user_id,
+                        'email' => $request->email,
+                        'phone' => $request->phone,
+                    ],
+                    'address_snapshot' => $shippingAddress['snapshot'],
+                    'metadata' => $request->input('metadata', []),
                 ]);
 
-                if ($cartItem->product?->track_inventory) {
-                    $previousQuantity = (int) $cartItem->product->stock_quantity;
-                    $cartItem->product->decrement('stock_quantity', $cartItem->quantity);
-                    $newQuantity = $previousQuantity - (int) $cartItem->quantity;
-                    app(AdminNotificationService::class)->inventoryStatus(
-                        $cartItem->product->fresh(),
-                        $previousQuantity,
-                        $newQuantity,
-                    );
+                foreach ($cart->items as $cartItem) {
+                    $promotion = $promotions->snapshot($priced[$cartItem->id]);
+
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $cartItem->product_id,
+                        'product_variant_id' => $cartItem->product_variant_id,
+                        'quantity' => $cartItem->quantity,
+                        'unit_price' => $priced[$cartItem->id]['unit_price'],
+                        'sale_price' => $cartItem->variant?->sale_price ?? $cartItem->product?->sale_price,
+                        'cost_price' => $cartItem->cost_price,
+                        'subtotal' => $priced[$cartItem->id]['subtotal'],
+                        'discount' => (float) $cartItem->discount + $priced[$cartItem->id]['discount'],
+                        'tax' => 0,
+                        'total' => max(0, $priced[$cartItem->id]['total'] - (float) $cartItem->discount),
+                        'product_name' => $cartItem->product_name,
+                        'product_sku' => $cartItem->product_sku,
+                        'variant_name' => $cartItem->variant_name,
+                        'variant_attributes' => $cartItem->variant_attributes,
+                        'quantity_shipped' => 0,
+                        'quantity_refunded' => 0,
+                        'status' => 'pending',
+                        'metadata' => $promotion
+                            ? [...($cartItem->metadata ?? []), 'promotion' => $promotion]
+                            : $cartItem->metadata,
+                    ]);
+
+                    if ($cartItem->product?->track_inventory) {
+                        $previousQuantity = (int) $cartItem->product->stock_quantity;
+                        $cartItem->product->decrement('stock_quantity', $cartItem->quantity);
+                        $newQuantity = $previousQuantity - (int) $cartItem->quantity;
+                        app(AdminNotificationService::class)->inventoryStatus(
+                            $cartItem->product->fresh(),
+                            $previousQuantity,
+                            $newQuantity,
+                        );
+                    }
+
+                    if ($cartItem->variant?->track_inventory) {
+                        $cartItem->variant->decrement('stock_quantity', $cartItem->quantity);
+                    }
                 }
 
-                if ($cartItem->variant?->track_inventory) {
-                    $cartItem->variant->decrement('stock_quantity', $cartItem->quantity);
+                if ($coupon) {
+                    $promotions->recordCouponCodeUsage($order, $coupon, $couponDiscount);
                 }
-            }
 
-            if ($coupon) {
-                $promotions->recordCouponCodeUsage($order, $coupon, $couponDiscount);
-            }
+                $promotions->recordUsage($order, $priced);
 
-            $promotions->recordUsage($order, $priced);
+                // Reserved with the order, so a unit sold to another checkout
+                // in the meantime rolls the whole order back instead of leaving
+                // it without its units.
+                $serials = app(ProductSerialService::class);
+                $serials->reserveForOrder(
+                    $serials->serialsForCart($cart->items, $request->input('serial_numbers', [])),
+                    (int) $cart->user_id,
+                    (int) $order->id,
+                );
 
-            $cart->update(['status' => 'converted']);
+                $cart->update(['status' => 'converted']);
 
-            return $order;
-        });
-
-        app(ProductSerialService::class)->reserveForOrder($request->input('serial_numbers', []), (int) $cart->user_id, (int) $order->id);
+                return $order;
+            });
+        } catch (\InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
+        }
 
         app(AdminNotificationService::class)->newOrder($order, 'app');
 

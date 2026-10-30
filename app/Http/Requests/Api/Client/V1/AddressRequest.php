@@ -33,7 +33,7 @@ class AddressRequest extends FormRequest
         }
 
         if (isset($normalized['country'])) {
-            $normalized['country'] = strtoupper($normalized['country']);
+            $normalized['country'] = ShippingAddressRules::normalizeCountry($normalized['country']);
         }
 
         $this->merge($normalized);

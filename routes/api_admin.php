@@ -173,6 +173,12 @@ Route::prefix('admin')->group(function () {
             Route::delete('customers/{user}', [CustomerController::class, 'destroy']);
         });
 
+        // Shipping methods the create-order form offers. Under orders.create,
+        // not settings.view, so whoever can place an order can pick one; and
+        // declared before orders/{order}, which would bind "shipping-methods".
+        Route::middleware('permission:orders.create')->group(function () {
+            Route::get('orders/shipping-methods', [OrderController::class, 'shippingMethods']);
+        });
         Route::middleware('permission:orders.view')->group(function () {
             Route::get('orders', [OrderController::class, 'index']);
             // Declared before orders/{order}, which would otherwise try to

@@ -26,10 +26,17 @@ class StoreOrderRequest extends FormRequest
             'notes' => ['sometimes', 'nullable', 'string'],
             'currency' => ['sometimes', 'string', 'in:USD,KHR'],
 
-            // Order-level discount and shipping. Tax is calculated from store
-            // tax settings on the server.
+            // Order-level discount. Tax is calculated from store tax settings
+            // on the server.
             'discount_total' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-            'shipping_total' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+
+            // Shipping is priced on the server from the chosen method and the
+            // lines' weight (OrderShippingCalculator); whether the method is
+            // active and can carry the weight is checked there too. A typed
+            // `shipping_total` is the older contract, kept for callers that
+            // send no method, and cannot be combined with one.
+            'shipping_method_id' => ['sometimes', 'nullable', 'integer', 'exists:shipping_methods,id'],
+            'shipping_total' => ['sometimes', 'nullable', 'numeric', 'min:0', 'prohibits:shipping_method_id'],
 
             'payment_method' => ['sometimes', 'nullable', 'in:'.implode(',', self::PAYMENT_METHODS)],
             'payment_status' => ['sometimes', 'nullable', 'in:'.implode(',', self::PAYMENT_STATUSES)],

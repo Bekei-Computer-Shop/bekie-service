@@ -10,9 +10,11 @@ use Illuminate\Database\Seeder;
 class ShippingMethodSeeder extends Seeder
 {
     /**
+     * Also read by ShippingMethodDeploySeeder.
+     *
      * @var array<int, array<string, int|float|string|null|bool>>
      */
-    private const METHODS = [
+    public const METHODS = [
         [
             'name' => 'Store Pickup',
             'code' => 'store_pickup',

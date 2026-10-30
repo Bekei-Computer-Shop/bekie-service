@@ -38,10 +38,62 @@ class ShippingAddressRules
     }
 
     /**
+     * Country names older clients send instead of a code, by upper-cased name.
+     * The storefront on `main` posts "Cambodia"; the rest cover the region and
+     * common shorthands. Any other English name is resolved through intl where
+     * the extension is loaded (it is in the production image).
+     */
+    private const COUNTRY_ALIASES = [
+        'CAMBODIA' => 'KH', 'KINGDOM OF CAMBODIA' => 'KH', 'KAMPUCHEA' => 'KH', 'KHM' => 'KH',
+        'THAILAND' => 'TH', 'VIETNAM' => 'VN', 'VIET NAM' => 'VN', 'LAOS' => 'LA', 'LAO PDR' => 'LA',
+        'MYANMAR' => 'MM', 'SINGAPORE' => 'SG', 'MALAYSIA' => 'MY', 'INDONESIA' => 'ID',
+        'PHILIPPINES' => 'PH', 'CHINA' => 'CN', 'JAPAN' => 'JP', 'SOUTH KOREA' => 'KR', 'KOREA' => 'KR',
+        'UNITED STATES' => 'US', 'UNITED STATES OF AMERICA' => 'US', 'USA' => 'US',
+        'UNITED KINGDOM' => 'GB', 'UK' => 'GB', 'AUSTRALIA' => 'AU', 'FRANCE' => 'FR',
+    ];
+
+    /**
      * @return list<string>
      */
     public static function countryCodes(): array
     {
         return explode(' ', self::COUNTRY_CODES);
+    }
+
+    /**
+     * The ISO 3166-1 alpha-2 code for a submitted country: a code in any case,
+     * or a country name ("Cambodia" → "KH"). Anything not recognised comes
+     * back trimmed and upper-cased, for the country rules to reject.
+     */
+    public static function normalizeCountry(string $country): string
+    {
+        $value = strtoupper(trim(preg_replace('/\s+/', ' ', $country) ?? $country));
+
+        if (strlen($value) === 2) {
+            return $value;
+        }
+
+        return self::COUNTRY_ALIASES[$value] ?? self::countryNamesFromIntl()[$value] ?? $value;
+    }
+
+    /**
+     * English country names to codes, from intl when it is available.
+     *
+     * @return array<string, string>
+     */
+    private static function countryNamesFromIntl(): array
+    {
+        static $names = null;
+
+        if ($names === null) {
+            $names = [];
+            if (extension_loaded('intl')) {
+                foreach (self::countryCodes() as $code) {
+                    $names[strtoupper(\Locale::getDisplayRegion('-'.$code, 'en'))] = $code;
+                }
+            }
+        }
+
+        return $names;
     }
 }
