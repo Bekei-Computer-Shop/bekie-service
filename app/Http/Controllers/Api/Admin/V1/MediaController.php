@@ -50,6 +50,7 @@ class MediaController extends BaseAdminController
     {
         $file = $request->file('file');
         $folder = $request->input('folder', config('cloudinary.folder'));
+        $resourceType = $request->input('resource_type', 'image');
 
         $cloudName = config('cloudinary.cloud_name');
         $apiKey = config('cloudinary.api_key');
@@ -69,7 +70,7 @@ class MediaController extends BaseAdminController
                 'timestamp' => $timestamp,
             ], $apiSecret);
 
-            $response = Http::asMultipart()->timeout(30)->post("https://api.cloudinary.com/v1_1/{$cloudName}/image/upload", [
+            $response = Http::asMultipart()->timeout(120)->post("https://api.cloudinary.com/v1_1/{$cloudName}/{$resourceType}/upload", [
                 [
                     'name' => 'file',
                     'contents' => fopen($file->getRealPath(), 'r'),

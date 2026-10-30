@@ -42,6 +42,7 @@ class UpdateContentRequest extends FormRequest
             'body' => ['sometimes', 'nullable', 'string'],
             'category' => ['sometimes', 'nullable', 'string', 'max:100'],
             'image_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'video_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'status' => ['sometimes', 'in:draft,published,archived'],
             'published_at' => ['sometimes', 'nullable', 'date'],
         ];

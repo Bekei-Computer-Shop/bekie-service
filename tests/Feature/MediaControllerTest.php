@@ -78,6 +78,50 @@ test('admin can upload media to Cloudinary', function (): void {
     });
 });
 
+test('admin can upload a video to Cloudinary', function (): void {
+    $token = adminTokenForMedia();
+
+    Http::fake([
+        'https://api.cloudinary.com/v1_1/test-cloud/video/upload' => Http::response([
+            'secure_url' => 'https://res.cloudinary.com/test-cloud/video/upload/v1234/clip.mp4',
+            'public_id' => 'news/clip',
+            'resource_type' => 'video',
+            'format' => 'mp4',
+            'bytes' => 12345,
+        ], 200),
+    ]);
+
+    $response = withHeaders(['Authorization' => 'Bearer '.$token])
+        ->postJson('/api/v1/admin/media', [
+            'file' => UploadedFile::fake()->create('clip.mp4', 100, 'video/mp4'),
+            'folder' => 'news',
+            'resource_type' => 'video',
+        ]);
+
+    $response->assertCreated();
+    $response->assertJsonPath('data.url', 'https://res.cloudinary.com/test-cloud/video/upload/v1234/clip.mp4');
+    $response->assertJsonPath('data.resource_type', 'video');
+
+    Http::assertSent(function ($request): bool {
+        $parts = multipartParts($request->data());
+
+        return $request->url() === 'https://api.cloudinary.com/v1_1/test-cloud/video/upload'
+            && ($parts['folder'] ?? null) === 'news';
+    });
+});
+
+test('video upload rejects an image resource type', function (): void {
+    $token = adminTokenForMedia();
+
+    withHeaders(['Authorization' => 'Bearer '.$token])
+        ->postJson('/api/v1/admin/media', [
+            'file' => UploadedFile::fake()->create('clip.mp4', 100, 'video/mp4'),
+            'folder' => 'news',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('file');
+});
+
 /**
  * Cloudinary computes `sha1(<signable params as sorted query string> . api_secret)`
  * and excludes `file`, `cloud_name`, `api_key` and `resource_type` from the signed

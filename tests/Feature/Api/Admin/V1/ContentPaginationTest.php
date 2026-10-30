@@ -75,16 +75,19 @@ test('news rows carry the category and cover image through the API', function ()
             'body' => 'Launch stock has landed.',
             'category' => 'Product News',
             'image_url' => 'https://picsum.photos/seed/rtx50/1200/630',
+            'video_url' => 'https://res.cloudinary.com/test-cloud/video/upload/clip.mp4',
             'status' => 'draft',
         ])
         ->assertCreated()
         ->assertJsonPath('data.category', 'Product News')
-        ->assertJsonPath('data.image_url', 'https://picsum.photos/seed/rtx50/1200/630');
+        ->assertJsonPath('data.image_url', 'https://picsum.photos/seed/rtx50/1200/630')
+        ->assertJsonPath('data.video_url', 'https://res.cloudinary.com/test-cloud/video/upload/clip.mp4');
 
     $this->withHeaders(['Authorization' => 'Bearer '.$token])
         ->getJson('/api/v1/admin/content/'.$created->json('data.id'))
         ->assertOk()
-        ->assertJsonPath('data.category', 'Product News');
+        ->assertJsonPath('data.category', 'Product News')
+        ->assertJsonPath('data.video_url', 'https://res.cloudinary.com/test-cloud/video/upload/clip.mp4');
 });
 
 test('the categories endpoint returns distinct, non-empty categories in use', function (): void {
