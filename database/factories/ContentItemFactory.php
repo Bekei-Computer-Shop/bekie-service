@@ -26,6 +26,7 @@ class ContentItemFactory extends Factory
             'body' => fake()->paragraphs(2, true),
             'category' => null,
             'image_url' => null,
+            'video_url' => null,
             'status' => 'draft',
             'author_id' => User::factory(),
             'published_at' => null,

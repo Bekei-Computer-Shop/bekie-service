@@ -25,6 +25,10 @@ FROM php:8.2-apache
 
 WORKDIR /var/www/html
 
+# News cover videos are uploaded through the authenticated media endpoint.
+RUN printf "upload_max_filesize=100M\npost_max_size=110M\nmax_execution_time=120\nmax_input_time=120\n" \
+    > /usr/local/etc/php/conf.d/uploads.ini
+
 # ------------------------------------------------------------
 # Install system dependencies
 # ------------------------------------------------------------

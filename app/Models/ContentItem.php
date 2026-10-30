@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $body
  * @property string|null $category
  * @property string|null $image_url
+ * @property string|null $video_url
  * @property string $status
  * @property int $author_id
  * @property Carbon|null $published_at
@@ -33,6 +34,7 @@ class ContentItem extends Model
         'body',
         'category',
         'image_url',
+        'video_url',
         'status',
         'author_id',
         'published_at',
