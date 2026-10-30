@@ -606,10 +606,16 @@ class ProductCatalogSeeder extends Seeder
     {
         $brands = [];
         foreach (array_unique(array_column(self::PRODUCTS, 'brand')) as $name) {
-            $brands[$name] = Brand::firstOrCreate(
+            // withTrashed(): a soft-deleted brand still holds its slug in the
+            // unique index, so firstOrCreate() would collide on insert.
+            $brand = Brand::withTrashed()->firstOrCreate(
                 ['slug' => Str::slug($name)],
                 ['name' => $name, 'is_active' => true]
             );
+            if ($brand->trashed()) {
+                $brand->restore();
+            }
+            $brands[$name] = $brand;
         }
 
         return $brands;
@@ -794,13 +800,26 @@ class ProductCatalogSeeder extends Seeder
     {
         foreach ($definition['variants'] as $sortOrder => $variant) {
             $sku = $definition['sku'].'-'.$variant['suffix'];
+            $slug = Str::slug($sku.' '.$variant['label']);
 
-            ProductVariant::updateOrCreate(
-                ['sku' => $sku],
+            // Same trap as seedProduct(): the admin product editor soft-deletes
+            // variants, and updateOrCreate(['sku' => ...]) can't see trashed
+            // rows, so it INSERTs and collides with the global sku/slug unique
+            // indexes. Match across trashed rows and restore instead.
+            $model = ProductVariant::withTrashed()->where('sku', $sku)->first()
+                ?? ProductVariant::withTrashed()->where('slug', $slug)->first()
+                ?? new ProductVariant;
+
+            if ($model->trashed()) {
+                $model->restore();
+            }
+
+            $model->fill(
                 [
+                    'sku' => $sku,
                     'product_id' => $product->id,
                     'name' => $variant['label'],
-                    'slug' => Str::slug($sku.' '.$variant['label']),
+                    'slug' => $slug,
                     'barcode' => $this->nextBarcode(),
                     'price' => $variant['price'],
                     'sale_price' => $variant['sale_price'],
@@ -823,7 +842,7 @@ class ProductCatalogSeeder extends Seeder
                     'is_active' => true,
                     'sort_order' => $sortOrder,
                 ]
-            );
+            )->save();
         }
     }
 
