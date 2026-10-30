@@ -32,6 +32,8 @@ class ProductListResource extends JsonResource
             'is_active' => $this->is_active,
             'is_featured' => $this->is_featured,
             'is_digital' => $this->is_digital,
+            'published_at' => $this->published_at?->toIso8601String(),
+            'is_new_arrival' => $this->isNewArrival(),
             'views_count' => $this->views_count,
             'sales_count' => $this->sales_count,
             'sort_order' => $this->sort_order,

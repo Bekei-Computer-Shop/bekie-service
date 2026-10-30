@@ -52,8 +52,9 @@ class StoreOrderRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        // Older clients send the country's name ("Cambodia"), not its code.
         if (is_string($this->input('country'))) {
-            $this->merge(['country' => strtoupper(trim($this->input('country')))]);
+            $this->merge(['country' => ShippingAddressRules::normalizeCountry($this->input('country'))]);
         }
     }
 }
