@@ -92,7 +92,13 @@ class PaymentService
             && (number_format((float) $details['payment_amount'], 2, '.', '') !== number_format((float) $payment->amount, 2, '.', '')
                 || strtoupper((string) $details['payment_currency']) !== strtoupper((string) $payment->currency))) {
             throw new AbaPayWayException('ABA PayWay transaction amount or currency did not match.', [
-                'aba' => ['reason_code' => 'check_payment_details_mismatch'],
+                'aba' => [
+                    'reason_code' => 'check_payment_details_mismatch',
+                    'expected_amount' => number_format((float) $payment->amount, 2, '.', ''),
+                    'expected_currency' => $payment->currency,
+                    'received_amount' => (string) $details['payment_amount'],
+                    'received_currency' => (string) $details['payment_currency'],
+                ],
             ]);
         }
 

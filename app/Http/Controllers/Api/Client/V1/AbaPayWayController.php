@@ -251,10 +251,13 @@ class AbaPayWayController extends BaseApiController
 
             $customer = $order->customer_snapshot ?? [];
             $name = preg_split('/\s+/', trim((string) ($customer['name'] ?? 'Customer')), 2);
+            // PayWay charges `amount + shipping`, while grand_total already
+            // includes shipping, so send the non-shipping part as `amount`.
+            $shipping = round((float) $order->shipping_total, 2);
             $result = $this->payWay->purchase([
                 'tran_id' => $payment->provider_payment_id,
-                'amount' => $order->grand_total,
-                'shipping' => $order->shipping_total,
+                'amount' => max(0, round((float) $order->grand_total - $shipping, 2)),
+                'shipping' => $shipping,
                 'currency' => $order->currency,
                 'items' => $order->items->map(fn ($item) => [
                     'name' => $item->product_name,
@@ -407,6 +410,9 @@ class AbaPayWayController extends BaseApiController
                 'status_code' => $exception instanceof AbaPayWayException
                     ? data_get($exception->errors, 'aba.status_code')
                     : null,
+                'expected_amount' => data_get($exception->errors ?? [], 'aba.expected_amount'),
+                'received_amount' => data_get($exception->errors ?? [], 'aba.received_amount'),
+                'received_currency' => data_get($exception->errors ?? [], 'aba.received_currency'),
                 'error_code' => class_basename($exception),
             ]);
 
