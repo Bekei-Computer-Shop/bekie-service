@@ -26,7 +26,7 @@ class StorePromotionRequest extends FormRequest
             'type' => ['required', 'in:percentage,fixed'],
             // The campaign label. Kept off `type` on purpose — see Coupon::KINDS.
             'kind' => ['sometimes', 'nullable', Rule::in(Coupon::KINDS)],
-            'value' => ['required', 'numeric', 'min:0'],
+            'value' => ['required', 'numeric', 'min:0', Rule::when($this->input('type') === 'percentage', ['max:100'])],
             'min_order_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'max_discount_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'include_subcategories' => ['sometimes', 'boolean'],
@@ -44,6 +44,9 @@ class StorePromotionRequest extends FormRequest
     /** @return array<string, string> */
     public function messages(): array
     {
-        return $this->targetMessages();
+        return [
+            ...$this->targetMessages(),
+            'value.max' => 'A percentage promotion cannot exceed 100%.',
+        ];
     }
 }
