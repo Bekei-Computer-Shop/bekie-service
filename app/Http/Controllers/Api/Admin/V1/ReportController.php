@@ -39,8 +39,8 @@ class ReportController extends BaseAdminController
     {
         $validated = $request->validate([
             'preset' => ['nullable', 'in:daily,weekly,monthly,yearly,custom'],
-            'date_from' => ['nullable', 'date'],
-            'date_to' => ['nullable', 'date'],
+            'date_from' => ['nullable', 'date', 'required_with:date_to'],
+            'date_to' => ['nullable', 'date', 'required_with:date_from', 'after_or_equal:date_from'],
         ]);
 
         $payload = $this->customerOrdersService->build([
@@ -56,8 +56,8 @@ class ReportController extends BaseAdminController
     {
         $validated = $request->validate([
             'preset' => ['nullable', 'in:daily,weekly,monthly,yearly,custom'],
-            'date_from' => ['nullable', 'date'],
-            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+            'date_from' => ['nullable', 'date', 'required_with:date_to'],
+            'date_to' => ['nullable', 'date', 'required_with:date_from', 'after_or_equal:date_from'],
         ]);
 
         return $this->success($this->salesService->build([

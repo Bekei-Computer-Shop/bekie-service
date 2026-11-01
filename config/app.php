@@ -69,6 +69,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Report Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Timestamps are stored in UTC, but the admin reports group orders by the
+    | day, week and month the shop experienced them in. Without this, an order
+    | placed at 01:00 local time would be counted against the previous day.
+    |
+    */
+
+    'report_timezone' => env('REPORT_TIMEZONE', 'Asia/Phnom_Penh'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |
