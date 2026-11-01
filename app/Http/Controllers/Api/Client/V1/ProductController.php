@@ -42,6 +42,7 @@ class ProductController extends BaseApiController
             ->where('products.is_active', true)
             ->whereHas('approvedReviews')
             ->select('products.*', 'sales.units_sold as sales_count')
+            ->with('brand:id,name,slug,logo')
             ->addSelect([
                 'average_rating' => DB::table('reviews')
                     ->select(DB::raw('COALESCE(ROUND(AVG(rating), 1), 0)'))
@@ -76,6 +77,7 @@ class ProductController extends BaseApiController
                     ->orWhereIn('id', $productIds)
                     ->orWhereIn('category_id', $categoryIds);
             })
+            ->with('brand:id,name,slug,logo')
             ->addSelect([
                 'average_rating' => DB::table('reviews')
                     ->select(DB::raw('COALESCE(ROUND(AVG(rating), 1), 0)'))
@@ -104,6 +106,7 @@ class ProductController extends BaseApiController
             ->where('in_stock', true)
             ->where('stock_quantity', '>', 0)
             ->whereBetween('created_at', [$now->copy()->subDays(30), $now])
+            ->with('brand:id,name,slug,logo')
             ->addSelect([
                 'average_rating' => DB::table('reviews')
                     ->select(DB::raw('COALESCE(ROUND(AVG(rating), 1), 0)'))
@@ -125,6 +128,7 @@ class ProductController extends BaseApiController
     public function index(ListProductsRequest $request, ProductPromotionService $pricing)
     {
         $query = Product::where('is_active', true)
+            ->with('brand:id,name,slug,logo')
             ->addSelect([
                 'average_rating' => DB::table('reviews')
                     ->select(DB::raw('COALESCE(ROUND(AVG(rating), 1), 0)'))
