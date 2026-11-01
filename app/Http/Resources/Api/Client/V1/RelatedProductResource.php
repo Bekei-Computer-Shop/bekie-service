@@ -21,6 +21,7 @@ class RelatedProductResource extends JsonResource
             'price' => $this->price,
             'sale_price' => $this->sale_price,
             'promotion' => $this->promotionSummary(),
+            'site_promotions' => $this->siteWidePromotionSummaries(),
             'thumbnail' => $this->thumbnail,
             'is_featured' => (bool) $this->is_featured,
             'in_stock' => (bool) $this->in_stock,
