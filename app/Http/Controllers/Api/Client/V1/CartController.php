@@ -466,7 +466,7 @@ class CartController extends BaseApiController
             return $this->error($exception->getMessage(), 422);
         }
 
-        return $this->created(new OrderResource($order->load('items')));
+        return $this->created(new OrderResource($order->load(OrderResource::itemRelations())));
     }
 
     protected function recalculateCart(Cart $cart): Cart

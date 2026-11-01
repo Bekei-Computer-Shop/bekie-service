@@ -25,7 +25,7 @@ class OrderController extends BaseApiController
 {
     public function index(Request $request)
     {
-        $query = Order::with('items');
+        $query = Order::with(OrderResource::itemRelations());
 
         $query->where('user_id', $request->user()->id);
 
@@ -191,14 +191,14 @@ class OrderController extends BaseApiController
 
         app(AdminNotificationService::class)->newOrder($order, 'app');
 
-        return $this->created(new OrderResource($order->load('items')));
+        return $this->created(new OrderResource($order->load(OrderResource::itemRelations())));
     }
 
     public function show(Request $request, Order $order)
     {
         abort_unless((int) $order->user_id === (int) $request->user()->id, 403, 'This order belongs to another account.');
 
-        return $this->success(new OrderResource($order->load('items')));
+        return $this->success(new OrderResource($order->load(OrderResource::itemRelations())));
     }
 
     public function cancel(Request $request, Order $order)
