@@ -39,7 +39,7 @@ class SupplierSeeder extends Seeder
      * `brands` are the catalog brands a supplier is the usual source for. A
      * brand appears under one supplier only.
      */
-    private const SUPPLIERS = [
+    public const SUPPLIERS = [
         [
             'code' => 'SUP-001',
             'name' => 'Mekong Computer Distribution Co., Ltd.',
