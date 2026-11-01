@@ -51,6 +51,7 @@ class StockController extends BaseAdminController
                 'is_serialized',
                 'category_id',
                 'brand_id',
+                'default_supplier_id',
                 'created_at',
                 'updated_at',
             ])
@@ -155,6 +156,7 @@ class StockController extends BaseAdminController
             ->with([
                 'category:id,name,slug',
                 'brand:id,name,slug',
+                'defaultSupplier:id,name,code',
                 'variants:id,product_id,name,sku,stock_quantity,min_stock_alert,in_stock',
             ]);
 
@@ -185,10 +187,13 @@ class StockController extends BaseAdminController
                     });
             })
             ->latest()
-            ->with('createdBy:id,first_name,last_name,email');
+            ->with(['createdBy:id,first_name,last_name,email', 'supplier:id,name,code']);
 
         if ($request->filled('movement_type')) {
             $movementsQuery->where('movement_type', $request->input('movement_type'));
+        }
+        if ($request->filled('supplier_id')) {
+            $movementsQuery->where('supplier_id', $request->integer('supplier_id'));
         }
         if ($request->filled('movements_from')) {
             $movementsQuery->whereDate('created_at', '>=', Carbon::parse($request->input('movements_from')));
@@ -223,6 +228,11 @@ class StockController extends BaseAdminController
                 'name' => $product->brand->name,
                 'slug' => $product->brand->slug,
             ] : null,
+            'default_supplier' => $product->defaultSupplier ? [
+                'id' => $product->defaultSupplier->id,
+                'name' => $product->defaultSupplier->name,
+                'code' => $product->defaultSupplier->code,
+            ] : null,
             'variants' => $product->variants,
             'created_at' => $product->created_at?->toIso8601String(),
             'updated_at' => $product->updated_at?->toIso8601String(),
@@ -243,7 +253,7 @@ class StockController extends BaseAdminController
     public function movements(Request $request): JsonResponse
     {
         $perPage = (int) $request->input('per_page', 20);
-        $query = StockMovement::query()->latest()->with(['createdBy:id,first_name,last_name,email', 'stockable']);
+        $query = StockMovement::query()->latest()->with(['createdBy:id,first_name,last_name,email', 'stockable', 'supplier:id,name,code']);
 
         if ($request->filled('product_id')) {
             $productId = (string) $request->input('product_id');
@@ -271,6 +281,10 @@ class StockController extends BaseAdminController
             $query->where('movement_type', $request->input('movement_type'));
         }
 
+        if ($request->filled('supplier_id')) {
+            $query->where('supplier_id', $request->integer('supplier_id'));
+        }
+
         $items = $query->paginate($perPage);
 
         return $this->success([
@@ -295,18 +309,20 @@ class StockController extends BaseAdminController
         $reason = $request->input('reason');
         $reference = $request->input('reference');
         $metadata = (array) $request->input('metadata', []);
+        $supplierId = $request->filled('supplier_id') ? $request->integer('supplier_id') : null;
+        $unitCost = $request->filled('unit_cost') ? (float) $request->input('unit_cost') : null;
 
         try {
             $movement = match ($movementType) {
                 'adjust' => $this->stockService->adjust($stockable, $quantity, $reason, $reference, $metadata),
                 'reconcile' => $this->stockService->reconcile($stockable, $quantity, $reason, $reference, $metadata),
-                'stock_in' => $this->stockService->stockIn($stockable, $quantity, $reason, $reference, $metadata),
-                'stock_out' => $this->stockService->stockOut($stockable, $quantity, $reason, $reference, $metadata),
+                'stock_in' => $this->stockService->stockIn($stockable, $quantity, $reason, $reference, $metadata, supplierId: $supplierId, unitCost: $unitCost),
+                'stock_out' => $this->stockService->stockOut($stockable, $quantity, $reason, $reference, $metadata, supplierId: $supplierId, unitCost: $unitCost),
                 'transfer' => $this->stockService->transfer($stockable, $quantity, (string) $request->input('source_location', ''), (string) $request->input('destination_location', ''), $reason, $metadata),
                 default => throw new \InvalidArgumentException('Unsupported stock movement type.'),
             };
 
-            return $this->created(new StockMovementResource($movement));
+            return $this->created(new StockMovementResource($movement->load('supplier:id,name,code')));
         } catch (\InvalidArgumentException $e) {
             throw ValidationException::withMessages([
                 'quantity' => [$e->getMessage()],
@@ -360,10 +376,12 @@ class StockController extends BaseAdminController
         $items = $request->input('items');
         $globalReason = $request->input('reason');
         $globalReference = $request->input('reference');
+        $globalSupplierId = $request->input('supplier_id');
 
         $prepared = [];
         foreach ($items as $item) {
             $stockable = $this->resolveStockable($item['stockable_type'], (string) $item['stockable_id']);
+            $takesSupplier = in_array($item['movement_type'], StockService::SUPPLIER_MOVEMENT_TYPES, true);
             $prepared[] = [
                 'stockable' => $stockable,
                 'movement_type' => $item['movement_type'],
@@ -372,6 +390,8 @@ class StockController extends BaseAdminController
                 'reference' => $item['reference'] ?? $globalReference,
                 'metadata' => $item['metadata'] ?? [],
                 'serial_numbers' => $item['serial_numbers'] ?? [],
+                'supplier_id' => $item['supplier_id'] ?? ($takesSupplier ? $globalSupplierId : null),
+                'unit_cost' => $item['unit_cost'] ?? null,
             ];
         }
 
@@ -418,7 +438,7 @@ class StockController extends BaseAdminController
                 return $movements;
             });
 
-            return $this->created(StockMovementResource::collection($movements));
+            return $this->created(StockMovementResource::collection(collect($movements)->each->load('supplier:id,name,code')));
         } catch (\InvalidArgumentException $e) {
             throw ValidationException::withMessages([
                 'items' => [$e->getMessage()],
@@ -481,7 +501,7 @@ class StockController extends BaseAdminController
     public function movementExport(Request $request): StreamedResponse
     {
         $query = StockMovement::query()
-            ->with(['createdBy:id,first_name,last_name', 'stockable'])
+            ->with(['createdBy:id,first_name,last_name', 'stockable', 'supplier:id,name'])
             ->latest();
 
         if ($request->filled('movement_type')) {
@@ -496,12 +516,15 @@ class StockController extends BaseAdminController
         if ($request->filled('product_id')) {
             $query->where('stockable_type', Product::class)->where('stockable_id', (string) $request->input('product_id'));
         }
+        if ($request->filled('supplier_id')) {
+            $query->where('supplier_id', $request->integer('supplier_id'));
+        }
 
         $filename = 'stock-movements-'.now()->format('Y-m-d').'.csv';
 
         return response()->streamDownload(function () use ($query) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Date', 'Product', 'SKU', 'Type', 'Qty Change', 'Prev Qty', 'New Qty', 'Reason', 'Reference', 'Source', 'Destination', 'Adjusted By']);
+            fputcsv($handle, ['Date', 'Product', 'SKU', 'Type', 'Qty Change', 'Prev Qty', 'New Qty', 'Reason', 'Reference', 'Supplier', 'Unit Cost', 'Source', 'Destination', 'Adjusted By']);
             $query->chunk(500, function ($movements) use ($handle) {
                 foreach ($movements as $m) {
                     fputcsv($handle, [
@@ -514,6 +537,8 @@ class StockController extends BaseAdminController
                         $m->new_quantity,
                         $m->reason ?? '',
                         $m->reference ?? '',
+                        $m->supplier?->name ?? '',
+                        $m->unit_cost ?? '',
                         $m->source_location ?? '',
                         $m->destination_location ?? '',
                         $m->createdBy ? trim(($m->createdBy->first_name ?? '').' '.($m->createdBy->last_name ?? '')) : 'System',

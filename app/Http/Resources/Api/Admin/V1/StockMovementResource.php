@@ -26,6 +26,13 @@ class StockMovementResource extends JsonResource
             'reference' => $this->reference,
             'source_location' => $this->source_location,
             'destination_location' => $this->destination_location,
+            'supplier_id' => $this->supplier_id,
+            'supplier' => $this->whenLoaded('supplier', fn () => $this->supplier ? [
+                'id' => $this->supplier->id,
+                'name' => $this->supplier->name,
+                'code' => $this->supplier->code,
+            ] : null),
+            'unit_cost' => $this->unit_cost !== null ? (float) $this->unit_cost : null,
             'metadata' => $this->metadata ?? [],
             'note' => $this->metadata['notes'] ?? $this->metadata['note'] ?? null,
             'attachment' => $this->metadata['attachment'] ?? null,

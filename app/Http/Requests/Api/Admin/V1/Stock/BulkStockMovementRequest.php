@@ -8,6 +8,8 @@ use App\Models\ProductVariant;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 
 class BulkStockMovementRequest extends FormRequest
 {
@@ -58,9 +60,31 @@ class BulkStockMovementRequest extends FormRequest
             'items.*.metadata' => ['nullable', 'array'],
             'items.*.serial_numbers' => ['nullable', 'array'],
             'items.*.serial_numbers.*' => ['required', 'string', 'distinct', 'max:191'],
+            'items.*.supplier_id' => ['nullable', 'integer', 'prohibited_unless:items.*.movement_type,stock_in,stock_out', $this->activeSupplier()],
+            'items.*.unit_cost' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
             'reason' => ['nullable', 'string', 'max:255'],
             'reference' => ['nullable', 'string', 'max:255'],
+            // One delivery usually comes from one supplier: this applies to every
+            // stock in / stock out row that doesn't name its own.
+            'supplier_id' => ['nullable', 'integer', $this->activeSupplier()],
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'supplier_id.exists' => 'The selected supplier does not exist or is inactive.',
+            'items.*.supplier_id.exists' => 'The selected supplier does not exist or is inactive.',
+            'items.*.supplier_id.prohibited_unless' => 'A supplier can only be recorded on stock in or stock out.',
+        ];
+    }
+
+    private function activeSupplier(): Exists
+    {
+        return Rule::exists('suppliers', 'id')->whereNull('deleted_at')->where('is_active', true);
     }
 
     public function withValidator($validator)

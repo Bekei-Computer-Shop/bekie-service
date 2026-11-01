@@ -29,6 +29,8 @@ class DatabaseSeeder extends Seeder
         StockAlertSeeder::class,
         // More products, real variant configurations, serials and stock movements.
         DemoCatalogSeeder::class,
+        // Needs the catalog's brands and DemoCatalogSeeder's opening-stock receipts.
+        SupplierSeeder::class,
         // Orders take their shipping cost from these.
         ShippingMethodSeeder::class,
         // Groups (and their shoppers) must exist before promotions target them.

@@ -9,6 +9,7 @@ use App\Http\Requests\Api\Admin\V1\Product\Concerns\ValidatesVariantRows;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Coupon;
+use App\Models\Supplier;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -29,6 +30,7 @@ class StoreProductRequest extends FormRequest
         return [
             'category_id' => ['required', 'integer', Rule::exists((new Category)->getTable(), 'id')->whereNull('deleted_at')],
             'brand_id' => ['nullable', 'integer', Rule::exists((new Brand)->getTable(), 'id')->whereNull('deleted_at')],
+            'default_supplier_id' => ['nullable', 'integer', Rule::exists((new Supplier)->getTable(), 'id')->whereNull('deleted_at')],
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:191', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('products', 'slug')->whereNull('deleted_at')],
             'sku' => ['required', 'string', 'max:64', 'regex:/^[A-Za-z0-9._-]+$/', Rule::unique('products', 'sku')->whereNull('deleted_at')],

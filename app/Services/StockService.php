@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\DB;
 
 class StockService
 {
+    /** Movements that can name a supplier: receipts from one, returns to one. */
+    public const SUPPLIER_MOVEMENT_TYPES = ['stock_in', 'stock_out'];
+
     public function adjust(Model $stockable, int $quantity, ?string $reason = null, ?string $description = null, array $metadata = [], ?string $sourceLocation = null, ?string $destinationLocation = null): StockMovement
     {
         return $this->recordMovement($stockable, 'adjust', $quantity, $reason, $description, $metadata, $sourceLocation, $destinationLocation);
@@ -20,14 +23,20 @@ class StockService
         return $this->recordMovement($stockable, 'reconcile', $quantity, $reason, $description, $metadata, $sourceLocation, $destinationLocation);
     }
 
-    public function stockIn(Model $stockable, int $quantity, ?string $reason = null, ?string $description = null, array $metadata = [], ?string $sourceLocation = null, ?string $destinationLocation = null): StockMovement
+    /**
+     * `$supplierId` / `$unitCost` record who the units came from and what each
+     * cost. Both are optional; nothing is filled in from the product's default
+     * supplier, because a stock_in is also how returns and recounts arrive.
+     */
+    public function stockIn(Model $stockable, int $quantity, ?string $reason = null, ?string $description = null, array $metadata = [], ?string $sourceLocation = null, ?string $destinationLocation = null, ?int $supplierId = null, ?float $unitCost = null): StockMovement
     {
-        return $this->recordMovement($stockable, 'stock_in', $quantity, $reason, $description, $metadata, $sourceLocation, $destinationLocation);
+        return $this->recordMovement($stockable, 'stock_in', $quantity, $reason, $description, $metadata, $sourceLocation, $destinationLocation, $supplierId, $unitCost);
     }
 
-    public function stockOut(Model $stockable, int $quantity, ?string $reason = null, ?string $description = null, array $metadata = [], ?string $sourceLocation = null, ?string $destinationLocation = null): StockMovement
+    /** `$supplierId` here is the supplier the units went back to. */
+    public function stockOut(Model $stockable, int $quantity, ?string $reason = null, ?string $description = null, array $metadata = [], ?string $sourceLocation = null, ?string $destinationLocation = null, ?int $supplierId = null, ?float $unitCost = null): StockMovement
     {
-        return $this->recordMovement($stockable, 'stock_out', $quantity, $reason, $description, $metadata, $sourceLocation, $destinationLocation);
+        return $this->recordMovement($stockable, 'stock_out', $quantity, $reason, $description, $metadata, $sourceLocation, $destinationLocation, $supplierId, $unitCost);
     }
 
     public function transfer(Model $stockable, int $quantity, string $sourceLocation, string $destinationLocation, ?string $reason = null, array $metadata = []): StockMovement
@@ -64,7 +73,9 @@ class StockService
                     $itemReference,
                     $item['metadata'] ?? [],
                     $sourceLocation,
-                    $destinationLocation
+                    $destinationLocation,
+                    isset($item['supplier_id']) ? (int) $item['supplier_id'] : null,
+                    isset($item['unit_cost']) ? (float) $item['unit_cost'] : null,
                 );
             }
 
@@ -209,10 +220,14 @@ class StockService
         }
     }
 
-    protected function recordMovement(Model $stockable, string $movementType, int $quantity, ?string $reason, ?string $description, array $metadata = [], ?string $sourceLocation = null, ?string $destinationLocation = null): StockMovement
+    protected function recordMovement(Model $stockable, string $movementType, int $quantity, ?string $reason, ?string $description, array $metadata = [], ?string $sourceLocation = null, ?string $destinationLocation = null, ?int $supplierId = null, ?float $unitCost = null): StockMovement
     {
+        if ($supplierId !== null && ! in_array($movementType, self::SUPPLIER_MOVEMENT_TYPES, true)) {
+            throw new \InvalidArgumentException('A supplier can only be recorded on stock in or stock out.');
+        }
+
         if ($stockable instanceof ProductVariant || $stockable instanceof Product) {
-            return DB::transaction(function () use ($stockable, $movementType, $quantity, $reason, $description, $metadata, $sourceLocation, $destinationLocation): StockMovement {
+            return DB::transaction(function () use ($stockable, $movementType, $quantity, $reason, $description, $metadata, $sourceLocation, $destinationLocation, $supplierId, $unitCost): StockMovement {
                 $previousQuantity = (int) $stockable->stock_quantity;
                 $newQuantity = $this->calculateNewQuantity($stockable, $movementType, $quantity);
 
@@ -235,6 +250,8 @@ class StockService
                     'metadata' => $metadata,
                     'source_location' => $sourceLocation,
                     'destination_location' => $destinationLocation,
+                    'supplier_id' => $supplierId,
+                    'unit_cost' => $unitCost,
                     'created_by_id' => auth()->check() ? auth()->id() : null,
                 ]);
 
