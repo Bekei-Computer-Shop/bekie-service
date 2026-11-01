@@ -26,7 +26,6 @@ describe('Create Review', function () {
             [
                 'product_id' => $this->product->id,
                 'rating' => 5,
-                'title' => 'Excellent product',
                 'comment' => 'Very happy with this purchase!',
             ],
             ['Authorization' => 'Bearer '.$this->token->token]
@@ -34,7 +33,7 @@ describe('Create Review', function () {
 
         $response->assertCreated();
         $response->assertJsonPath('data.rating', 5);
-        $response->assertJsonPath('data.title', 'Excellent product');
+        $response->assertJsonMissingPath('data.title');
 
         expect(Review::count())->toBe(1);
         expect(Review::first()->user_id)->toBe($this->user->id);

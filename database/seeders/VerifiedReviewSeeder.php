@@ -30,14 +30,6 @@ class VerifiedReviewSeeder extends Seeder
 
     private const RATINGS = [5, 4, 5, 5, 3, 4, 5, 2, 4, 5, 1, 4];
 
-    private const TITLES = [
-        5 => 'Exactly what I needed',
-        4 => 'Solid purchase, small nitpicks',
-        3 => 'Does the job',
-        2 => 'Not quite what I expected',
-        1 => 'Had problems with mine',
-    ];
-
     private const COMMENTS = [
         5 => 'Arrived well packed and worked first time. Setup took a few minutes and performance has been excellent.',
         4 => 'Good value for the money. Runs well day to day; the included software could be better.',
@@ -71,7 +63,6 @@ class VerifiedReviewSeeder extends Seeder
                 ['user_id' => $item->order->user_id, 'product_id' => $item->product_id, 'order_id' => $item->order_id],
                 [
                     'rating' => $rating,
-                    'title' => self::TITLES[$rating],
                     'comment' => self::COMMENTS[$rating],
                     'status' => match (true) {
                         $number % 11 === 10 => 'rejected',
