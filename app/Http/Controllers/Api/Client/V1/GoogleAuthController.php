@@ -32,7 +32,7 @@ class GoogleAuthController extends BaseApiController
         try {
             $profile = $this->verifier->verify($request->input('id_token'));
         } catch (GoogleAuthException $exception) {
-            return $this->error($exception->getMessage(), $exception->status);
+            return $this->error($exception->getMessage(), $exception->status, $exception->errors());
         }
 
         $email = strtolower(trim($profile['email']));
@@ -79,7 +79,7 @@ class GoogleAuthController extends BaseApiController
         try {
             $profile = $this->verifier->verify($request->input('id_token'));
         } catch (GoogleAuthException $exception) {
-            return $this->error($exception->getMessage(), $exception->status);
+            return $this->error($exception->getMessage(), $exception->status, $exception->errors());
         }
 
         $user = User::where('google_id', $profile['sub'])->first();
