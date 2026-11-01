@@ -11,10 +11,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-/** SUP-001 … SUP-011: the factory's random `SUP-XXXXXX` codes never match. */
+/** The seeder's own codes: the factory's random `SUP-XXXXXX` codes never match. */
 function seededSupplierCodes(): array
 {
-    return array_map(fn (int $n) => sprintf('SUP-%03d', $n), range(1, 11));
+    return array_column(SupplierSeeder::SUPPLIERS, 'code');
 }
 
 function openingReceipt(ProductVariant $variant, int $quantity): StockMovement
@@ -52,7 +52,7 @@ test('seeds suppliers, links products by brand and names the supplier on opening
     $gaming = Supplier::where('code', 'SUP-003')->firstOrFail();
     $storeDefault = Supplier::where('is_default', true)->sole();
 
-    expect(Supplier::whereIn('code', seededSupplierCodes())->count())->toBe(11)
+    expect(Supplier::whereIn('code', seededSupplierCodes())->count())->toBe(count(SupplierSeeder::SUPPLIERS))
         ->and($storeDefault->code)->toBe('SUP-001')
         ->and(Supplier::where('code', 'SUP-011')->value('is_active'))->toBeFalse()
         ->and($mouse->fresh()->default_supplier_id)->toBe($gaming->id)
@@ -75,7 +75,7 @@ test('re-running updates the suppliers instead of duplicating them', function ()
 
     $this->seed(SupplierSeeder::class);
 
-    expect(Supplier::withTrashed()->whereIn('code', seededSupplierCodes())->count())->toBe(11)
+    expect(Supplier::withTrashed()->whereIn('code', seededSupplierCodes())->count())->toBe(count(SupplierSeeder::SUPPLIERS))
         ->and(Supplier::where('code', 'SUP-002')->exists())->toBeTrue()
         ->and(Supplier::where('is_default', true)->pluck('code')->all())->toBe(['SUP-001']);
 });
