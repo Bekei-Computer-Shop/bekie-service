@@ -8,7 +8,7 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class MailtrapTestMail extends Mailable
+class MailConfigTestMail extends Mailable
 {
     use Queueable, SerializesModels;
 
@@ -22,7 +22,7 @@ class MailtrapTestMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            markdown: 'emails.mailtrap-test',
+            markdown: 'emails.mail-config-test',
         );
     }
 }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 use App\Mail\AdminPasswordRecoveryOtpMail;
 use App\Mail\ContactMessageMail;
 use App\Mail\CustomerVerificationOtpMail;
-use App\Mail\MailtrapTestMail;
+use App\Mail\MailConfigTestMail;
 use App\Mail\PasswordResetOtpMail;
 use App\Models\User;
 use App\Services\AdminAuthService;
@@ -31,7 +31,7 @@ test('all email templates render with their expected content', function (): void
         [new ContactMessageMail('Contact Tester', 'tester@example.com', 'Order question', 'A package arrived damaged.'), ['Contact Tester', 'tester@example.com', 'Order question', 'A package arrived damaged.']],
         [new CustomerVerificationOtpMail('verify-code-456', 15), ['Verify your email', 'verify-code-456', '15 minutes']],
         [new PasswordResetOtpMail('reset-code-789', 20), ['Password Reset Request', 'reset-code-789', '20 minutes']],
-        [new MailtrapTestMail, ['Email delivery test', 'Delivery check passed', 'successfully submitted', 'accepted the message for delivery', 'no action is needed']],
+        [new MailConfigTestMail, ['Email delivery test', 'Delivery check passed', 'successfully submitted', 'accepted the message for delivery', 'no action is needed']],
     ];
 
     foreach ($mailables as [$mailable, $expectedContent]) {
@@ -70,7 +70,7 @@ test('only an authenticated admin can send the mail configuration test', functio
         ->assertJsonPath('status', 'success')
         ->assertJsonPath('data.recipient', 'recipient@example.com');
 
-    Mail::assertSent(MailtrapTestMail::class);
+    Mail::assertSent(MailConfigTestMail::class);
 });
 
 test('the mail configuration test validates its recipient', function (): void {
