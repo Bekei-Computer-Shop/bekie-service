@@ -21,6 +21,7 @@ class IndexOrdersRequest extends FormRequest
         return [
             'q' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'string', 'max:50'],
+            'payment_status' => ['nullable', 'string', 'in:'.implode(',', StoreOrderRequest::PAYMENT_STATUSES)],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date'],
             'customer_id' => ['nullable', 'integer'],

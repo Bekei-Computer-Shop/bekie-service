@@ -6211,6 +6211,22 @@
                         }
                     },
                     {
+                        "name": "payment_status",
+                        "in": "query",
+                        "schema": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "enum": [
+                                "pending",
+                                "paid",
+                                "failed",
+                                "refunded"
+                            ]
+                        }
+                    },
+                    {
                         "name": "date_from",
                         "in": "query",
                         "schema": {

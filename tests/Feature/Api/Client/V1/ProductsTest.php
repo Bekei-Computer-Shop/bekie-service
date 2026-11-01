@@ -15,6 +15,7 @@ use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use Database\Factories\ReviewFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ProductsTest extends TestCase
@@ -95,6 +96,53 @@ class ProductsTest extends TestCase
         $response = $this->getJson('/api/v1/products?page=2');
 
         $response->assertOk();
+    }
+
+    public function test_product_lists_include_brand(): void
+    {
+        $this->travelTo(now());
+        $brand = Brand::factory()->create(['name' => 'Apple', 'slug' => 'apple', 'logo' => 'apple.png']);
+        $product = Product::factory()->create([
+            'brand_id' => $brand->id,
+            'is_active' => true,
+            'price' => 100,
+            'sale_price' => 80,
+            'in_stock' => true,
+            'stock_quantity' => 5,
+            'created_at' => now()->subDay(),
+        ]);
+        $this->recordPaidSale($product, 3);
+        ReviewFactory::new()->create(['product_id' => $product->id, 'rating' => 5, 'status' => 'approved']);
+
+        $expected = ['id' => $brand->id, 'name' => 'Apple', 'slug' => 'apple', 'logo' => 'apple.png'];
+
+        foreach (['/api/v1/products', '/api/v1/products/best-selling', '/api/v1/products/on-promotion', '/api/v1/products/new'] as $uri) {
+            $this->getJson($uri)
+                ->assertOk()
+                ->assertJsonPath('data.0.brand_id', $brand->id)
+                ->assertJsonPath('data.0.brand', $expected);
+        }
+    }
+
+    public function test_product_list_brand_is_null_without_a_brand(): void
+    {
+        Product::factory()->create(['brand_id' => null, 'is_active' => true]);
+
+        $this->getJson('/api/v1/products')
+            ->assertOk()
+            ->assertJsonPath('data.0.brand_id', null)
+            ->assertJsonPath('data.0.brand', null);
+    }
+
+    public function test_product_list_eager_loads_brand(): void
+    {
+        Product::factory()->count(5)->create(['is_active' => true]);
+
+        DB::enableQueryLog();
+        $this->getJson('/api/v1/products')->assertOk();
+        $brandQueries = collect(DB::getQueryLog())->filter(fn (array $query): bool => str_contains($query['query'], 'from "brands"'));
+
+        $this->assertCount(1, $brandQueries);
     }
 
     public function test_best_selling_products_use_paid_sales_and_approved_reviews(): void

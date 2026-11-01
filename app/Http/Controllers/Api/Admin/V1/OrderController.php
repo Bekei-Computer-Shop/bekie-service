@@ -58,7 +58,15 @@ class OrderController extends BaseAdminController
             ->when($request->filled('date_from'), fn ($query) => $query->whereDate('created_at', '>=', $request->input('date_from')))
             ->when($request->filled('date_to'), fn ($query) => $query->whereDate('created_at', '<=', $request->input('date_to')));
 
-        $query = $withDates()
+        // Each facet's counts skip their own filter but honour the other one, so
+        // the status and payment status dropdowns narrow each other's totals.
+        $withPaymentStatus = fn () => $withDates()
+            ->when($request->filled('payment_status'), fn ($q) => $q->where('payment_status', $request->input('payment_status')));
+
+        $withStatus = fn () => $withDates()
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')));
+
+        $query = $withPaymentStatus()
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')));
 
         $total = (clone $query)->count();
@@ -87,11 +95,16 @@ class OrderController extends BaseAdminController
             ],
             'filters' => [
                 // Counts ignore the status filter so each status tab can show its
-                // own total; they still honour the date range and search.
-                'status_counts' => $withDates()
+                // own total; they still honour the date range, search and payment
+                // status.
+                'status_counts' => $withPaymentStatus()
                     ->select('status', DB::raw('count(*) as aggregate'))
                     ->groupBy('status')
                     ->pluck('aggregate', 'status'),
+                'payment_status_counts' => $withStatus()
+                    ->select('payment_status', DB::raw('count(*) as aggregate'))
+                    ->groupBy('payment_status')
+                    ->pluck('aggregate', 'payment_status'),
                 // Months that have orders at all, so the month filter can list
                 // real options instead of guessing from the current page.
                 'months' => $base()
