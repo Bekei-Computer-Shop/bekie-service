@@ -48,7 +48,8 @@ return [
 
     'google' => [
         // OAuth Web client ID from Google Cloud Console. Shopper Google sign-in
-        // is refused (503) while this is empty.
+        // is refused (503) while this is empty. Several IDs may be given,
+        // separated by commas; a token is accepted if it was issued to any of them.
         'client_id' => env('GOOGLE_CLIENT_ID'),
     ],
 
