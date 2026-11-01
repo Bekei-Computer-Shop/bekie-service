@@ -7,6 +7,7 @@ namespace App\Exceptions;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -74,6 +75,12 @@ class ApiExceptionRenderer
         // 404 — route-binding miss or unknown route.
         if ($e instanceof ModelNotFoundException || $e instanceof NotFoundHttpException) {
             return $this->respond('Resource not found.', 404);
+        }
+
+        // 413 — the body exceeded PHP's post_max_size, so PHP dropped it whole
+        // (usually a photo or file that is far too big).
+        if ($e instanceof PostTooLargeException) {
+            return $this->respond("The file you're uploading is too large. Please choose a smaller file and try again.", 413);
         }
 
         // 405 — wrong HTTP verb.

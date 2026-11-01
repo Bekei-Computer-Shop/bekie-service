@@ -71,6 +71,17 @@ RUN pecl install redis \
     && docker-php-ext-enable redis
 
 # ------------------------------------------------------------
+# PHP upload limits
+# ------------------------------------------------------------
+# The base image allows only 2 MB uploads, so ordinary phone photos were
+# rejected before Laravel could validate them. Keep these above the app's own
+# limits (avatar: 5 MB) so customers get the app's clear size message instead.
+RUN { \
+        echo 'upload_max_filesize = 10M'; \
+        echo 'post_max_size = 12M'; \
+    } > /usr/local/etc/php/conf.d/uploads.ini
+
+# ------------------------------------------------------------
 # Enable Apache rewrite
 # ------------------------------------------------------------
 RUN a2enmod rewrite

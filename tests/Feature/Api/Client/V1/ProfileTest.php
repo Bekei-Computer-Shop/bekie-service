@@ -8,10 +8,12 @@ use App\Models\ApiToken;
 use App\Models\User;
 use App\Services\JwtService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class ProfileTest extends TestCase
@@ -187,7 +189,9 @@ class ProfileTest extends TestCase
             ]);
 
         $response->assertUnprocessable()
-            ->assertJsonPath('errors.avatar.0', 'The file must be a valid image.');
+            ->assertJsonPath('code', 'avatar_invalid_type')
+            ->assertJsonPath('message', "This file isn't a photo. Please upload a JPG, PNG or GIF image.")
+            ->assertJsonPath('errors.avatar', ["This file isn't a photo. Please upload a JPG, PNG or GIF image."]);
     }
 
     public function test_upload_profile_image_rejects_oversized_file(): void
@@ -200,7 +204,8 @@ class ProfileTest extends TestCase
             ]);
 
         $response->assertUnprocessable()
-            ->assertJsonPath('errors.avatar.0', 'The image size cannot exceed 5 MB.');
+            ->assertJsonPath('code', 'avatar_too_large')
+            ->assertJsonPath('message', 'Your photo is larger than 5 MB. Please choose a smaller photo and try again.');
     }
 
     public function test_upload_profile_image_requires_image(): void
@@ -209,7 +214,10 @@ class ProfileTest extends TestCase
             ->postJson('/api/v1/profile/avatar', []);
 
         $response->assertUnprocessable()
-            ->assertJsonPath('errors.avatar.0', 'Profile image is required.');
+            ->assertJsonPath('status', 'error')
+            ->assertJsonPath('code', 'avatar_required')
+            ->assertJsonPath('message', 'Please choose a photo to upload.')
+            ->assertJsonPath('data', null);
     }
 
     public function test_upload_profile_image_requires_authentication(): void
@@ -221,5 +229,89 @@ class ProfileTest extends TestCase
         ]);
 
         $response->assertUnauthorized();
+    }
+
+    public function test_upload_profile_image_explains_a_file_php_rejected_as_too_large(): void
+    {
+        $this->postAvatar($this->failedUpload(UPLOAD_ERR_INI_SIZE))
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'avatar_too_large')
+            ->assertJsonPath('message', 'Your photo is too large. Please choose a photo under 5 MB and try again.');
+    }
+
+    public function test_upload_profile_image_explains_an_interrupted_upload(): void
+    {
+        $this->postAvatar($this->failedUpload(UPLOAD_ERR_PARTIAL))
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'avatar_upload_interrupted')
+            ->assertJsonPath('message', "Your photo didn't finish uploading. Please check your connection and try again.");
+    }
+
+    public function test_upload_profile_image_reports_a_photo_cloudinary_cannot_process(): void
+    {
+        $this->fakeCloudinaryFailure(400, 'Invalid image file');
+
+        $this->postAvatar(UploadedFile::fake()->image('avatar.jpg'))
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'avatar_unprocessable')
+            ->assertJsonPath('message', "We couldn't process this photo. Please choose a different photo and try again.");
+
+        $this->assertNull($this->user->fresh()->avatar);
+    }
+
+    public function test_upload_profile_image_hides_cloudinary_outages_behind_a_retry_message(): void
+    {
+        $this->fakeCloudinaryFailure(500, 'Internal error');
+
+        $response = $this->postAvatar(UploadedFile::fake()->image('avatar.jpg'))
+            ->assertStatus(503)
+            ->assertJsonPath('code', 'avatar_service_unavailable')
+            ->assertJsonPath('message', "We couldn't update your photo right now. Please try again in a few minutes.");
+
+        $this->assertStringNotContainsStringIgnoringCase('cloudinary', $response->getContent());
+    }
+
+    public function test_upload_profile_image_does_not_expose_missing_configuration(): void
+    {
+        config(['cloudinary.api_secret' => null]);
+
+        $response = $this->postAvatar(UploadedFile::fake()->image('avatar.jpg'))
+            ->assertStatus(503)
+            ->assertJsonPath('code', 'avatar_service_unavailable');
+
+        $this->assertStringNotContainsStringIgnoringCase('cloudinary', $response->getContent());
+    }
+
+    public function test_upload_larger_than_the_server_accepts_gets_a_clear_message(): void
+    {
+        $this->call('POST', '/api/v1/profile/avatar', server: [
+            'CONTENT_LENGTH' => (string) (1024 * 1024 * 1024),
+            'HTTP_ACCEPT' => 'application/json',
+            'HTTP_AUTHORIZATION' => "Bearer {$this->jwtToken}",
+        ])
+            ->assertStatus(413)
+            ->assertJsonPath('status', 'error')
+            ->assertJsonPath('message', "The file you're uploading is too large. Please choose a smaller file and try again.");
+    }
+
+    /** Replace the successful upload faked in setUp(); the first matching fake wins. */
+    private function fakeCloudinaryFailure(int $status, string $error): void
+    {
+        Http::swap(new HttpFactory);
+        Http::fake(['*' => Http::response(['error' => ['message' => $error]], $status)]);
+    }
+
+    private function postAvatar(UploadedFile $file): TestResponse
+    {
+        return $this->withHeader('Authorization', "Bearer {$this->jwtToken}")
+            ->postJson('/api/v1/profile/avatar', ['avatar' => $file]);
+    }
+
+    /** A file PHP refused before validation ran, as it arrives with a PHP upload error. */
+    private function failedUpload(int $error): UploadedFile
+    {
+        $path = tempnam(sys_get_temp_dir(), 'avatar');
+
+        return new UploadedFile($path, 'avatar.jpg', 'image/jpeg', $error, true);
     }
 }
