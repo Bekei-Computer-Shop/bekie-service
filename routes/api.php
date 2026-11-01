@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\Client\V1\ContactController;
 use App\Http\Controllers\Api\Client\V1\ContentPageController;
 use App\Http\Controllers\Api\Client\V1\CouponController;
 use App\Http\Controllers\Api\Client\V1\EmailVerificationController;
+use App\Http\Controllers\Api\Client\V1\GoogleAuthController;
 use App\Http\Controllers\Api\Client\V1\KhqrController;
 use App\Http\Controllers\Api\Client\V1\MasterDataController;
 use App\Http\Controllers\Api\Client\V1\MyProductController;
@@ -45,6 +46,10 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/register', [AuthController::class, 'register'])
         ->middleware('throttle:auth-client');
     Route::post('auth/login', [AuthController::class, 'login'])
+        ->middleware('throttle:auth-client');
+    Route::post('auth/google/register', [GoogleAuthController::class, 'register'])
+        ->middleware('throttle:auth-client');
+    Route::post('auth/google/login', [GoogleAuthController::class, 'login'])
         ->middleware('throttle:auth-client');
     Route::post('auth/forgot-password', [PasswordResetController::class, 'forgot'])
         ->middleware('throttle:auth-password-reset');
