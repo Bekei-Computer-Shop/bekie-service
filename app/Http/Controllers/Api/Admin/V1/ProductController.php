@@ -128,6 +128,7 @@ class ProductController extends BaseAdminController
         $product->load([
             'category:id,name,slug',
             'brand:id,name,slug',
+            'defaultSupplier:id,name,code',
             'variants' => fn ($query) => $query->withCount([
                 'serials' => fn ($serials) => $serials->live(),
             ]),
@@ -177,7 +178,7 @@ class ProductController extends BaseAdminController
             return $product;
         });
 
-        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants', 'images', 'promotions']);
+        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'defaultSupplier:id,name,code', 'variants', 'images', 'promotions']);
 
         return $this->created(new ProductResource($product));
     }
@@ -255,7 +256,7 @@ class ProductController extends BaseAdminController
             }
         });
 
-        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants', 'images', 'promotions']);
+        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'defaultSupplier:id,name,code', 'variants', 'images', 'promotions']);
 
         return $this->success(new ProductResource($product));
     }
@@ -272,7 +273,7 @@ class ProductController extends BaseAdminController
         /** @var Product|null $product */
         $product = Product::onlyTrashed()->whereKey($id)->firstOrFail();
         $product->restore();
-        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'variants', 'images', 'promotions']);
+        $product->load(['category:id,name,slug', 'brand:id,name,slug', 'defaultSupplier:id,name,code', 'variants', 'images', 'promotions']);
 
         return $this->success(new ProductResource($product));
     }

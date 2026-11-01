@@ -20,6 +20,8 @@ class StockMovement extends Model
         'destination_location',
         'reference',
         'metadata',
+        'supplier_id',
+        'unit_cost',
         'created_by_id',
     ];
 
@@ -28,11 +30,21 @@ class StockMovement extends Model
         'quantity' => 'integer',
         'previous_quantity' => 'integer',
         'new_quantity' => 'integer',
+        'unit_cost' => 'decimal:2',
     ];
 
     public function stockable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /**
+     * Includes soft-deleted suppliers, so history keeps naming who a receipt
+     * came from after that supplier is removed.
+     */
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class)->withTrashed();
     }
 
     public function createdBy(): BelongsTo

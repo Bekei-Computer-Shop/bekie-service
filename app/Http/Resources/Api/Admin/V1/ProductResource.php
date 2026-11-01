@@ -35,6 +35,10 @@ class ProductResource extends JsonResource
             'brand' => $product->relationLoaded('brand') && $product->brand
                 ? ['id' => $product->brand->id, 'name' => $product->brand->name, 'slug' => $product->brand->slug]
                 : null,
+            'default_supplier_id' => $product->default_supplier_id,
+            'default_supplier' => $product->relationLoaded('defaultSupplier') && $product->defaultSupplier
+                ? ['id' => $product->defaultSupplier->id, 'name' => $product->defaultSupplier->name, 'code' => $product->defaultSupplier->code]
+                : null,
             'short_description' => $product->short_description,
             'description' => $product->description,
             'price' => $product->price !== null ? (float) $product->price : null,
