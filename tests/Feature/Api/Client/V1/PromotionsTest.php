@@ -75,6 +75,24 @@ test('the promotion payload carries display fields and hides the redemption ledg
         ->assertJsonMissingPath('data.0.usage_limit');
 });
 
+test('the promotion payload exposes the campaign kind the admin API returns', function (): void {
+    clientPromotion(['name' => 'Flash', 'code' => 'FLASH001', 'type' => 'fixed', 'kind' => 'flash_sale']);
+
+    $this->getJson('/api/v1/promotions')
+        ->assertOk()
+        ->assertJsonPath('data.0.kind', 'flash_sale')
+        ->assertJsonPath('data.0.type', 'fixed');
+});
+
+test('an ordinary discount reports its kind as an explicit null', function (): void {
+    clientPromotion(['name' => 'Plain', 'code' => 'PLAIN001']);
+
+    $this->getJson('/api/v1/promotions')
+        ->assertOk()
+        ->assertJsonStructure(['data' => [['kind']]])
+        ->assertJsonPath('data.0.kind', null);
+});
+
 test('promotions with no usage cap report a null usage_remaining', function (): void {
     clientPromotion(['name' => 'Unlimited', 'code' => 'OPEN0001', 'usage_limit' => null, 'used_count' => 3]);
 

@@ -16,6 +16,7 @@ class PromotionResource extends JsonResource
             'name' => $this->name,
             'code' => $this->code,
             'type' => $this->type,
+            'kind' => $this->kind,
             'value' => (float) $this->value,
             'description' => $this->description,
             'banner_image' => $this->resolveImage($this->banner_image),
