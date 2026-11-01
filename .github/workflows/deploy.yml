@@ -102,18 +102,23 @@ jobs:
             --region ${{ env.REGION }} --project ${{ env.PROJECT_ID }} --wait
 
       # Reuses the same Cloud Run Job resource (no separate seed job is
-      # provisioned). Both seeders are idempotent (firstOrCreate / guarded
+      # provisioned). All of these seeders are idempotent (firstOrCreate / guarded
       # creates throughout), so running them on every deploy is safe:
       # AdminPermissionsSeeder only adds missing roles/permissions/grants,
       # ShippingMethodDeploySeeder only creates default shipping methods that
       # have never existed, so admin edits in Settings survive the deploy,
+      # SupplierDeploySeeder adds a starter supplier list only while the
+      # suppliers table is empty (trashed rows included), never sets a store
+      # default and never touches products or stock history, so after the
+      # first deploy it is a no-op and admin edits on the Suppliers page stay,
       # PreProductionSeeder only fills in missing catalog/demo data. Order
       # matters: permissions first, as in DatabaseSeeder. AdminUserSeeder is
       # deliberately not run here -- it resets well-known admin logins to a
-      # fixed password on every run.
+      # fixed password on every run. SupplierSeeder is not run either: it is
+      # demo-only and refuses to run in production.
       - name: Run seeders and wait for completion
         run: |
-          for SEEDER in AdminPermissionsSeeder ShippingMethodDeploySeeder PreProductionSeeder; do
+          for SEEDER in AdminPermissionsSeeder ShippingMethodDeploySeeder SupplierDeploySeeder PreProductionSeeder; do
             echo "::group::db:seed --class=${SEEDER}"
             gcloud run jobs update ${{ env.MIGRATE_JOB_NAME }} \
               --image ${{ needs.build-and-push.outputs.image-uri }} \
