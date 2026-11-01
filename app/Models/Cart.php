@@ -51,4 +51,37 @@ class Cart extends Model
     {
         return $this->hasMany(CartItem::class);
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Actions
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Empty the cart once its contents have become an order.
+     *
+     * A user keeps one cart (looked up by user_id and a null session_id), so it
+     * is emptied in place rather than replaced. The order holds its own copy of
+     * every line, so nothing is lost. Call inside the order transaction, so a
+     * rolled-back order leaves the cart as it was.
+     */
+    public function clearAfterCheckout(): void
+    {
+        // Soft-deleted, like a line the customer removes themselves.
+        $this->items()->delete();
+
+        $this->forceFill([
+            'subtotal' => 0,
+            'discount_total' => 0,
+            'tax_total' => 0,
+            'shipping_total' => 0,
+            'grand_total' => 0,
+            'coupon_code' => null,
+            'status' => 'active',
+            'last_activity_at' => now(),
+        ])->save();
+
+        $this->unsetRelation('items');
+    }
 }

@@ -97,6 +97,7 @@ Route::prefix('v1')->group(function () {
     Route::get('slides', [SlideController::class, 'index']);
     Route::get('promotions', [PromotionController::class, 'index']);
     Route::get('news', [NewsController::class, 'index']);
+    Route::get('news/{news}', [NewsController::class, 'show']);
     Route::get('about-us', [ContentPageController::class, 'show'])->defaults('slug', 'about-us');
     Route::get('terms-and-conditions', [ContentPageController::class, 'show'])->defaults('slug', 'terms-and-conditions');
     Route::get('contact-us', [ContentPageController::class, 'show'])->defaults('slug', 'contact-us');
