@@ -193,6 +193,39 @@ test('the product form only attaches product-targeted promotions', function (): 
     ])->assertStatus(422)->assertJsonValidationErrors('promotion_ids.0');
 });
 
+test('the storefront promotion carries the value the admin product API returns', function (
+    string $type,
+    float $value,
+    float $price,
+): void {
+    $product = promoProduct(['slug' => 'parity-product', 'sku' => 'PARITY-SKU', 'price' => $price]);
+    $promotion = promoCoupon('PARITY', [
+        'name' => 'Parity Promo', 'type' => $type, 'value' => $value, 'starts_at' => now()->subDay(),
+    ]);
+
+    asPromoAdmin()->putJson('/api/v1/admin/products/'.$product->id, ['promotion_ids' => [$promotion->id]])->assertOk();
+
+    $admin = asPromoAdmin()->getJson('/api/v1/admin/products/'.$product->id)->assertOk()->json('data.promotions.0');
+
+    // The same promotion, as the website's product list and detail return it.
+    $list = collect(test()->getJson('/api/v1/products')->assertOk()->json('data'))->firstWhere('id', $product->id);
+    $detail = test()->getJson('/api/v1/products/'.$product->id)->assertOk()->json('data');
+
+    foreach ([$list['promotion'], $detail['promotion']] as $storefront) {
+        expect($storefront['id'])->toBe($admin['id'])
+            ->and($storefront['name'])->toBe($admin['name'])
+            ->and($storefront['type'])->toBe($admin['type'])
+            ->and((float) $storefront['value'])->toBe((float) $admin['value'])
+            // Nothing caps these, so the share a badge shows is the configured value itself.
+            ->and($storefront[$type === 'percentage' ? 'discount_percentage' : 'discount_amount'])->toEqual((float) $admin['value']);
+    }
+})->with([
+    'percentage on a price with cents' => ['percentage', 10, 33.33],
+    'percentage that rounds down' => ['percentage', 15, 20.01],
+    'whole-number percentage' => ['percentage', 20, 1399.00],
+    'fixed amount' => ['fixed', 15, 599.00],
+]);
+
 test('deleting a product removes its pivot rows', function (): void {
     $product = promoProduct();
     $a = promoCoupon('PROMO-A');

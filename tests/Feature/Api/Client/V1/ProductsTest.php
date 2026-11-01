@@ -278,58 +278,6 @@ class ProductsTest extends TestCase
             ->assertJsonPath('data.promotion.final_price', 549);
     }
 
-    public function test_products_list_the_live_site_wide_codes_without_a_per_unit_price(): void
-    {
-        $category = Category::factory()->create(['is_active' => true]);
-        $plain = Product::factory()->create(['is_active' => true, 'price' => 100, 'sale_price' => null, 'category_id' => $category->id]);
-        $targeted = Product::factory()->create(['is_active' => true, 'price' => 100, 'sale_price' => null, 'category_id' => $category->id]);
-        $this->promotion(['name' => 'Product Deal', 'target_type' => Coupon::TARGET_PRODUCTS])->products()->attach($targeted->id);
-
-        $welcome = $this->promotion([
-            'name' => 'Welcome', 'code' => 'WELCOME10', 'value' => 10, 'min_order_amount' => 50,
-            'max_discount_amount' => 20, 'expires_at' => now()->addDays(10),
-        ]);
-        $flat = $this->promotion(['name' => 'Flat', 'code' => 'FLAT15', 'type' => 'fixed', 'value' => 15, 'starts_at' => now()->subDays(30)]);
-        // Never listed: expired, switched off, out of uses, limited to a customer group.
-        $this->promotion(['code' => 'EXPIRED', 'expires_at' => now()->subDay()]);
-        $this->promotion(['code' => 'OFF', 'is_active' => false]);
-        $this->promotion(['code' => 'USEDUP', 'usage_limit' => 1, 'used_count' => 1]);
-        $this->promotion(['code' => 'MEMBERS'])->customerGroups()
-            ->attach(CustomerGroup::create(['name' => 'Members', 'slug' => 'members', 'is_active' => true])->id);
-
-        $expected = [
-            [
-                'id' => $welcome->id, 'name' => 'Welcome', 'code' => 'WELCOME10', 'type' => 'percentage', 'kind' => null,
-                'value' => 10, 'min_order_amount' => 50, 'max_discount_amount' => 20,
-                'expires_at' => $welcome->fresh()->expires_at->toIso8601String(),
-            ],
-            [
-                'id' => $flat->id, 'name' => 'Flat', 'code' => 'FLAT15', 'type' => 'fixed', 'kind' => null,
-                'value' => 15, 'min_order_amount' => null, 'max_discount_amount' => null, 'expires_at' => null,
-            ],
-        ];
-
-        // The newest campaign first, like GET /promotions. The code is taken off the
-        // whole order, so there is no per-unit discount or final price here.
-        $list = collect($this->getJson('/api/v1/products')->assertOk()->json('data'))->keyBy('id');
-        expect($list[$plain->id]['site_promotions'])->toEqual($expected)
-            ->and($list[$targeted->id]['site_promotions'])->toEqual($expected)
-            ->and($list[$plain->id]['promotion'])->toBeNull()
-            ->and($list[$targeted->id]['promotion']['name'])->toBe('Product Deal');
-
-        $this->getJson("/api/v1/products/{$plain->id}")->assertOk()->assertJsonPath('data.site_promotions', $expected);
-        $this->getJson("/api/v1/products/{$plain->id}/related")->assertOk()->assertJsonPath('data.items.0.site_promotions', $expected);
-    }
-
-    public function test_site_wide_codes_do_not_make_a_product_count_as_on_promotion(): void
-    {
-        Product::factory()->create(['is_active' => true, 'price' => 100, 'sale_price' => null]);
-        $this->promotion(['code' => 'WELCOME10']);
-
-        $this->getJson('/api/v1/products/on-promotion')->assertOk()->assertJsonCount(0, 'data');
-        $this->getJson('/api/v1/products')->assertOk()->assertJsonPath('data.0.site_promotions.0.code', 'WELCOME10');
-    }
-
     /** @param array<string, mixed> $attributes */
     private function promotion(array $attributes): Coupon
     {

@@ -13,7 +13,6 @@ use App\Models\CustomerGroup;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -41,9 +40,6 @@ class ProductPromotionService
 {
     /** @var Collection<int, Coupon>|null */
     private ?Collection $storefrontPromotions = null;
-
-    /** @var Collection<int, Coupon>|null */
-    private ?Collection $siteWidePromotions = null;
 
     /**
      * @param  Collection<array-key, array{product: ?Product, quantity: int, unit_price: float, variant_id?: ?int}>  $lines  keyed by the caller; keys are preserved
@@ -159,16 +155,13 @@ class ProductPromotionService
     /**
      * Sets `activePromotion` and `promotion_discount` on each product: the live
      * public promotion worth the most on one unit at its current price, or null.
-     * A variant target counts for its product. Also sets `siteWidePromotions`,
-     * the same list on every product: codes taken off the whole order, which
-     * cannot be priced per unit.
+     * A variant target counts for its product.
      *
      * @param  iterable<Product>  $products
      */
     public function attachStorefrontPromotions(iterable $products): void
     {
         $promotions = $this->storefrontPromotions();
-        $siteWide = $this->siteWidePromotions();
 
         foreach ($products as $product) {
             $unitPrice = (float) ($product->sale_price ?? $product->price);
@@ -181,7 +174,6 @@ class ProductPromotionService
 
             $product->setRelation('activePromotion', $best);
             $product->promotion_discount = $best ? $this->amountFor($best, $unitPrice, 1) : null;
-            $product->setRelation('siteWidePromotions', $siteWide);
         }
     }
 
@@ -194,42 +186,17 @@ class ProductPromotionService
      */
     private function storefrontPromotions(): Collection
     {
-        return $this->storefrontPromotions ??= $this->livePublicPromotions()
+        return $this->storefrontPromotions ??= Coupon::query()
+            ->active()
+            ->valid()
+            ->where(fn ($query) => $query->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit'))
+            ->whereDoesntHave('customerGroups')
             ->where(fn ($query) => $query->has('products')->orHas('variants')->orHas('categories'))
             ->with(['products:id', 'variants:id,product_id', 'categories:id'])
             ->get()
             ->each(function (Coupon $promotion): void {
                 $promotion->storefront_category_ids = $this->reachedCategoryIds($promotion);
             });
-    }
-
-    /**
-     * The live public promotions that name no product, variant, category or
-     * customer group: untargeted coupons a shopper enters by code, taking their
-     * discount off the whole order. Newest campaign first, as in GET /promotions.
-     * Memoised for the request.
-     *
-     * @return Collection<int, Coupon>
-     */
-    private function siteWidePromotions(): Collection
-    {
-        return $this->siteWidePromotions ??= $this->livePublicPromotions()
-            ->doesntHave('products')
-            ->doesntHave('variants')
-            ->doesntHave('categories')
-            ->orderByDesc('starts_at')
-            ->orderByDesc('id')
-            ->get();
-    }
-
-    /** Active, inside their window, under their usage limit, and open to every customer group. */
-    private function livePublicPromotions(): Builder
-    {
-        return Coupon::query()
-            ->active()
-            ->valid()
-            ->where(fn ($query) => $query->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit'))
-            ->whereDoesntHave('customerGroups');
     }
 
     /**
