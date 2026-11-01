@@ -281,7 +281,7 @@ class CartController extends BaseApiController
      * Checkout authenticated user's cart and create order
      *
      * Converts the user's cart into an order. Validates cart contents, applies shipping,
-     * deducts inventory, and marks cart as converted.
+     * deducts inventory, and empties the cart.
      * Returns the created order with all details.
      *
      * @bodyParam shipping_method_id integer required The shipping method ID. Example: 1
@@ -456,7 +456,7 @@ class CartController extends BaseApiController
                     (int) $order->id,
                 );
 
-                $cart->update(['status' => 'converted']);
+                $cart->clearAfterCheckout();
 
                 return $order;
             });

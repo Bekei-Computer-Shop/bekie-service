@@ -12,6 +12,8 @@ class NewsResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            // Null for articles saved without one; link those by id.
+            'slug' => $this->slug,
             'title' => $this->title,
             'body' => $this->body,
             'category' => $this->category,

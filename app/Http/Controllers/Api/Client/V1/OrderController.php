@@ -179,7 +179,7 @@ class OrderController extends BaseApiController
                     (int) $order->id,
                 );
 
-                $cart->update(['status' => 'converted']);
+                $cart->clearAfterCheckout();
 
                 return $order;
             });

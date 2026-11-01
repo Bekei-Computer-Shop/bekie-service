@@ -157,3 +157,47 @@ test('a cart without serialized products checks out without serials', function (
 
     expect(ProductSerial::count())->toBe(0);
 });
+
+test('a successful checkout empties the cart, and the next add starts fresh', function (): void {
+    stockSerials($this->laptop, ['SN-001']);
+    serializedCartLine($this->cart, $this->laptop, 1);
+    $this->cart->update(['subtotal' => 500, 'grand_total' => 500, 'coupon_code' => 'SAVE10']);
+
+    $this->withHeaders($this->headers)
+        ->postJson('/api/v1/orders', storefrontCheckout($this->cart, $this->shipping))
+        ->assertCreated();
+
+    $cart = $this->cart->refresh();
+    expect($cart->items()->count())->toBe(0)
+        ->and((float) $cart->grand_total)->toBe(0.0)
+        ->and($cart->coupon_code)->toBeNull()
+        ->and($cart->status)->toBe('active');
+
+    $this->withHeaders($this->headers)
+        ->getJson('/api/v1/cart')
+        ->assertOk()
+        ->assertJsonCount(0, 'data.items');
+});
+
+test('the cart checkout endpoint empties the cart too', function (): void {
+    $plain = Product::factory()->create(['price' => 20, 'is_serialized' => false, 'stock_quantity' => 5]);
+    serializedCartLine($this->cart, $plain, 1);
+
+    $this->withHeaders($this->headers)
+        ->postJson('/api/v1/cart/checkout', storefrontCheckout($this->cart, $this->shipping, [
+            'email' => $this->customer->email,
+        ]))
+        ->assertCreated();
+
+    expect($this->cart->refresh()->items()->count())->toBe(0);
+});
+
+test('a refused checkout leaves the cart as it was', function (): void {
+    serializedCartLine($this->cart, $this->laptop, 1);
+
+    $this->withHeaders($this->headers)
+        ->postJson('/api/v1/orders', storefrontCheckout($this->cart, $this->shipping))
+        ->assertUnprocessable();
+
+    expect($this->cart->refresh()->items()->count())->toBe(1);
+});
