@@ -118,6 +118,22 @@ test('expired OTP is rejected', function (): void {
     ])->assertUnprocessable();
 });
 
+test('a wrong, replaced or expired reset code gets one honest message that does not reveal which', function (): void {
+    Mail::fake();
+    User::factory()->create(['email' => 'customer@example.com']);
+    $this->postJson('/api/v1/auth/forgot-password', ['email' => 'customer@example.com'])->assertOk();
+    $message = 'That code is incorrect, has expired, or was replaced by a newer one. Use the code from your latest email, or request a new one.';
+
+    $wrong = $this->postJson('/api/v1/auth/verify-otp', ['email' => 'customer@example.com', 'otp' => '000000'])
+        ->assertUnprocessable()->assertJsonPath('message', $message);
+    $unknown = $this->postJson('/api/v1/auth/verify-otp', ['email' => 'nobody@example.com', 'otp' => '000000'])
+        ->assertUnprocessable()->assertJsonPath('message', $message);
+
+    // An unknown address must be indistinguishable from a wrong code, or this
+    // endpoint would reveal which emails have accounts.
+    expect($unknown->json())->toEqual($wrong->json());
+});
+
 test('resend cooldown is enforced', function (): void {
     Mail::fake();
     User::factory()->create(['email' => 'customer@example.com']);

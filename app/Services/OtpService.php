@@ -52,8 +52,12 @@ class OtpService
 
     public function verify(OtpChallenge $challenge, string $code): string
     {
-        if ($challenge->used_at || $challenge->verified_at || $challenge->expires_at->isPast()) {
-            throw new \InvalidArgumentException('This verification code is invalid or expired.');
+        if ($challenge->used_at || $challenge->verified_at) {
+            throw new \InvalidArgumentException('This verification code has already been used.');
+        }
+
+        if ($challenge->expires_at->isPast()) {
+            throw new \InvalidArgumentException('This verification code has expired. Request a new one.');
         }
 
         if ($challenge->attempts >= (int) config('otp.max_attempts')) {
@@ -63,7 +67,7 @@ class OtpService
         $challenge->increment('attempts');
 
         if (! hash_equals($challenge->code_hash, $this->hash($code))) {
-            throw new \InvalidArgumentException('The verification code is incorrect.');
+            throw new \InvalidArgumentException('The verification code is incorrect. If you requested more than one code, use the one from your latest email.');
         }
 
         $resetToken = Str::random(64);

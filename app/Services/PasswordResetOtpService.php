@@ -15,6 +15,10 @@ use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 class PasswordResetOtpService
 {
+    // One message for wrong, replaced, expired and unknown-account alike: any
+    // difference between them would reveal which emails have accounts.
+    private const CODE_REJECTED = 'That code is incorrect, has expired, or was replaced by a newer one. Use the code from your latest email, or request a new one.';
+
     public function requestOtp(string $email): void
     {
         $email = strtolower(trim($email));
@@ -73,7 +77,7 @@ class PasswordResetOtpService
                 ->first();
 
             if (! $challenge || $challenge->used_at || $challenge->verified_at || $challenge->expires_at->isPast()) {
-                return ['error' => 'The verification code is invalid or expired.', 'status' => 422];
+                return ['error' => self::CODE_REJECTED, 'status' => 422];
             }
 
             $maxAttempts = (int) config('auth.otp.max_attempts');
@@ -88,7 +92,7 @@ class PasswordResetOtpService
                     return ['error' => 'Maximum verification attempts exceeded.', 'status' => 429];
                 }
 
-                return ['error' => 'The verification code is invalid or expired.', 'status' => 422];
+                return ['error' => self::CODE_REJECTED, 'status' => 422];
             }
 
             $resetToken = bin2hex(random_bytes(32));

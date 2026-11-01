@@ -64,11 +64,13 @@ class AuthController extends BaseApiController
             try {
                 DB::transaction(function () use ($user, $email): void {
                     $issued = app(OtpService::class)->issue($user, $email, 'customer_email_verification');
-                    Mail::to($email)->queue(new CustomerVerificationOtpMail($issued['code'], (int) config('otp.expires_minutes')));
+                    // Not queued: no worker runs in production, so a queued code
+                    // would never leave the jobs table. Resend already sends inline.
+                    Mail::to($email)->sendNow(new CustomerVerificationOtpMail($issued['code'], (int) config('otp.expires_minutes')));
                 });
             } catch (\Throwable $exception) {
-                Log::error('Customer verification email could not be queued.', ['exception' => $exception::class]);
-                $message = 'Registration successful, but the verification email could not be queued. Request a new code to continue.';
+                Log::error('Customer verification email could not be sent.', ['exception' => $exception::class]);
+                $message = 'Registration successful, but the verification email could not be sent. Request a new code to continue.';
             }
 
             return $this->created([
