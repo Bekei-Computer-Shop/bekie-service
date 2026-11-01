@@ -107,7 +107,7 @@ describe('List Reviews', function () {
         expect($response['data']['items'][0]['customer']['id'])->toBe($this->customer->id);
     });
 
-    test('admin can search reviews by comment/title/customer', function () {
+    test('admin can search reviews by comment/customer', function () {
         Review::factory()->create([
             'product_id' => $this->product->id,
             'comment' => 'Excellent product quality',

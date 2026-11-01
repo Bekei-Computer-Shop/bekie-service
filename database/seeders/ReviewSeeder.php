@@ -51,10 +51,9 @@ class ReviewSeeder extends Seeder
             $status = self::STATUSES[intdiv($number - 1, $reviewsPerStatus)];
             $customer = $customers[($number - 1) % $customers->count()];
             $product = $products[($number - 1) % $products->count()];
-            $title = sprintf('Demo customer review %03d', $number);
 
-            Review::query()->updateOrCreate(
-                ['title' => $title],
+            // Reviews carry no title to match on, so the seeded values together identify a slot.
+            Review::query()->firstOrCreate(
                 [
                     'user_id' => $customer->id,
                     'product_id' => $product->id,
@@ -62,9 +61,11 @@ class ReviewSeeder extends Seeder
                     'rating' => (($number * 7) % 5) + 1,
                     'comment' => self::COMMENTS[($number - 1) % count(self::COMMENTS)],
                     'status' => $status,
-                    'is_verified_purchase' => false,
                     'helpful_count' => ($number * 3) % 24,
                     'not_helpful_count' => $number % 5,
+                ],
+                [
+                    'is_verified_purchase' => false,
                     'images' => null,
                     'is_featured' => $status === 'approved' && $number % 10 === 0,
                 ],
