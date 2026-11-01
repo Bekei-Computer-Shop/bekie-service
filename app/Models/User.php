@@ -21,6 +21,7 @@ use Spatie\Permission\Traits\HasRoles;
  * @property string|null $last_name
  * @property string|null $username
  * @property string $email
+ * @property string|null $google_id
  * @property string|null $phone
  * @property string $password
  * @property string $role
@@ -45,6 +46,7 @@ class User extends Authenticatable
         'last_name',
         'username',
         'email',
+        'google_id',
         'recovery_email',
         'avatar',
         'phone',

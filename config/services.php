@@ -46,6 +46,12 @@ return [
         'return_url' => rtrim((string) env('APP_URL', 'http://localhost'), '/').'/api/v1/payments/aba/callback',
     ],
 
+    'google' => [
+        // OAuth Web client ID from Google Cloud Console. Shopper Google sign-in
+        // is refused (503) while this is empty.
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+    ],
+
     'khqr' => [
         'enabled' => (bool) env('KHQR_ENABLED', true),
         'merchant_id' => env('KHQR_MERCHANT_ID', 'bekie'),
