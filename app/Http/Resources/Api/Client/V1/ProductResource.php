@@ -22,6 +22,7 @@ class ProductResource extends JsonResource
             'price' => $this->price,
             'sale_price' => $this->sale_price,
             'promotion' => $this->promotionSummary(),
+            'site_promotions' => $this->siteWidePromotionSummaries(),
             'is_serialized' => (bool) $this->is_serialized,
             'in_stock' => $this->in_stock,
             'weight' => $this->weight,

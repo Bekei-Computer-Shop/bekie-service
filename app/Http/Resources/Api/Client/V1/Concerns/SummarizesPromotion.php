@@ -46,4 +46,31 @@ trait SummarizesPromotion
             ];
         });
     }
+
+    /**
+     * The `site_promotions` block: untargeted codes a shopper enters at checkout,
+     * the same list on every product. They discount the whole order, so unlike
+     * `promotion` there is no per-unit discount or final price, and the minimum
+     * order amount is checked against the cart. Missing when the endpoint did not
+     * look promotions up; an empty list when none are live.
+     *
+     * @return list<array<string, mixed>>|MissingValue
+     */
+    protected function siteWidePromotionSummaries(): array|MissingValue
+    {
+        return $this->when($this->resource->relationLoaded('siteWidePromotions'), fn (): array => $this->siteWidePromotions
+            ->map(fn ($promotion): array => [
+                'id' => $promotion->id,
+                'name' => $promotion->name,
+                'code' => $promotion->code,
+                'type' => $promotion->type,
+                'kind' => $promotion->kind,
+                'value' => (float) $promotion->value,
+                'min_order_amount' => $promotion->min_order_amount !== null ? (float) $promotion->min_order_amount : null,
+                'max_discount_amount' => $promotion->max_discount_amount !== null ? (float) $promotion->max_discount_amount : null,
+                'expires_at' => $promotion->expires_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all());
+    }
 }

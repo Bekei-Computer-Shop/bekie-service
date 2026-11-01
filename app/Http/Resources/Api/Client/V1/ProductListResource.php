@@ -40,6 +40,7 @@ class ProductListResource extends JsonResource
             'average_rating' => $this->average_rating ?? 0,
             'reviews_count' => $this->reviews_count ?? 0,
             'promotion' => $this->promotionSummary(),
+            'site_promotions' => $this->siteWidePromotionSummaries(),
             'brand_id' => $this->brand_id,
             'brand' => $this->whenLoaded('brand', fn (): ?array => $this->brand ? [
                 'id' => $this->brand->id,
