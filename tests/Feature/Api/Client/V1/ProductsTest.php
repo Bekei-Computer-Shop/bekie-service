@@ -229,14 +229,14 @@ class ProductsTest extends TestCase
             'product_id' => $viaVariant->id, 'name' => 'Blue', 'slug' => 'blue', 'sku' => 'PROMO-BLUE',
             'price' => 40, 'in_stock' => true, 'stock_quantity' => 3, 'is_active' => true,
         ]);
-        $promotion = $this->promotion(['name' => 'Ten Off', 'target_type' => Coupon::TARGET_PRODUCTS, 'value' => 10]);
+        $promotion = $this->promotion(['name' => 'Ten Off', 'kind' => 'flash_sale', 'target_type' => Coupon::TARGET_PRODUCTS, 'value' => 10]);
         $promotion->products()->attach($promoted->id);
         $promotion->variants()->attach($variant->id);
 
         $list = collect($this->getJson('/api/v1/products')->assertOk()->json('data'))->keyBy('id');
 
         expect($list[$promoted->id]['promotion'])->toMatchArray([
-            'name' => 'Ten Off', 'discount_amount' => 8, 'discount_percentage' => 10, 'final_price' => 72,
+            'name' => 'Ten Off', 'kind' => 'flash_sale', 'discount_amount' => 8, 'discount_percentage' => 10, 'final_price' => 72,
         ])
             ->and($list[$viaVariant->id]['promotion']['final_price'])->toEqual(36)
             ->and($list[$plain->id]['promotion'])->toBeNull();
@@ -244,6 +244,7 @@ class ProductsTest extends TestCase
         $this->getJson("/api/v1/products/{$promoted->id}")
             ->assertOk()
             ->assertJsonPath('data.promotion.name', 'Ten Off')
+            ->assertJsonPath('data.promotion.kind', 'flash_sale')
             ->assertJsonPath('data.promotion.final_price', 72);
     }
 
