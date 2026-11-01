@@ -54,6 +54,19 @@ class StockMovementRequest extends FormRequest
             'source_location' => ['nullable', 'string', 'max:255'],
             'destination_location' => ['nullable', 'string', 'max:255'],
             'metadata' => ['nullable', 'array'],
+            'supplier_id' => ['nullable', 'integer', 'prohibited_unless:movement_type,stock_in,stock_out', Rule::exists('suppliers', 'id')->whereNull('deleted_at')->where('is_active', true)],
+            'unit_cost' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'supplier_id.exists' => 'The selected supplier does not exist or is inactive.',
+            'supplier_id.prohibited_unless' => 'A supplier can only be recorded on stock in or stock out.',
         ];
     }
 

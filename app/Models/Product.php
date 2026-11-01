@@ -36,6 +36,7 @@ class Product extends Model
     protected $fillable = [
         'category_id',
         'brand_id',
+        'default_supplier_id',
         'name',
         'slug',
         'sku',
@@ -118,6 +119,12 @@ class Product extends Model
     public function brand()
     {
         return $this->belongsTo(Brand::class);
+    }
+
+    /** Who this product is usually bought from; variants share it. */
+    public function defaultSupplier()
+    {
+        return $this->belongsTo(Supplier::class, 'default_supplier_id');
     }
 
     public function variants()

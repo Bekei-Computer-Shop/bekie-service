@@ -10,6 +10,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Product;
+use App\Models\Supplier;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -36,6 +37,7 @@ class UpdateProductRequest extends FormRequest
             // (the admin category picker's "uncheck to remove" flow does this).
             'category_id' => ['sometimes', 'nullable', 'integer', Rule::exists((new Category)->getTable(), 'id')->whereNull('deleted_at')],
             'brand_id' => ['sometimes', 'nullable', 'integer', Rule::exists((new Brand)->getTable(), 'id')->whereNull('deleted_at')],
+            'default_supplier_id' => ['sometimes', 'nullable', 'integer', Rule::exists((new Supplier)->getTable(), 'id')->whereNull('deleted_at')],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'slug' => [
                 'sometimes',

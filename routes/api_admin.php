@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\Admin\V1\RoleController;
 use App\Http\Controllers\Api\Admin\V1\SettingsController;
 use App\Http\Controllers\Api\Admin\V1\ShippingMethodController;
 use App\Http\Controllers\Api\Admin\V1\StockController;
+use App\Http\Controllers\Api\Admin\V1\SupplierController;
 use App\Http\Controllers\Api\Admin\V1\StoreSettingsController;
 use App\Http\Controllers\Api\Admin\V1\UserController;
 use App\Http\Middleware\AuthenticateAdminApiToken;
@@ -97,6 +98,14 @@ Route::prefix('admin')->group(function () {
         Route::apiResource('categories', CategoryController::class)->only('store')->middleware('permission:categories.create');
         Route::apiResource('categories', CategoryController::class)->only(['update'])->middleware('permission:categories.update');
         Route::apiResource('categories', CategoryController::class)->only('destroy')->middleware('permission:categories.delete');
+
+        // Suppliers. The list is also readable with stock.view: the stock
+        // adjustment form picks a supplier for a delivery from it.
+        Route::get('suppliers', [SupplierController::class, 'index'])->middleware('permission:suppliers.view|stock.view');
+        Route::apiResource('suppliers', SupplierController::class)->only('show')->middleware('permission:suppliers.view');
+        Route::apiResource('suppliers', SupplierController::class)->only('store')->middleware('permission:suppliers.create');
+        Route::apiResource('suppliers', SupplierController::class)->only(['update'])->middleware('permission:suppliers.update');
+        Route::apiResource('suppliers', SupplierController::class)->only('destroy')->middleware('permission:suppliers.delete');
 
         // Media Management
         Route::get('media', [MediaController::class, 'index'])->middleware('permission:media.view')->name('admin.media.index');
