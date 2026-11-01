@@ -214,9 +214,12 @@ class ProductsTest extends TestCase
         $data = collect($this->getJson('/api/v1/products/on-promotion')->assertOk()->json('data'))->keyBy('id');
 
         expect($data->keys()->sort()->values()->all())->toBe(collect([$direct->id, $inSubcategory->id])->sort()->values()->all())
-            ->and($data[$direct->id]['promotion']['discount_amount'])->toEqual(20)
+            ->and($data[$direct->id]['promotion']['discount_percentage'])->toEqual(10)
+            ->and($data[$direct->id]['promotion']['discount_amount'])->toBeNull()
             ->and($data[$direct->id]['promotion']['final_price'])->toEqual(180)
             ->and($data[$inSubcategory->id]['promotion']['type'])->toBe('fixed')
+            ->and($data[$inSubcategory->id]['promotion']['discount_amount'])->toEqual(5)
+            ->and($data[$inSubcategory->id]['promotion']['discount_percentage'])->toBeNull()
             ->and($data[$inSubcategory->id]['promotion']['final_price'])->toEqual(45);
     }
 
@@ -236,7 +239,7 @@ class ProductsTest extends TestCase
         $list = collect($this->getJson('/api/v1/products')->assertOk()->json('data'))->keyBy('id');
 
         expect($list[$promoted->id]['promotion'])->toMatchArray([
-            'name' => 'Ten Off', 'kind' => 'flash_sale', 'discount_amount' => 8, 'discount_percentage' => 10, 'final_price' => 72,
+            'name' => 'Ten Off', 'kind' => 'flash_sale', 'discount_amount' => null, 'discount_percentage' => 10, 'final_price' => 72,
         ])
             ->and($list[$viaVariant->id]['promotion']['final_price'])->toEqual(36)
             ->and($list[$plain->id]['promotion'])->toBeNull();
@@ -246,6 +249,33 @@ class ProductsTest extends TestCase
             ->assertJsonPath('data.promotion.name', 'Ten Off')
             ->assertJsonPath('data.promotion.kind', 'flash_sale')
             ->assertJsonPath('data.promotion.final_price', 72);
+    }
+
+    public function test_fixed_promotion_shows_only_the_discount_amount(): void
+    {
+        $product = Product::factory()->create(['is_active' => true, 'price' => 599, 'sale_price' => null]);
+        $promotion = $this->promotion(['name' => 'Flat Discount', 'type' => 'fixed', 'target_type' => Coupon::TARGET_PRODUCTS, 'value' => 15]);
+        $promotion->products()->attach($product->id);
+
+        $this->getJson("/api/v1/products/{$product->id}")
+            ->assertOk()
+            ->assertJsonPath('data.promotion.discount_amount', 15)
+            ->assertJsonPath('data.promotion.discount_percentage', null)
+            ->assertJsonPath('data.promotion.final_price', 584);
+    }
+
+    public function test_capped_percentage_promotion_shows_only_the_effective_percentage(): void
+    {
+        $product = Product::factory()->create(['is_active' => true, 'price' => 599, 'sale_price' => null]);
+        $promotion = $this->promotion(['type' => 'percentage', 'value' => 18, 'max_discount_amount' => 50, 'target_type' => Coupon::TARGET_PRODUCTS]);
+        $promotion->products()->attach($product->id);
+
+        // 18% of 599 is 107.82, capped at 50: 50 / 599 is 8.3%, rounded down.
+        $this->getJson("/api/v1/products/{$product->id}")
+            ->assertOk()
+            ->assertJsonPath('data.promotion.discount_percentage', 8.3)
+            ->assertJsonPath('data.promotion.discount_amount', null)
+            ->assertJsonPath('data.promotion.final_price', 549);
     }
 
     /** @param array<string, mixed> $attributes */
