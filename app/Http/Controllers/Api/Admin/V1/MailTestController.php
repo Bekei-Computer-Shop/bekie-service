@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
-use App\Mail\MailtrapTestMail;
+use App\Mail\MailConfigTestMail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -17,7 +17,7 @@ class MailTestController extends BaseAdminController
         ]);
 
         try {
-            Mail::to($validated['email'])->send(new MailtrapTestMail);
+            Mail::to($validated['email'])->send(new MailConfigTestMail);
         } catch (\Throwable $exception) {
             Log::error('Mail configuration test failed.', ['exception' => $exception::class]);
 
