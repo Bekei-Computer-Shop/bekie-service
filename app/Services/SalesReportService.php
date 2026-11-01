@@ -4,172 +4,208 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use Illuminate\Support\Carbon;
+use App\Services\Reports\ReportPeriod;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class SalesReportService
 {
+    /** Orders in these states never earned anything, so they are not income. */
+    private const EXCLUDED_STATUSES = ['rejected', 'cancelled'];
+
+    private const TOP_PRODUCTS = 10;
+
+    private const WEEKDAYS = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 'Sat', 7 => 'Sun'];
+
     /**
-     * Build the sales dashboard from frozen order-item prices.
+     * Build the sales dashboard.
      *
-     * @param  array{preset?: string, date_from?: string|null, date_to?: string|null}  $filters
+     * Income is each live order's grand total, the figure the customer was
+     * charged. Cost comes from the cost price frozen on each order line when it
+     * was sold, so later price changes cannot rewrite history.
+     *
+     * @param  array{preset?: string|null, date_from?: string|null, date_to?: string|null}  $filters
      * @return array<string, mixed>
      */
     public function build(array $filters = []): array
     {
-        [$start, $end] = $this->resolveRange($filters);
-        $previousEnd = $start->copy()->subDay();
-        $previousStart = $previousEnd->copy()->subDays($start->diffInDays($end));
+        $period = ReportPeriod::resolve($filters);
+        $previous = $period->previous();
 
-        $current = $this->rowsBetween($start, $end);
-        $previous = $this->rowsBetween($previousStart, $previousEnd);
-        $summary = $this->summary($current);
-        $previousSummary = $this->summary($previous);
+        $orders = $this->orders($period);
+        $current = $this->totals($orders);
+        $before = $this->totals($this->orders($previous));
+
+        $byBucket = $orders->groupBy(fn (array $order): string => $period->keyFor($order['at']));
+        $series = collect($period->buckets())->map(function (array $bucket) use ($byBucket): array {
+            return $bucket + $this->totals($byBucket->get($bucket['key'], collect()));
+        });
 
         return [
             'summary' => [
-                'revenue' => $summary['revenue'],
-                'cogs' => $summary['cogs'],
-                'profit' => $summary['profit'],
-                'margin' => $summary['revenue'] > 0 ? round(($summary['profit'] / $summary['revenue']) * 100, 1) : 0,
-                'orders' => $summary['orders'],
-                'revenue_change' => $this->change($summary['revenue'], $previousSummary['revenue']),
-                'cogs_change' => $this->change($summary['cogs'], $previousSummary['cogs']),
-                'profit_change' => $this->change($summary['profit'], $previousSummary['profit']),
-                'margin_change' => $this->marginChange($summary, $previousSummary),
+                'revenue' => $current['revenue'],
+                'cogs' => $current['cogs'],
+                'profit' => $current['profit'],
+                'margin' => $this->margin($current),
+                'orders' => $current['orders'],
+                'average_order_value' => $current['orders'] > 0 ? round($current['revenue'] / $current['orders'], 2) : 0.0,
+                'revenue_change' => $this->change($current['revenue'], $before['revenue']),
+                'cogs_change' => $this->change($current['cogs'], $before['cogs']),
+                'profit_change' => $this->change($current['profit'], $before['profit']),
+                'orders_change' => $this->change((float) $current['orders'], (float) $before['orders']),
+                'margin_change' => $before['revenue'] > 0 ? round($this->margin($current) - $this->margin($before), 1) : null,
             ],
-            'chart' => $this->chart($current, $filters['preset'] ?? 'weekly'),
-            'daily_breakdown' => $this->dailyBreakdown($current),
-            'top_products' => $this->topProducts($current),
-            'table' => $this->table($current, $filters['preset'] ?? 'weekly'),
-            'meta' => [
-                'preset' => $filters['preset'] ?? 'custom',
-                'date_from' => $start->toDateString(),
-                'date_to' => $end->toDateString(),
-                'previous_date_from' => $previousStart->toDateString(),
-                'previous_date_to' => $previousEnd->toDateString(),
-            ],
+            'chart' => $series->map(fn (array $row): array => [
+                'label' => $row['label'],
+                'title' => $row['title'],
+                'revenue' => $row['revenue'],
+                'profit' => $row['profit'],
+                'orders' => $row['orders'],
+            ])->all(),
+            'daily_breakdown' => $this->weekdayBreakdown($orders),
+            'top_products' => $this->topProducts($period),
+            'table' => $this->table($series),
+            'meta' => $period->meta() + ['generated_at' => now()->toIso8601String()],
         ];
     }
 
-    private function rowsBetween(Carbon $start, Carbon $end): Collection
+    /**
+     * Every live order in the window with its income and cost.
+     *
+     * @return Collection<int, array{at: \Carbon\CarbonImmutable, revenue: float, cogs: float}>
+     */
+    private function orders(ReportPeriod $period): Collection
     {
-        return DB::table('order_items')
-            ->join('orders', 'order_items.order_id', '=', 'orders.id')
-            ->whereBetween('orders.created_at', [$start->startOfDay(), $end->endOfDay()])
-            ->whereNotIn('orders.status', ['rejected', 'cancelled'])
-            ->select([
-                'orders.id as order_id',
-                'orders.created_at',
-                'order_items.product_name',
-                'order_items.quantity',
-                'order_items.total',
-                'order_items.cost_price',
-            ])
-            ->orderBy('orders.created_at')
-            ->get();
+        $cogs = $this->liveOrders($period)
+            ->join('order_items', 'order_items.order_id', '=', 'orders.id')
+            ->whereNull('order_items.deleted_at')
+            ->groupBy('order_items.order_id')
+            ->selectRaw('order_items.order_id, SUM(COALESCE(order_items.cost_price, 0) * order_items.quantity) as cogs')
+            ->pluck('cogs', 'order_id');
+
+        return $this->liveOrders($period)
+            ->select(['orders.id', 'orders.created_at', 'orders.grand_total'])
+            ->get()
+            ->map(fn (object $order): array => [
+                'at' => $period->localize((string) $order->created_at),
+                'revenue' => (float) $order->grand_total,
+                'cogs' => (float) ($cogs[$order->id] ?? 0),
+            ]);
     }
 
-    private function summary(Collection $rows): array
+    /** Orders that count as sales: not rejected, not cancelled, not deleted. */
+    private function liveOrders(ReportPeriod $period): Builder
     {
-        $revenue = (float) $rows->sum(fn ($row) => (float) $row->total);
-        $cogs = (float) $rows->sum(fn ($row) => (float) ($row->cost_price ?? 0) * (int) $row->quantity);
+        return DB::table('orders')
+            ->whereNull('orders.deleted_at')
+            ->whereNotIn('orders.status', self::EXCLUDED_STATUSES)
+            ->where('orders.created_at', '>=', $period->startUtc())
+            ->where('orders.created_at', '<', $period->endExclusiveUtc());
+    }
+
+    /**
+     * @param  Collection<int, array{revenue: float, cogs: float}>  $orders
+     * @return array{revenue: float, cogs: float, profit: float, orders: int}
+     */
+    private function totals(Collection $orders): array
+    {
+        $revenue = round((float) $orders->sum('revenue'), 2);
+        $cogs = round((float) $orders->sum('cogs'), 2);
 
         return [
-            'revenue' => round($revenue, 2),
-            'cogs' => round($cogs, 2),
+            'revenue' => $revenue,
+            'cogs' => $cogs,
             'profit' => round($revenue - $cogs, 2),
-            'orders' => $rows->pluck('order_id')->unique()->count(),
+            'orders' => $orders->count(),
         ];
     }
 
-    private function chart(Collection $rows, string $preset): array
+    /** @param  array{revenue: float, profit: float}  $totals */
+    private function margin(array $totals): float
     {
-        $groups = $rows->groupBy(function ($row) use ($preset) {
-            $date = Carbon::parse($row->created_at);
-            return match ($preset) {
-                'daily' => $date->format('H:00'),
-                'monthly' => $date->format('M'),
-                'yearly' => $date->format('Y'),
-                default => 'W'.$date->isoWeek,
-            };
-        });
+        return $totals['revenue'] > 0 ? round(($totals['profit'] / $totals['revenue']) * 100, 1) : 0.0;
+    }
 
-        return $groups->map(function (Collection $items, string $label): array {
-            $summary = $this->summary($items);
-            return ['label' => $label, 'revenue' => $summary['revenue'], 'profit' => $summary['profit']];
+    /** Percent change, or null when there is nothing earlier to compare against. */
+    private function change(float $current, float $previous): ?float
+    {
+        return $previous == 0.0 ? null : round((($current - $previous) / abs($previous)) * 100, 1);
+    }
+
+    /**
+     * Income and profit for each weekday, Monday first, quiet days included.
+     *
+     * @param  Collection<int, array{at: \Carbon\CarbonImmutable, revenue: float, cogs: float}>  $orders
+     * @return list<array{label: string, revenue: float, profit: float, orders: int}>
+     */
+    private function weekdayBreakdown(Collection $orders): array
+    {
+        $byDay = $orders->groupBy(fn (array $order): int => $order['at']->isoWeekday());
+
+        return collect(self::WEEKDAYS)->map(function (string $label, int $day) use ($byDay): array {
+            $totals = $this->totals($byDay->get($day, collect()));
+
+            return ['label' => $label, 'revenue' => $totals['revenue'], 'profit' => $totals['profit'], 'orders' => $totals['orders']];
         })->values()->all();
     }
 
-    private function dailyBreakdown(Collection $rows): array
+    /**
+     * Best sellers by sales value, ties broken by units sold.
+     *
+     * @return list<array{rank: int, name: string, units: int, revenue: float, share: float}>
+     */
+    private function topProducts(ReportPeriod $period): array
     {
-        return $rows->groupBy(fn ($row) => Carbon::parse($row->created_at)->format('D'))
-            ->map(function (Collection $items, string $label): array {
-                $summary = $this->summary($items);
-                return ['label' => $label, 'revenue' => $summary['revenue'], 'profit' => $summary['profit']];
-            })->values()->all();
+        $lines = $this->liveOrders($period)
+            ->join('order_items', 'order_items.order_id', '=', 'orders.id')
+            ->whereNull('order_items.deleted_at');
+
+        $allSales = (float) (clone $lines)->sum('order_items.total');
+
+        return (clone $lines)
+            ->groupBy('order_items.product_id', 'order_items.product_name')
+            ->selectRaw('order_items.product_name, SUM(order_items.quantity) as units, SUM(order_items.total) as revenue')
+            ->orderByDesc('revenue')
+            ->orderByDesc('units')
+            ->orderBy('order_items.product_name')
+            ->limit(self::TOP_PRODUCTS)
+            ->get()
+            ->values()
+            ->map(fn (object $product, int $index): array => [
+                'rank' => $index + 1,
+                'name' => (string) $product->product_name,
+                'units' => (int) $product->units,
+                'revenue' => round((float) $product->revenue, 2),
+                'share' => $allSales > 0 ? round(((float) $product->revenue / $allSales) * 100, 1) : 0.0,
+            ])
+            ->all();
     }
 
-    private function topProducts(Collection $rows): array
+    /**
+     * One row per bucket; `revenue_change` compares each with the row before it.
+     *
+     * @param  Collection<int, array<string, mixed>>  $series
+     * @return list<array<string, mixed>>
+     */
+    private function table(Collection $series): array
     {
-        return $rows->groupBy('product_name')->map(function (Collection $items, string $name): array {
-            $summary = $this->summary($items);
-            return ['name' => $name, 'units' => (int) $items->sum('quantity'), 'revenue' => $summary['revenue']];
-        })->sortByDesc('revenue')->take(5)->values()->all();
-    }
+        $previousRevenue = null;
 
-    private function table(Collection $rows, string $preset): array
-    {
-        return $rows->groupBy(function ($row) use ($preset) {
-            $date = Carbon::parse($row->created_at);
-            return match ($preset) {
-                'daily' => $date->format('Y-m-d'),
-                'monthly' => $date->format('Y-m'),
-                'yearly' => $date->format('Y'),
-                default => $date->isoWeekYear.'-'.$date->isoWeek,
-            };
-        })->map(function (Collection $items, string $key): array {
-            $summary = $this->summary($items);
-            $first = Carbon::parse($items->min('created_at'));
-            $last = Carbon::parse($items->max('created_at'));
+        return $series->map(function (array $row) use (&$previousRevenue): array {
+            $change = $previousRevenue === null ? null : $this->change($row['revenue'], $previousRevenue);
+            $previousRevenue = $row['revenue'];
+
             return [
-                'period' => $key,
-                'date_range' => $first->toDateString().' - '.$last->toDateString(),
-                'orders' => $summary['orders'],
-                'revenue' => $summary['revenue'],
-                'cogs' => $summary['cogs'],
-                'profit' => $summary['profit'],
-                'margin' => $summary['revenue'] > 0 ? round(($summary['profit'] / $summary['revenue']) * 100, 1) : 0,
+                'period' => $row['title'],
+                'date_range' => $row['date_range'],
+                'orders' => $row['orders'],
+                'revenue' => $row['revenue'],
+                'cogs' => $row['cogs'],
+                'profit' => $row['profit'],
+                'margin' => $this->margin($row),
+                'revenue_change' => $change,
             ];
-        })->values()->all();
-    }
-
-    private function change(float $current, float $previous): float
-    {
-        return $previous == 0 ? 0 : round((($current - $previous) / abs($previous)) * 100, 1);
-    }
-
-    private function marginChange(array $current, array $previous): float
-    {
-        $currentMargin = $current['revenue'] > 0 ? ($current['profit'] / $current['revenue']) * 100 : 0;
-        $previousMargin = $previous['revenue'] > 0 ? ($previous['profit'] / $previous['revenue']) * 100 : 0;
-        return round($currentMargin - $previousMargin, 1);
-    }
-
-    private function resolveRange(array $filters): array
-    {
-        $preset = $filters['preset'] ?? 'weekly';
-        $from = isset($filters['date_from']) ? Carbon::parse($filters['date_from']) : null;
-        $to = isset($filters['date_to']) ? Carbon::parse($filters['date_to']) : null;
-
-        if ($from && $to) return [$from, $to];
-
-        return match ($preset) {
-            'daily' => [now()->startOfDay(), now()->endOfDay()],
-            'monthly' => [now()->startOfMonth(), now()->endOfMonth()],
-            'yearly' => [now()->startOfYear(), now()->endOfYear()],
-            default => [now()->startOfWeek()->subWeeks(9), now()->endOfWeek()],
-        };
+        })->all();
     }
 }
