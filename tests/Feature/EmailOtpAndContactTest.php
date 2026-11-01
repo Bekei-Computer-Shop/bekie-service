@@ -222,7 +222,7 @@ test('OTP verification stops after the configured maximum attempts', function ()
     $this->postJson('/api/v1/auth/verify-email-otp', [
         'email' => $user->email,
         'otp' => '000000',
-    ])->assertUnprocessable()->assertJsonPath('message', 'Maximum verification attempts exceeded.');
+    ])->assertUnprocessable()->assertJsonPath('message', 'Too many incorrect attempts. Please request a new code and try again.');
 });
 test('example', function () {
     $response = $this->get('/');

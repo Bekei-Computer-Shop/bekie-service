@@ -27,7 +27,7 @@ class ApiErrorResponseTest extends TestCase
     {
         parent::setUp();
 
-        Route::prefix('api/v1/__errors')->group(function (): void {
+        Route::middleware('api')->prefix('api/v1/__errors')->group(function (): void {
             Route::post('one-field', fn (Request $request) => $request->validate(['email' => 'required|email']));
             Route::post('many-fields', fn (Request $request) => $request->validate(['email' => 'required', 'name' => 'required']));
             Route::get('products/{product}', fn (Product $product) => $product);

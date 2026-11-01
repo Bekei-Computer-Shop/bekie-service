@@ -45,6 +45,6 @@ test('public content endpoints return a consistent not found response', function
         ->assertNotFound()
         ->assertJson([
             'status' => 'error',
-            'message' => 'Content page not found.',
+            'message' => "We couldn't find this page. It may have been moved or removed.",
         ]);
 });

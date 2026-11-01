@@ -63,14 +63,17 @@ class ApiExceptionRenderer
             return ApiError::response($this->ownMessage($e), 403);
         }
 
-        // 429 — rate limit / throttle.
-        if ($e instanceof ThrottleRequestsException) {
+        // 429 — route throttles and any abort(429) / TooManyRequestsHttpException.
+        // A message a developer wrote ("Too many incorrect attempts...") wins.
+        if ($e instanceof ThrottleRequestsException
+            || ($e instanceof HttpExceptionInterface && $e->getStatusCode() === 429)) {
             $retryAfter = $e->getHeaders()['Retry-After'] ?? null;
+            $message = $this->ownMessage($e) ?: ($retryAfter
+                ? "You're going a little too fast. Please wait {$this->seconds((int) $retryAfter)} and try again."
+                : '');
 
             return ApiError::response(
-                $retryAfter
-                    ? "You're going a little too fast. Please wait {$this->seconds((int) $retryAfter)} and try again."
-                    : '',
+                $message,
                 429,
                 headers: $retryAfter ? ['Retry-After' => (string) $retryAfter] : [],
             );
