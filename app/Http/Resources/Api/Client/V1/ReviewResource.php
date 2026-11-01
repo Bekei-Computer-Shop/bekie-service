@@ -20,7 +20,6 @@ class ReviewResource extends JsonResource
                 'thumbnail' => $this->product?->thumbnail,
             ],
             'rating' => $this->rating,
-            'title' => $this->title,
             'comment' => $this->comment,
             'images' => $this->images,
             'is_verified_purchase' => $this->is_verified_purchase,

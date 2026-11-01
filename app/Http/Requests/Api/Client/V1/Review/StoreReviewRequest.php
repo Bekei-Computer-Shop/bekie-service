@@ -19,7 +19,6 @@ class StoreReviewRequest extends FormRequest
             'product_id' => ['required', 'uuid', 'exists:products,id'],
             'order_id' => ['nullable', 'integer', 'exists:orders,id'],
             'rating' => ['required', 'integer', 'between:1,5'],
-            'title' => ['nullable', 'string', 'max:255'],
             'comment' => ['nullable', 'string', 'max:2000'],
         ];
     }
@@ -35,8 +34,6 @@ class StoreReviewRequest extends FormRequest
             'rating.required' => 'Rating is required.',
             'rating.integer' => 'Rating must be an integer.',
             'rating.between' => 'Rating must be between 1 and 5.',
-            'title.string' => 'Title must be a string.',
-            'title.max' => 'Title cannot exceed 255 characters.',
             'comment.string' => 'Comment must be a string.',
             'comment.max' => 'Comment cannot exceed 2000 characters.',
         ];

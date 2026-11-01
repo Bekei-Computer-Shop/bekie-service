@@ -69,7 +69,6 @@ class ReviewController extends BaseApiController
             'product_id' => $data['product_id'],
             'order_id' => $data['order_id'] ?? null,
             'rating' => $data['rating'],
-            'title' => $data['title'] ?? null,
             'comment' => $data['comment'] ?? null,
             'status' => 'pending',
         ]);
