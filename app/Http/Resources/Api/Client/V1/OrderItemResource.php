@@ -22,6 +22,7 @@ class OrderItemResource extends JsonResource
             'total' => $this->total,
             'product_name' => $this->product_name,
             'product_sku' => $this->product_sku,
+            'image' => $this->image(),
             'variant_name' => $this->variant_name,
             'variant_attributes' => $this->variant_attributes,
             'quantity_shipped' => $this->quantity_shipped,
@@ -29,5 +30,17 @@ class OrderItemResource extends JsonResource
             'status' => $this->status,
             'metadata' => $this->metadata,
         ];
+    }
+
+    /**
+     * The variant's own picture when it has one, else the product's thumbnail.
+     * Reads only relations already loaded (see OrderResource::itemRelations()).
+     */
+    private function image(): ?string
+    {
+        $variant = $this->resource->relationLoaded('variant') ? $this->variant : null;
+        $product = $this->resource->relationLoaded('product') ? $this->product : null;
+
+        return $variant?->image ?: $product?->thumbnail ?: null;
     }
 }

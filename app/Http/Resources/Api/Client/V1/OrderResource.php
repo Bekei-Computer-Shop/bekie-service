@@ -6,6 +6,21 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class OrderResource extends JsonResource
 {
+    /**
+     * Eager loads for the items, including the product and variant each image
+     * comes from. Deleted products still show in the customer's history.
+     *
+     * @return array<int|string, string|\Closure>
+     */
+    public static function itemRelations(): array
+    {
+        return [
+            'items',
+            'items.product' => fn ($query) => $query->withTrashed()->select('id', 'thumbnail'),
+            'items.variant' => fn ($query) => $query->withTrashed()->select('id', 'image'),
+        ];
+    }
+
     public function toArray($request): array
     {
         return [
