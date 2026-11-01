@@ -34,7 +34,7 @@ class EmailVerificationController extends BaseApiController
             ->first();
 
         if (! $user || ! $challenge) {
-            return $this->error('The verification code is invalid or expired.', 422);
+            return $this->error('That code is incorrect, has expired, or was replaced by a newer one. Use the code from your latest email, or request a new one.', 422);
         }
 
         try {

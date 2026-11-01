@@ -25,7 +25,7 @@ test('contact form validates and queues a support email', function (): void {
     Mail::assertQueued(ContactMessageMail::class, fn (ContactMessageMail $mail): bool => $mail->senderEmail === 'jane@example.com');
 });
 
-test('customer email registration queues an OTP and does not issue a token', function (): void {
+test('customer email registration sends the OTP immediately and does not issue a token', function (): void {
     Mail::fake();
 
     $response = $this->postJson('/api/v1/auth/register', [
@@ -38,13 +38,16 @@ test('customer email registration queues an OTP and does not issue a token', fun
     $response->assertCreated()
         ->assertJsonPath('data.email_verification_required', true)
         ->assertJsonMissingPath('data.access_token');
-    Mail::assertQueued(CustomerVerificationOtpMail::class);
+    // Sent inline, not queued: production has no queue worker, so a queued
+    // sign-up code would sit in the jobs table and never reach the shopper.
+    Mail::assertSent(CustomerVerificationOtpMail::class);
+    Mail::assertNotQueued(CustomerVerificationOtpMail::class);
     expect(OtpChallenge::where('purpose', 'customer_email_verification')->count())->toBe(1);
 });
 
-test('registration reports when verification email could not be queued', function (): void {
+test('registration reports when verification email could not be sent', function (): void {
     $mailer = Mockery::mock();
-    $mailer->shouldReceive('queue')->once()->andThrow(new RuntimeException('Queue unavailable'));
+    $mailer->shouldReceive('sendNow')->once()->andThrow(new RuntimeException('SMTP unavailable'));
     Mail::shouldReceive('to')->once()->with('customer@example.com')->andReturn($mailer);
 
     $this->postJson('/api/v1/auth/register', [
@@ -53,7 +56,7 @@ test('registration reports when verification email could not be queued', functio
         'password' => 'SecurePassword123',
         'password_confirmation' => 'SecurePassword123',
     ])->assertCreated()
-        ->assertJsonPath('message', 'Registration successful, but the verification email could not be queued. Request a new code to continue.');
+        ->assertJsonPath('message', 'Registration successful, but the verification email could not be sent. Request a new code to continue.');
 
     expect(User::query()->where('email', 'customer@example.com')->exists())->toBeTrue()
         ->and(OtpChallenge::query()->where('purpose', 'customer_email_verification')->count())->toBe(0);
@@ -74,7 +77,8 @@ test('correct customer OTP verifies email and OTP cannot be reused', function ()
     $this->postJson('/api/v1/auth/verify-email-otp', [
         'email' => $user->email,
         'otp' => $issued['code'],
-    ])->assertUnprocessable();
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'This verification code has already been used.');
 });
 
 test('resending customer OTP sends a replacement code immediately', function (): void {
@@ -177,7 +181,8 @@ test('incorrect OTP is rejected and attempts are counted', function (): void {
     $this->postJson('/api/v1/auth/verify-email-otp', [
         'email' => $user->email,
         'otp' => '000000',
-    ])->assertUnprocessable();
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'The verification code is incorrect. If you requested more than one code, use the one from your latest email.');
 
     expect(OtpChallenge::first()->attempts)->toBe(1);
 });
@@ -193,7 +198,8 @@ test('expired OTPs and immediate resends are rejected', function (): void {
     $this->postJson('/api/v1/auth/verify-email-otp', [
         'email' => $user->email,
         'otp' => $issued['code'],
-    ])->assertUnprocessable();
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'This verification code has expired. Request a new one.');
 
     app(OtpService::class)->issue($user, $user->email, 'customer_email_verification');
 
