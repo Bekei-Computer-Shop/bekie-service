@@ -28,9 +28,9 @@ class GoogleIdTokenVerifier
      */
     public function verify(string $idToken): array
     {
-        $clientId = config('services.google.client_id');
+        $clientIds = $this->clientIds();
 
-        if (! is_string($clientId) || $clientId === '') {
+        if ($clientIds === []) {
             throw GoogleAuthException::unavailable();
         }
 
@@ -61,7 +61,7 @@ class GoogleIdTokenVerifier
         // Same checks, same order, each naming itself so a rejection can be told apart.
         $failure = match (true) {
             ! in_array($claims['iss'] ?? null, self::ISSUERS, true) => ['wrong_issuer', ['iss' => $this->loggable($claims['iss'] ?? null)]],
-            ($claims['aud'] ?? null) !== $clientId => ['wrong_audience', ['aud' => $this->loggable($claims['aud'] ?? null), 'expected' => $clientId]],
+            ! in_array($claims['aud'] ?? null, $clientIds, true) => ['wrong_audience', ['aud' => $this->loggable($claims['aud'] ?? null), 'expected' => implode(',', $clientIds)]],
             ! is_numeric($claims['exp'] ?? null) || $claims['exp'] <= time() => ['expired', ['exp' => $this->loggable($claims['exp'] ?? null), 'now' => time()]],
             ! is_string($claims['sub'] ?? null) || $claims['sub'] === '' => ['missing_subject', []],
             ! is_string($claims['email'] ?? null) || $claims['email'] === '' => ['missing_email', []],
@@ -81,6 +81,24 @@ class GoogleIdTokenVerifier
             'family_name' => $this->optionalString($claims, 'family_name'),
             'picture' => $this->optionalString($claims, 'picture'),
         ];
+    }
+
+    /**
+     * The OAuth client IDs we accept tokens from: GOOGLE_CLIENT_ID, one or several
+     * separated by commas (e.g. the owner's client plus a teammate's, or localhost
+     * plus production). Stray spaces around an ID are ignored.
+     *
+     * @return list<string>
+     */
+    private function clientIds(): array
+    {
+        $configured = config('services.google.client_id');
+
+        if (! is_string($configured)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('trim', explode(',', $configured)), fn (string $id): bool => $id !== ''));
     }
 
     /**
