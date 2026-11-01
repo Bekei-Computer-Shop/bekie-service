@@ -184,12 +184,12 @@ class AbaPayWayController extends BaseApiController
             return $this->error('Order is already paid.', 422);
         }
         if (! in_array($order->currency, ['USD', 'KHR'], true)) {
-            return $this->error('Order currency is not supported by ABA PayWay.', 422);
+            return $this->error("ABA PayWay can't be used for this order's currency. Please choose another payment method.", 422, code: 'payment_method_unavailable');
         }
 
         $lock = Cache::lock('aba-payway:purchase:order:'.$order->id, 75);
         if (! $lock->get()) {
-            return $this->error('ABA PayWay setup is already in progress for this order.', 409);
+            return $this->error('Your payment is already being prepared. Please wait a moment.', 409, code: 'payment_in_progress');
         }
 
         try {
@@ -245,16 +245,19 @@ class AbaPayWayController extends BaseApiController
             if (! $isNewPayment) {
                 $providerStatus = $this->payWay->check((string) $payment->provider_payment_id, allowNotFound: true);
                 if ((string) data_get($providerStatus, 'status.code', '') !== '6') {
-                    return $this->error('An ABA PayWay transaction already exists for this order; it will not be duplicated.', 409);
+                    return $this->error('A payment has already been started for this order. Please complete it or check your payment status.', 409, code: 'payment_in_progress');
                 }
             }
 
             $customer = $order->customer_snapshot ?? [];
             $name = preg_split('/\s+/', trim((string) ($customer['name'] ?? 'Customer')), 2);
+            // PayWay charges `amount + shipping`, while grand_total already
+            // includes shipping, so send the non-shipping part as `amount`.
+            $shipping = round((float) $order->shipping_total, 2);
             $result = $this->payWay->purchase([
                 'tran_id' => $payment->provider_payment_id,
-                'amount' => $order->grand_total,
-                'shipping' => $order->shipping_total,
+                'amount' => max(0, round((float) $order->grand_total - $shipping, 2)),
+                'shipping' => $shipping,
                 'currency' => $order->currency,
                 'items' => $order->items->map(fn ($item) => [
                     'name' => $item->product_name,
@@ -292,7 +295,7 @@ class AbaPayWayController extends BaseApiController
                 'error_code' => class_basename($exception),
             ]);
 
-            return $this->error('ABA PayWay is temporarily unavailable. Check the payment status before retrying.', 502);
+            return $this->error('ABA PayWay is temporarily unavailable. Please check your payment status before trying again, so you are not charged twice.', 502, code: 'payment_unavailable');
         } catch (RuntimeException $exception) {
             if ($exception instanceof AbaPayWayException) {
                 $errors = ['aba' => [
@@ -300,10 +303,10 @@ class AbaPayWayController extends BaseApiController
                     'http_status' => $exception->errors['aba']['http_status'] ?? null,
                     'reason_code' => $exception->errors['aba']['reason_code'] ?? null,
                 ]];
-                $message = 'Unable to set up ABA PayWay checkout.';
+                $message = "We couldn't start your ABA PayWay payment. Please try again in a moment.";
             } else {
                 $errors = ['payment' => ['message' => 'The checkout could not be created.']];
-                $message = 'Unable to create the ABA PayWay checkout.';
+                $message = "We couldn't start your ABA PayWay payment. Please try again in a moment.";
             }
 
             Log::error('ABA PayWay purchase failed', [
@@ -407,6 +410,9 @@ class AbaPayWayController extends BaseApiController
                 'status_code' => $exception instanceof AbaPayWayException
                     ? data_get($exception->errors, 'aba.status_code')
                     : null,
+                'expected_amount' => data_get($exception->errors ?? [], 'aba.expected_amount'),
+                'received_amount' => data_get($exception->errors ?? [], 'aba.received_amount'),
+                'received_currency' => data_get($exception->errors ?? [], 'aba.received_currency'),
                 'error_code' => class_basename($exception),
             ]);
 

@@ -325,7 +325,7 @@ class CartController extends BaseApiController
         $cart = Cart::where('user_id', $request->user()->id)->firstOrFail();
 
         if ($cart->items()->count() === 0) {
-            return $this->error('Cart is empty.', 422);
+            return $this->error('Your cart is empty. Add a product before checking out.', 422, code: 'cart_empty');
         }
 
         $shippingMethod = ShippingMethod::active()->findOrFail($request->shipping_method_id);
@@ -344,7 +344,9 @@ class CartController extends BaseApiController
         $shippingWeight = $this->calculateCartWeight($cart);
 
         if (! $shippingMethod->supportsWeight($shippingWeight)) {
-            return $this->error('Selected shipping method does not support the cart weight.', 422);
+            $message = "This shipping method can't carry an order this heavy. Please choose another shipping method.";
+
+            return $this->error($message, 422, ['shipping_method_id' => [$message]], 'shipping_method_unavailable');
         }
 
         $coupon = $cart->coupon_code
@@ -464,7 +466,7 @@ class CartController extends BaseApiController
             return $this->error($exception->getMessage(), 422);
         }
 
-        return $this->created(new OrderResource($order->load('items')));
+        return $this->created(new OrderResource($order->load(OrderResource::itemRelations())));
     }
 
     protected function recalculateCart(Cart $cart): Cart
@@ -526,7 +528,7 @@ class CartController extends BaseApiController
     protected function ensureItemBelongsToCart(Cart $cart, CartItem $item): void
     {
         if ((int) $item->cart_id !== (int) $cart->id) {
-            abort(404, 'Cart item not found.');
+            abort(404, 'This item is no longer in your cart. Please refresh your cart.');
         }
     }
 

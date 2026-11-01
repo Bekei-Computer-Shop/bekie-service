@@ -200,7 +200,7 @@ class ProductSerialController extends BaseAdminController
 
             return $this->success($this->serials->validateWarranty($serial));
         } catch (\Exception) {
-            return $this->error('Serial number not found', 404);
+            return $this->error("We couldn't find this serial number. Please check it and try again.", 404, code: 'serial_not_found');
         }
     }
 

@@ -82,14 +82,14 @@ class PasswordResetOtpService
 
             $maxAttempts = (int) config('auth.otp.max_attempts');
             if ($challenge->attempts >= $maxAttempts) {
-                return ['error' => 'Maximum verification attempts exceeded.', 'status' => 429];
+                return ['error' => 'Too many incorrect attempts. Please request a new code and try again.', 'status' => 429];
             }
 
             if (! Hash::check($otp, $challenge->otp_hash)) {
                 $challenge->increment('attempts');
 
                 if ($challenge->attempts >= $maxAttempts) {
-                    return ['error' => 'Maximum verification attempts exceeded.', 'status' => 429];
+                    return ['error' => 'Too many incorrect attempts. Please request a new code and try again.', 'status' => 429];
                 }
 
                 return ['error' => self::CODE_REJECTED, 'status' => 422];

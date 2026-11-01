@@ -164,7 +164,7 @@ class UserController extends BaseAdminController
             ) || in_array('admin', (array) $data['roles'], true));
 
         if ($currentlySuper && ! $willStillBeSuper && User::countActiveSuperAdminsExcept($user->id) === 0) {
-            return $this->error('Cannot remove the last active super-admin.', 422);
+            return $this->error("This is the only active super-admin, so this change isn't allowed. Make another user a super-admin first.", 422, code: 'last_super_admin');
         }
 
         $roles = $data['roles'] ?? null;
@@ -211,7 +211,7 @@ class UserController extends BaseAdminController
         }
 
         if ($user->isSuperAdmin() && User::countActiveSuperAdminsExcept($user->id) === 0) {
-            return $this->error('Cannot delete the last active super-admin.', 422);
+            return $this->error("This is the only active super-admin, so it can't be deleted. Make another user a super-admin first.", 422, code: 'last_super_admin');
         }
 
         try {
@@ -228,7 +228,7 @@ class UserController extends BaseAdminController
         } catch (Throwable $e) {
             Log::error('Admin user delete failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
 
-            return $this->error('Failed to delete user.', 500);
+            return $this->error("We couldn't delete this user. Please try again, and contact support if it keeps happening.", 500);
         }
 
         return $this->noContent();

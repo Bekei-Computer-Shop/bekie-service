@@ -49,6 +49,6 @@ test('drafts, scheduled articles, other content types and unknown ids are not fo
         $this->getJson("/api/v1/news/{$key}")
             ->assertNotFound()
             ->assertJsonPath('status', 'error')
-            ->assertJsonPath('message', 'News article not found.');
+            ->assertJsonPath('message', "We couldn't find this article. It may have been moved or removed.");
     }
 });

@@ -28,12 +28,13 @@ trait SummarizesPromotion
                 'id' => $promotion->id,
                 'name' => $promotion->name,
                 'type' => $promotion->type,
+                'kind' => $promotion->kind,
                 'value' => (float) $promotion->value,
                 'min_order_amount' => $promotion->min_order_amount !== null ? (float) $promotion->min_order_amount : null,
                 'max_discount_amount' => $promotion->max_discount_amount !== null ? (float) $promotion->max_discount_amount : null,
                 'expires_at' => $promotion->expires_at?->toIso8601String(),
                 'discount_amount' => $this->promotion_discount,
-                'discount_percentage' => $unitPrice > 0 && $this->promotion_discount > 0 ? max(1,(int) round($this->promotion_discount / $unitPrice * 100)) : 0,
+                'discount_percentage' => $unitPrice > 0 && $this->promotion_discount > 0 ? max(1, (int) round($this->promotion_discount / $unitPrice * 100)) : 0,
                 'final_price' => round($unitPrice - $this->promotion_discount, 2),
             ];
         });

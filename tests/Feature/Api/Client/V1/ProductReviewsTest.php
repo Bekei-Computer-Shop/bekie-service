@@ -23,7 +23,6 @@ test('product reviews list only approved reviews with a public reviewer name', f
     productReview($product, [
         'user_id' => $reviewer->id,
         'rating' => 5,
-        'title' => 'Fast and quiet',
         'comment' => 'Runs every game I own.',
         'is_verified_purchase' => true,
     ]);
@@ -37,14 +36,13 @@ test('product reviews list only approved reviews with a public reviewer name', f
         ->assertJsonCount(1, 'data.items')
         ->assertJsonPath('data.product_id', $product->id)
         ->assertJsonPath('data.items.0.rating', 5)
-        ->assertJsonPath('data.items.0.title', 'Fast and quiet')
         ->assertJsonPath('data.items.0.comment', 'Runs every game I own.')
         ->assertJsonPath('data.items.0.is_verified_purchase', true)
         ->assertJsonPath('data.items.0.customer.name', 'Sokha D.')
         ->assertJsonPath('data.pagination.total', 1);
 
     expect($response->content())->not->toContain('sokha@example.test')
-        ->and($response->json('data.items.0'))->not->toHaveKeys(['user_id', 'order_id', 'status']);
+        ->and($response->json('data.items.0'))->not->toHaveKeys(['user_id', 'order_id', 'status', 'title']);
 });
 
 test('the review summary averages approved reviews and breaks them down by star', function (): void {

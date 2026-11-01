@@ -4,8 +4,9 @@ namespace App\Http\Middleware;
 
 use App\Models\ApiToken;
 use App\Services\JwtService;
+use App\Support\ApiError;
 use Closure;
-use Illuminate\Auth\AuthenticationException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -17,18 +18,19 @@ class AuthenticateAdminApiToken
         $bearerToken = $request->bearerToken();
 
         if (empty($bearerToken)) {
-            throw new AuthenticationException('Authorization bearer token is required.');
+            return ApiError::response('Please sign in to continue.', 401, code: 'unauthenticated');
         }
 
         try {
             $payload = (new JwtService)->decode($bearerToken);
         } catch (\Exception $e) {
             Log::warning('Admin JWT decoding failed: '.$e->getMessage());
-            throw new AuthenticationException('Invalid or expired admin access token.');
+
+            return $this->sessionExpired();
         }
 
         if (! $payload || ! isset($payload['jti']) || empty($payload['jti'])) {
-            throw new AuthenticationException('Invalid or malformed admin access token payload.');
+            return $this->sessionExpired();
         }
 
         $apiToken = ApiToken::where('token', hash('sha256', $payload['jti']))
@@ -39,16 +41,17 @@ class AuthenticateAdminApiToken
         // Check if the token exists and is not expired.
         // The `isExpired()` method on ApiToken model is assumed to be correct.
         if (! $apiToken || $apiToken->isExpired()) {
-            throw new AuthenticationException('Invalid or expired admin access token.');
+            return $this->sessionExpired();
         }
 
         $user = $apiToken->user;
 
         if (! $user || ! $user->is_admin || ! $user->is_active || $user->is_banned) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Unauthorized: User account is not valid for admin access.',
-            ], 403);
+            return ApiError::response(
+                "This account can't use the admin panel. If you think this is a mistake, contact a super-admin.",
+                403,
+                code: 'account_restricted',
+            );
         }
 
         Auth::setUser($user);
@@ -57,5 +60,11 @@ class AuthenticateAdminApiToken
         $request->attributes->set('authenticated_user', $user);
 
         return $next($request);
+    }
+
+    /** The panel can refresh the token on this code before asking the user to sign in. */
+    private function sessionExpired(): JsonResponse
+    {
+        return ApiError::response('Your session has expired. Please sign in again.', 401, code: 'session_expired');
     }
 }

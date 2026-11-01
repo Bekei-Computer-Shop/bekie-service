@@ -16,6 +16,8 @@ class PromotionResource extends JsonResource
             'name' => $this->name,
             'code' => $this->code,
             'type' => $this->type,
+            // Campaign label (flash_sale, bogo, ...); null is an ordinary discount. See Coupon::KINDS.
+            'kind' => $this->kind,
             'value' => (float) $this->value,
             'description' => $this->description,
             'banner_image' => $this->resolveImage($this->banner_image),

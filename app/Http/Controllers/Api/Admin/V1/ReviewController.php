@@ -26,7 +26,6 @@ class ReviewController extends BaseAdminController
                 $like = '%'.$request->input('q').'%';
                 $q->where(function ($query) use ($like): void {
                     $query->where('comment', 'like', $like)
-                        ->orWhere('title', 'like', $like)
                         ->orWhereHas('user', fn ($u) => $u
                             ->where('first_name', 'like', $like)
                             ->orWhere('last_name', 'like', $like)

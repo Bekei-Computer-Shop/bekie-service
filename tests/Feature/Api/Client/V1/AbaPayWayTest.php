@@ -79,6 +79,54 @@ class AbaPayWayTest extends TestCase
         $this->assertSame('SANDBOX-QR-PAYLOAD-TEST', $payment->metadata['checkout']['payment_payload']['value']);
     }
 
+    public function test_purchase_does_not_charge_shipping_twice(): void
+    {
+        Http::fake([
+            config('aba_payway.purchase_url') => fn (Request $request) => Http::response($this->successfulPurchaseResponse($request)),
+        ]);
+
+        $this->actingAs($this->customer)
+            ->postJson('/api/v1/payments/aba/purchase', [
+                'order_id' => $this->order->id,
+                'payment_option' => 'abapay_khqr_deeplink',
+            ])
+            ->assertSuccessful();
+
+        // PayWay charges amount + shipping, which must equal the order's grand_total.
+        Http::assertSent(fn (Request $request): bool => $this->multipartField($request, 'amount') === '90.00'
+            && $this->multipartField($request, 'shipping') === '10.00');
+    }
+
+    public function test_check_reports_amount_mismatch_details_in_logs(): void
+    {
+        Log::spy();
+        Payment::create([
+            'order_id' => $this->order->id,
+            'user_id' => $this->customer->id,
+            'payment_reference' => 'PAY-TEST-MISMATCH-001',
+            'provider' => 'aba_payway',
+            'provider_payment_id' => 'MISMATCH123',
+            'amount' => 100.00,
+            'currency' => 'USD',
+            'status' => 'pending',
+            'payment_method' => 'aba_payway',
+            'gateway_response' => [],
+        ]);
+        $response = $this->checkResponse('MISMATCH123', 0, 'APPROVED');
+        $response['data']['payment_amount'] = '110.00';
+        Http::fake([config('aba_payway.check_url') => Http::response($response)]);
+
+        $this->actingAs($this->customer)
+            ->getJson('/api/v1/payments/aba/MISMATCH123')
+            ->assertStatus(502)
+            ->assertJsonPath('errors.reason_code', 'check_payment_details_mismatch');
+
+        Log::shouldHaveReceived('error')->withArgs(fn (string $message, array $context): bool => $message === 'ABA PayWay status check failed'
+            && $context['expected_amount'] === '100.00'
+            && $context['received_amount'] === '110.00');
+        $this->assertSame('pending', Payment::where('provider_payment_id', 'MISMATCH123')->sole()->status);
+    }
+
     public function test_retrying_purchase_reuses_the_pending_transaction_id(): void
     {
         Http::fake([
@@ -207,7 +255,7 @@ class AbaPayWayTest extends TestCase
             ]);
 
         $response->assertStatus(502)
-            ->assertJsonPath('message', 'ABA PayWay is temporarily unavailable. Check the payment status before retrying.');
+            ->assertJsonPath('message', 'ABA PayWay is temporarily unavailable. Please check your payment status before trying again, so you are not charged twice.');
         $this->assertSame('pending', $this->order->fresh()->payment_status);
         $this->assertSame('pending', Payment::where('order_id', $this->order->id)->sole()->status);
         $this->assertDatabaseMissing('payments', ['status' => 'paid', 'order_id' => $this->order->id]);
@@ -235,7 +283,7 @@ class AbaPayWayTest extends TestCase
         $response->assertStatus(502)
             ->assertJsonPath('errors.aba.status_code', '81')
             ->assertJsonPath('errors.aba.reason_code', 'provider_rejected')
-            ->assertJsonPath('message', 'Unable to set up ABA PayWay checkout.');
+            ->assertJsonPath('message', "We couldn't start your ABA PayWay payment. Please try again in a moment.");
         $this->assertSame('pending', $this->order->fresh()->payment_status);
         $this->assertSame('pending', Payment::where('order_id', $this->order->id)->sole()->status);
 

@@ -21,7 +21,6 @@ class ReviewFactory extends Factory
             'product_id' => Product::factory(),
             'order_id' => null,
             'rating' => $this->faker->numberBetween(1, 5),
-            'title' => $this->faker->sentence(6),
             'comment' => $this->faker->paragraph(3),
             'status' => 'pending',
             'is_verified_purchase' => false,

@@ -190,7 +190,7 @@ class AuthTest extends TestCase
         ]);
 
         $response->assertUnauthorized()
-            ->assertJsonPath('message', 'Invalid credentials.');
+            ->assertJsonPath('message', 'The email or password you entered is incorrect. Please try again.');
     }
 
     public function test_login_rejects_nonexistent_email(): void
@@ -201,7 +201,7 @@ class AuthTest extends TestCase
         ]);
 
         $response->assertUnauthorized()
-            ->assertJsonPath('message', 'Invalid credentials.');
+            ->assertJsonPath('message', 'The email or password you entered is incorrect. Please try again.');
     }
 
     public function test_logout_revokes_token(): void
