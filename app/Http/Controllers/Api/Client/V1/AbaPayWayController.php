@@ -184,12 +184,12 @@ class AbaPayWayController extends BaseApiController
             return $this->error('Order is already paid.', 422);
         }
         if (! in_array($order->currency, ['USD', 'KHR'], true)) {
-            return $this->error('Order currency is not supported by ABA PayWay.', 422);
+            return $this->error("ABA PayWay can't be used for this order's currency. Please choose another payment method.", 422, code: 'payment_method_unavailable');
         }
 
         $lock = Cache::lock('aba-payway:purchase:order:'.$order->id, 75);
         if (! $lock->get()) {
-            return $this->error('ABA PayWay setup is already in progress for this order.', 409);
+            return $this->error('Your payment is already being prepared. Please wait a moment.', 409, code: 'payment_in_progress');
         }
 
         try {
@@ -245,7 +245,7 @@ class AbaPayWayController extends BaseApiController
             if (! $isNewPayment) {
                 $providerStatus = $this->payWay->check((string) $payment->provider_payment_id, allowNotFound: true);
                 if ((string) data_get($providerStatus, 'status.code', '') !== '6') {
-                    return $this->error('An ABA PayWay transaction already exists for this order; it will not be duplicated.', 409);
+                    return $this->error('A payment has already been started for this order. Please complete it or check your payment status.', 409, code: 'payment_in_progress');
                 }
             }
 
@@ -292,7 +292,7 @@ class AbaPayWayController extends BaseApiController
                 'error_code' => class_basename($exception),
             ]);
 
-            return $this->error('ABA PayWay is temporarily unavailable. Check the payment status before retrying.', 502);
+            return $this->error('ABA PayWay is temporarily unavailable. Please check your payment status before trying again, so you are not charged twice.', 502, code: 'payment_unavailable');
         } catch (RuntimeException $exception) {
             if ($exception instanceof AbaPayWayException) {
                 $errors = ['aba' => [
@@ -300,10 +300,10 @@ class AbaPayWayController extends BaseApiController
                     'http_status' => $exception->errors['aba']['http_status'] ?? null,
                     'reason_code' => $exception->errors['aba']['reason_code'] ?? null,
                 ]];
-                $message = 'Unable to set up ABA PayWay checkout.';
+                $message = "We couldn't start your ABA PayWay payment. Please try again in a moment.";
             } else {
                 $errors = ['payment' => ['message' => 'The checkout could not be created.']];
-                $message = 'Unable to create the ABA PayWay checkout.';
+                $message = "We couldn't start your ABA PayWay payment. Please try again in a moment.";
             }
 
             Log::error('ABA PayWay purchase failed', [

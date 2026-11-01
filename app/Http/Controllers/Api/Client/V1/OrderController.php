@@ -36,10 +36,10 @@ class OrderController extends BaseApiController
     {
         $cart = Cart::with('items.product', 'items.variant')->findOrFail($request->cart_id);
 
-        abort_unless((int) $cart->user_id === (int) $request->user()->id, 403, 'You do not have access to this cart.');
+        abort_unless((int) $cart->user_id === (int) $request->user()->id, 403, 'This cart belongs to another account.');
 
         if ($cart->items->isEmpty()) {
-            return $this->error('Cart must contain at least one item.', 422);
+            return $this->error('Your cart is empty. Add a product before checking out.', 422, code: 'cart_empty');
         }
 
         $shippingMethod = ShippingMethod::active()->findOrFail($request->shipping_method_id);
@@ -57,7 +57,9 @@ class OrderController extends BaseApiController
         $shippingWeight = $this->calculateCartWeight($cart);
 
         if (! $shippingMethod->supportsWeight($shippingWeight)) {
-            return $this->error('Selected shipping method does not support the cart weight.', 422);
+            $message = "This shipping method can't carry an order this heavy. Please choose another shipping method.";
+
+            return $this->error($message, 422, ['shipping_method_id' => [$message]], 'shipping_method_unavailable');
         }
 
         // The coupon the customer applied to the cart, if it still exists. The
@@ -194,7 +196,7 @@ class OrderController extends BaseApiController
 
     public function show(Request $request, Order $order)
     {
-        abort_unless((int) $order->user_id === (int) $request->user()->id, 403, 'You do not have access to this order.');
+        abort_unless((int) $order->user_id === (int) $request->user()->id, 403, 'This order belongs to another account.');
 
         return $this->success(new OrderResource($order->load('items')));
     }

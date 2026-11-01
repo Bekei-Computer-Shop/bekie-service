@@ -82,7 +82,7 @@ class ReviewController extends BaseApiController
     public function show(Review $review)
     {
         if ($review->user_id !== auth()->id()) {
-            return $this->error('You are not authorized to view this review.', 403);
+            return $this->error('You can only view your own reviews.', 403);
         }
 
         $review->load('product');
@@ -93,7 +93,7 @@ class ReviewController extends BaseApiController
     public function update(UpdateReviewRequest $request, Review $review)
     {
         if ($review->user_id !== $request->user()->id) {
-            return $this->error('You are not authorized to update this review.', 403);
+            return $this->error('You can only edit your own reviews.', 403);
         }
 
         $data = $request->validated();
@@ -106,7 +106,7 @@ class ReviewController extends BaseApiController
     public function destroy(Review $review)
     {
         if ($review->user_id !== auth()->id()) {
-            return $this->error('You are not authorized to delete this review.', 403);
+            return $this->error('You can only delete your own reviews.', 403);
         }
 
         $review->delete();

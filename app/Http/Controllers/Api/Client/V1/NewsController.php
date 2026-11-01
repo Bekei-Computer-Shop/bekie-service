@@ -65,7 +65,7 @@ class NewsController extends BaseApiController
             ->first();
 
         if (! $article) {
-            return $this->error('News article not found.', 404);
+            return $this->error("We couldn't find this article. It may have been moved or removed.", 404);
         }
 
         // Same category first; an uncategorised article just gets the latest.

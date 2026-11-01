@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Support\ApiError;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -38,12 +39,12 @@ class CheckPermission
             && array_filter($accepted, static fn (string $name): bool => $user->can($name)) !== [];
 
         if (! $allowed) {
-            $named = implode('] or [', $accepted);
-
-            return response()->json([
-                'status' => 'error',
-                'message' => "Forbidden: missing permission [{$named}].",
-            ], 403);
+            return ApiError::response(
+                "You don't have permission to do this. Ask a super-admin to give your role access.",
+                403,
+                ['permission' => array_values($accepted)],
+                'permission_denied',
+            );
         }
 
         return $next($request);

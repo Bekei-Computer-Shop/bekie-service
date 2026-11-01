@@ -99,7 +99,7 @@ class AdministratorController extends BaseAdminController
         }
 
         if (! $user->is_admin || ! $user->is_active || $user->is_banned) {
-            return $this->error('The target administrator account is not active.', 422);
+            return $this->error("This administrator's account isn't active. Reactivate it before resetting the password.", 422, code: 'account_inactive');
         }
 
         $user->update(['password' => Hash::make($request->validated('password'))]);

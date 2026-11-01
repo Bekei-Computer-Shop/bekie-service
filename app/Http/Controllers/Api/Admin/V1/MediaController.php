@@ -6,6 +6,7 @@ use App\Http\Requests\Api\Admin\V1\StoreMediaRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class MediaController extends BaseAdminController
 {
@@ -27,7 +28,9 @@ class MediaController extends BaseAdminController
             ]);
 
             if (! $response->successful()) {
-                return $this->error('Unable to list media from Cloudinary.', 502);
+                Log::warning('Media library listing rejected by Cloudinary.', ['status' => $response->status(), 'error' => $response->json('error.message')]);
+
+                return $this->mediaUnavailable("We couldn't load the media library right now. Please try again in a few minutes.");
             }
 
             $items = collect($response->json('resources', []))->map(fn (array $resource): array => [
@@ -39,7 +42,9 @@ class MediaController extends BaseAdminController
 
             return $this->success($items);
         } catch (\Throwable $e) {
-            return $this->error('Unable to list media from Cloudinary.', 502, ['exception' => $e->getMessage()]);
+            Log::error('Media library listing failed.', ['exception' => $e]);
+
+            return $this->mediaUnavailable("We couldn't load the media library right now. Please try again in a few minutes.");
         }
     }
 
@@ -56,7 +61,7 @@ class MediaController extends BaseAdminController
         $apiSecret = config('cloudinary.api_secret');
 
         if (! $cloudName || ! $apiKey || ! $apiSecret) {
-            return $this->error('Cloudinary credentials are not configured.', 500);
+            return $this->mediaNotConfigured();
         }
 
         try {
@@ -94,7 +99,12 @@ class MediaController extends BaseAdminController
             ]);
 
             if (! $response->successful()) {
-                return $this->error('Cloudinary upload failed.', 502, ['cloudinary' => $response->json()]);
+                Log::warning('Media upload rejected by Cloudinary.', ['status' => $response->status(), 'error' => $response->json('error.message')]);
+
+                // 4xx: Cloudinary could not use this file; otherwise the service is the problem.
+                return $response->clientError() && ! in_array($response->status(), [401, 403, 429], true)
+                    ? $this->error("This file couldn't be processed. Please check it's a valid image or document and try again.", 422, ['file' => ["This file couldn't be processed."]], 'file_unprocessable')
+                    : $this->mediaUnavailable("We couldn't upload this file right now. Please try again in a few minutes.");
             }
 
             $payload = $response->json();
@@ -105,7 +115,9 @@ class MediaController extends BaseAdminController
                 'resource_type' => $payload['resource_type'] ?? null,
             ], 'File uploaded successfully.');
         } catch (\Throwable $e) {
-            return $this->error('Cloudinary upload failed.', 502, ['exception' => $e->getMessage()]);
+            Log::error('Media upload failed.', ['exception' => $e]);
+
+            return $this->mediaUnavailable("We couldn't upload this file right now. Please try again in a few minutes.");
         }
     }
 
@@ -148,7 +160,7 @@ class MediaController extends BaseAdminController
         $apiSecret = config('cloudinary.api_secret');
 
         if (! $cloudName || ! $apiKey || ! $apiSecret) {
-            return $this->error('Cloudinary credentials are not configured.', 500);
+            return $this->mediaNotConfigured();
         }
 
         try {
@@ -166,12 +178,28 @@ class MediaController extends BaseAdminController
             ]);
 
             if (! $response->successful()) {
-                return $this->error('Cloudinary deletion failed.', 502);
+                Log::warning('Media deletion rejected by Cloudinary.', ['path' => $path, 'status' => $response->status(), 'error' => $response->json('error.message')]);
+
+                return $this->mediaUnavailable("We couldn't delete this file right now. Please try again in a few minutes.");
             }
 
             return $this->noContent();
         } catch (\Throwable $e) {
-            return $this->error('Cloudinary deletion failed.', 502, ['exception' => $e->getMessage()]);
+            Log::error('Media deletion failed.', ['path' => $path, 'exception' => $e]);
+
+            return $this->mediaUnavailable("We couldn't delete this file right now. Please try again in a few minutes.");
         }
+    }
+
+    private function mediaUnavailable(string $message): JsonResponse
+    {
+        return $this->error($message, 503, code: 'media_unavailable');
+    }
+
+    private function mediaNotConfigured(): JsonResponse
+    {
+        Log::error('Media storage unavailable: Cloudinary credentials are not configured.');
+
+        return $this->error("Media storage isn't set up yet. Please ask your developer to configure it.", 503, code: 'media_not_configured');
     }
 }

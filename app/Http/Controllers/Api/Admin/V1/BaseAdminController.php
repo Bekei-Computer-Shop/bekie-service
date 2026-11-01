@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin\V1;
 
 use App\Http\Controllers\Controller;
+use App\Support\ApiError;
 use Illuminate\Http\JsonResponse;
 
 abstract class BaseAdminController extends Controller
@@ -30,12 +31,12 @@ abstract class BaseAdminController extends Controller
         return response()->json(null, 204);
     }
 
-    protected function error(string $message = '', int $status = 400, array $errors = []): JsonResponse
+    /**
+     * @param  array<string, mixed>  $errors  per-field messages, keyed by field name
+     * @param  string|null  $code  stable machine-readable code; defaults from the status
+     */
+    protected function error(string $message = '', int $status = 400, array $errors = [], ?string $code = null): JsonResponse
     {
-        return response()->json([
-            'status' => 'error',
-            'message' => $message,
-            'errors' => $errors,
-        ], $status);
+        return ApiError::response($message, $status, $errors, $code);
     }
 }

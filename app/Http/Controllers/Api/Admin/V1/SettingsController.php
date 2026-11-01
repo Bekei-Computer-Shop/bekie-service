@@ -95,17 +95,17 @@ class SettingsController extends BaseAdminController
         $defaults = $this->defaultSettings();
 
         if (! is_array($payload)) {
-            return $this->error('The settings payload is invalid.', 422);
+            return $this->error("These settings couldn't be saved because the data is incomplete. Please refresh the page and try again.", 422);
         }
 
         foreach ($payload as $section => $sectionValues) {
             if (! is_array($sectionValues) || ! array_key_exists($section, $defaults)) {
-                return $this->error('The settings section is invalid.', 422);
+                return $this->error("This settings section doesn't exist. Please refresh the page and try again.", 422);
             }
 
             $unknownKeys = array_diff(array_keys($sectionValues), array_keys($defaults[$section]));
             if ($unknownKeys !== []) {
-                return $this->error('The settings payload contains unsupported fields.', 422, [
+                return $this->error("Some of these settings can't be changed here. Please refresh the page and try again.", 422, [
                     'section' => $section,
                     'fields' => array_values($unknownKeys),
                 ]);

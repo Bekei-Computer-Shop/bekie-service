@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
-use App\Http\Controllers\Api\Admin\V1\BaseAdminController;
 use App\Http\Requests\Api\Admin\V1\StoreCategoryRequest;
 use App\Http\Requests\Api\Admin\V1\UpdateCategoryRequest;
 use App\Http\Resources\Api\Admin\V1\CategoryResource;
@@ -23,7 +22,7 @@ class CategoryController extends BaseAdminController
             $search = $request->query('search');
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('slug', 'like', "%{$search}%");
+                    ->orWhere('slug', 'like', "%{$search}%");
             });
         }
 
@@ -70,7 +69,7 @@ class CategoryController extends BaseAdminController
     public function destroy(Category $category): JsonResponse
     {
         if ($category->products()->exists()) {
-            return $this->error('Cannot delete category with associated products.', 409);
+            return $this->error("This category still has products, so it can't be deleted. Move or delete its products first.", 409, code: 'category_has_products');
         }
 
         $category->delete();

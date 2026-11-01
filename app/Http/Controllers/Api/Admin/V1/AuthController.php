@@ -86,8 +86,8 @@ class AuthController extends BaseAdminController
         ]);
 
         if (! Hash::check($validated['current_password'], $user->password)) {
-            return $this->error('The current password is incorrect.', 422, [
-                'current_password' => ['The current password is incorrect.'],
+            return $this->error("Your current password isn't correct. Please try again.", 422, code: 'incorrect_password', errors: [
+                'current_password' => ["Your current password isn't correct. Please try again."],
             ]);
         }
 
@@ -107,7 +107,7 @@ class AuthController extends BaseAdminController
         $tokenPair = $this->adminAuthService->authenticateAdmin($validated['email'], $validated['password']);
 
         if (! $tokenPair) {
-            return $this->error('Invalid admin credentials.', 401);
+            return $this->error('The email or password you entered is incorrect. Please try again.', 401, code: 'invalid_credentials');
         }
 
         return $this->success($tokenPair, 'Admin authentication successful.');
@@ -140,7 +140,7 @@ class AuthController extends BaseAdminController
             ->first();
 
         if (! $apiToken || $apiToken->isRefreshExpired()) {
-            return $this->error('Refresh token is invalid or expired.', 401);
+            return $this->error('Your session has expired. Please sign in again.', 401, code: 'session_expired');
         }
 
         $newTokenPair = $this->adminAuthService->createAdminToken($apiToken->user);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\Client\V1;
 
+use App\Support\ApiError;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -43,13 +44,12 @@ class UploadProfileImageRequest extends FormRequest
     {
         $failed = array_key_first($validator->failed()['avatar'] ?? []) ?? '';
 
-        throw new HttpResponseException(response()->json([
-            'status' => 'error',
-            'code' => $this->errorCode(strtolower($failed)),
-            'message' => $validator->errors()->first('avatar'),
-            'data' => null,
-            'errors' => $validator->errors()->toArray(),
-        ], 422));
+        throw new HttpResponseException(ApiError::response(
+            $validator->errors()->first('avatar'),
+            422,
+            $validator->errors()->toArray(),
+            $this->errorCode(strtolower($failed)),
+        ));
     }
 
     private function errorCode(string $rule): string

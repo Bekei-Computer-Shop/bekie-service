@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
-use App\Http\Controllers\Api\Admin\V1\BaseAdminController;
 use App\Http\Requests\Api\Admin\V1\Brand\IndexBrandsRequest;
 use App\Http\Requests\Api\Admin\V1\Brand\StoreBrandRequest;
 use App\Http\Requests\Api\Admin\V1\Brand\UpdateBrandRequest;
@@ -109,8 +108,9 @@ class BrandController extends BaseAdminController
     {
         if ($brand->products()->exists()) {
             return $this->error(
-                'Cannot delete a brand that still has products. Move or delete the products first.',
+                "This brand still has products, so it can't be deleted. Move or delete its products first.",
                 422,
+                code: 'brand_has_products',
             );
         }
 
