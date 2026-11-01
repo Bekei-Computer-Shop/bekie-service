@@ -23,6 +23,7 @@ trait SummarizesPromotion
             }
 
             $unitPrice = (float) ($this->sale_price ?? $this->price);
+            $isFixed = $promotion->type === 'fixed';
 
             return [
                 'id' => $promotion->id,
@@ -33,8 +34,14 @@ trait SummarizesPromotion
                 'min_order_amount' => $promotion->min_order_amount !== null ? (float) $promotion->min_order_amount : null,
                 'max_discount_amount' => $promotion->max_discount_amount !== null ? (float) $promotion->max_discount_amount : null,
                 'expires_at' => $promotion->expires_at?->toIso8601String(),
-                'discount_amount' => $this->promotion_discount,
-                'discount_percentage' => $unitPrice > 0 && $this->promotion_discount > 0 ? max(1, (int) round($this->promotion_discount / $unitPrice * 100)) : 0,
+                // Only the figure matching the promotion type is set; the other is null.
+                'discount_amount' => $isFixed ? $this->promotion_discount : null,
+                // The effective share of the price: the promotion value, or less when
+                // max_discount_amount caps it. One decimal and rounded down, so a
+                // badge never advertises more than the real discount.
+                'discount_percentage' => $isFixed ? null : ($unitPrice > 0 && $this->promotion_discount > 0
+                    ? max(0.1, floor(round($this->promotion_discount / $unitPrice * 1000, 6)) / 10)
+                    : 0),
                 'final_price' => round($unitPrice - $this->promotion_discount, 2),
             ];
         });
