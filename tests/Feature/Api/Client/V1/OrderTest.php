@@ -231,7 +231,7 @@ class OrderTest extends TestCase
             ->postJson('/api/v1/orders', $this->orderPayload($cart, $shippingMethod));
 
         $response->assertUnprocessable()
-            ->assertJsonPath('message', 'Selected shipping method does not support the cart weight.');
+            ->assertJsonPath('message', "This shipping method can't carry an order this heavy. Please choose another shipping method.");
 
         $this->assertDatabaseMissing('orders', ['user_id' => $this->user->id]);
     }
@@ -255,7 +255,7 @@ class OrderTest extends TestCase
             ]);
 
         $response->assertUnprocessable()
-            ->assertJsonPath('message', 'Cart must contain at least one item.');
+            ->assertJsonPath('message', 'Your cart is empty. Add a product before checking out.');
     }
 
     public function test_create_order_forbidden_for_other_user_cart(): void

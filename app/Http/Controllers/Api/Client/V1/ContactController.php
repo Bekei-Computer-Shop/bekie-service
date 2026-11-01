@@ -17,7 +17,7 @@ class ContactController extends BaseApiController
         try {
             $this->contacts->send($data['name'], $data['email'], $data['subject'], $data['message']);
         } catch (\Throwable) {
-            return $this->error('Unable to send your message right now.', 503);
+            return $this->error("We couldn't send your message right now. Please try again in a few minutes.", 503);
         }
 
         return $this->success(message: 'Your message has been queued for delivery.');

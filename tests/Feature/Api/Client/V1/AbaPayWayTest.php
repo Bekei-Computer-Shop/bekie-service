@@ -207,7 +207,7 @@ class AbaPayWayTest extends TestCase
             ]);
 
         $response->assertStatus(502)
-            ->assertJsonPath('message', 'ABA PayWay is temporarily unavailable. Check the payment status before retrying.');
+            ->assertJsonPath('message', 'ABA PayWay is temporarily unavailable. Please check your payment status before trying again, so you are not charged twice.');
         $this->assertSame('pending', $this->order->fresh()->payment_status);
         $this->assertSame('pending', Payment::where('order_id', $this->order->id)->sole()->status);
         $this->assertDatabaseMissing('payments', ['status' => 'paid', 'order_id' => $this->order->id]);
@@ -235,7 +235,7 @@ class AbaPayWayTest extends TestCase
         $response->assertStatus(502)
             ->assertJsonPath('errors.aba.status_code', '81')
             ->assertJsonPath('errors.aba.reason_code', 'provider_rejected')
-            ->assertJsonPath('message', 'Unable to set up ABA PayWay checkout.');
+            ->assertJsonPath('message', "We couldn't start your ABA PayWay payment. Please try again in a moment.");
         $this->assertSame('pending', $this->order->fresh()->payment_status);
         $this->assertSame('pending', Payment::where('order_id', $this->order->id)->sole()->status);
 

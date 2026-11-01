@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Support\ApiError;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,10 +20,7 @@ class EnsureClientResourceOwner
         $user = $request->user() ?? $request->attributes->get('authenticated_user');
 
         if (! $resource || ! $user || (int) $resource->user_id !== (int) $user->id) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Forbidden: you do not have access to this resource.',
-            ], 403);
+            return ApiError::response('You can only view or change your own items.', 403);
         }
 
         return $next($request);

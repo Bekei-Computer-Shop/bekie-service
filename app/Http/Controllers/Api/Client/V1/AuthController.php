@@ -32,10 +32,14 @@ class AuthController extends BaseApiController
 
         // Race-condition guard: turn a unique-index violation into a clean 422.
         if ($email && User::where('email', $email)->exists()) {
-            return $this->error('Email is already taken.', 422);
+            $message = 'An account with this email already exists. Please sign in, or use a different email.';
+
+            return $this->error($message, 422, ['email' => [$message]], 'email_taken');
         }
         if ($phone && User::where('phone', $phone)->exists()) {
-            return $this->error('Phone is already taken.', 422);
+            $message = 'An account with this phone number already exists. Please sign in, or use a different number.';
+
+            return $this->error($message, 422, ['phone' => [$message]], 'phone_taken');
         }
 
         $user = DB::transaction(function () use ($data, $email, $phone) {
@@ -116,7 +120,7 @@ class AuthController extends BaseApiController
         $user = User::where('email', $request->input('email'))->first();
 
         if (! $user || ! Hash::check($request->input('password'), $user->password)) {
-            return $this->error('Invalid credentials.', 401);
+            return $this->error('The email or password you entered is incorrect. Please try again.', 401, code: 'invalid_credentials');
         }
 
         $tokenPair = $this->authService->createToken($user, $request);
@@ -147,7 +151,7 @@ class AuthController extends BaseApiController
         $token = $this->authService->refreshToken($request->input('refresh_token'), $request);
 
         if (! $token) {
-            return $this->error('Refresh token is invalid or expired.', 401);
+            return $this->error('Your session has expired. Please sign in again.', 401, code: 'session_expired');
         }
 
         return $this->success([
@@ -167,7 +171,9 @@ class AuthController extends BaseApiController
         }
 
         if (! Hash::check($request->input('current_password'), $user->password)) {
-            return $this->error('Current password is incorrect.', 422, ['current_password' => 'The current password is incorrect.']);
+            $message = "Your current password isn't correct. Please try again.";
+
+            return $this->error($message, 422, ['current_password' => [$message]], 'incorrect_password');
         }
 
         $user->update(['password' => $request->input('new_password')]);

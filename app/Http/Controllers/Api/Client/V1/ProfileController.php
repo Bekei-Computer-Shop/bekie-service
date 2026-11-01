@@ -57,7 +57,7 @@ class ProfileController extends BaseApiController
         $user = auth()->user();
 
         if (! $request->hasFile('image')) {
-            return $this->error('No image provided.', 422);
+            return $this->error('Please choose a photo to upload.', 422, ['image' => ['Please choose a photo to upload.']]);
         }
 
         $file = $request->file('image');

@@ -15,6 +15,7 @@ class OtpService
     {
         $email = strtolower(trim($email));
         $code = (string) random_int(100000, 999999);
+
         return DB::transaction(function () use ($user, $email, $purpose, $code): array {
             if ($user) {
                 User::query()->whereKey($user->getKey())->lockForUpdate()->first();
@@ -61,7 +62,7 @@ class OtpService
         }
 
         if ($challenge->attempts >= (int) config('otp.max_attempts')) {
-            throw new \InvalidArgumentException('Maximum verification attempts exceeded.');
+            throw new \InvalidArgumentException('Too many incorrect attempts. Please request a new code and try again.');
         }
 
         $challenge->increment('attempts');

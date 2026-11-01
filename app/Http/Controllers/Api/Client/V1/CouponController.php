@@ -18,7 +18,9 @@ class CouponController extends BaseApiController
             ->first();
 
         if (! $coupon || ! $coupon->isValid()) {
-            return $this->error('Coupon code is invalid or expired.', 404);
+            $message = "This coupon code isn't valid or has expired. Please check the code and try again.";
+
+            return $this->error($message, 404, ['code' => [$message]], 'coupon_invalid');
         }
 
         $cart = Cart::whereKey($request->cart_id)
@@ -26,11 +28,11 @@ class CouponController extends BaseApiController
             ->first();
 
         if (! $cart) {
-            return $this->error('Cart not found.', 404);
+            return $this->error("We couldn't find your cart. Please refresh the page and try again.", 404, code: 'cart_not_found');
         }
 
         if ((int) $cart->user_id !== (int) $request->user()?->id) {
-            abort(403, 'You do not have access to this cart.');
+            abort(403, 'This cart belongs to another account.');
         }
 
         $amount = app(ProductPromotionService::class)->couponCodeDiscount(
@@ -40,7 +42,9 @@ class CouponController extends BaseApiController
         );
 
         if ($amount <= 0) {
-            return $this->error('Coupon code is not eligible for this customer or cart.', 422);
+            $message = "This coupon can't be used with your account or the items in your cart.";
+
+            return $this->error($message, 422, ['code' => [$message]], 'coupon_not_eligible');
         }
 
         // Persist the coupon on the cart so checkout (OrderController@store) can

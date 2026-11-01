@@ -21,7 +21,7 @@ class WarrantyController extends BaseApiController
 
             return $this->success($this->serials->validateWarranty($serial));
         } catch (\Exception) {
-            return $this->error('Serial number not found', 404);
+            return $this->error("We couldn't find a product with this serial number. Please check the number and try again.", 404, code: 'serial_not_found');
         }
     }
 

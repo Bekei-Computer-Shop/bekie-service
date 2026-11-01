@@ -292,7 +292,7 @@ class CartTest extends TestCase
             ]);
 
         $response->assertUnprocessable()
-            ->assertJsonPath('message', 'Selected shipping method does not support the cart weight.');
+            ->assertJsonPath('message', "This shipping method can't carry an order this heavy. Please choose another shipping method.");
 
         $this->assertDatabaseMissing('orders', ['user_id' => $this->user->id]);
     }

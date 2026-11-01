@@ -125,13 +125,7 @@ class UserProfileController extends BaseApiController
      */
     private function avatarError(string $message, int $status, string $code): JsonResponse
     {
-        return response()->json([
-            'status' => 'error',
-            'code' => $code,
-            'message' => $message,
-            'data' => null,
-            'errors' => ['avatar' => [$message]],
-        ], $status);
+        return $this->error($message, $status, ['avatar' => [$message]], $code);
     }
 
     /**

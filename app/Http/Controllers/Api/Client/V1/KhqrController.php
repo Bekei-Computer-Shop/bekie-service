@@ -143,7 +143,7 @@ class KhqrController extends BaseApiController
         }
 
         if (! in_array($order->currency, ['USD', 'KHR'], true)) {
-            return $this->error('Order currency is not supported by KHQR.', 422);
+            return $this->error("KHQR can't be used for this order's currency. Please choose another payment method.", 422, code: 'payment_method_unavailable');
         }
 
         try {
@@ -168,7 +168,7 @@ class KhqrController extends BaseApiController
                 'message' => $exception->getMessage(),
             ]);
 
-            return $this->error('Unable to generate KHQR QR code.', 502);
+            return $this->error("We couldn't create your KHQR code right now. Please try again in a moment.", 502, code: 'payment_unavailable');
         }
     }
 
@@ -293,7 +293,7 @@ class KhqrController extends BaseApiController
                 'message' => $exception->getMessage(),
             ]);
 
-            return $this->error('Unable to confirm KHQR payment.', 502);
+            return $this->error("We couldn't confirm your KHQR payment yet. If you've paid, please wait a moment and check again.", 502, code: 'payment_unavailable');
         }
     }
 
@@ -336,7 +336,7 @@ class KhqrController extends BaseApiController
         }
 
         if ($transaction->status === 'paid') {
-            return $this->error('Payment already completed.', 422);
+            return $this->error("This payment is already complete, so it can't be cancelled.", 422, code: 'order_already_paid');
         }
 
         try {
@@ -349,7 +349,7 @@ class KhqrController extends BaseApiController
                 'message' => $exception->getMessage(),
             ]);
 
-            return $this->error('Unable to cancel KHQR payment.', 502);
+            return $this->error("We couldn't cancel this KHQR payment right now. Please try again in a moment.", 502, code: 'payment_unavailable');
         }
     }
 }

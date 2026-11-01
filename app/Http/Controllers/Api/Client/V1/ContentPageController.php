@@ -22,7 +22,7 @@ class ContentPageController extends BaseApiController
             ->first();
 
         if ($page === null) {
-            return $this->error('Content page not found.', 404);
+            return $this->error("We couldn't find this page. It may have been moved or removed.", 404);
         }
 
         return $this->success(new ContentPageResource($page));

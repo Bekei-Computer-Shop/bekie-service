@@ -193,7 +193,7 @@ class WishlistController extends BaseApiController
     protected function ensureItemBelongsToWishlist(Wishlist $wishlist, WishlistItem $item): void
     {
         if ((int) $item->wishlist_id !== (int) $wishlist->id) {
-            abort(404, 'Wishlist item not found.');
+            abort(404, 'This item is no longer in your wishlist.');
         }
     }
 

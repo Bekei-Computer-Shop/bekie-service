@@ -99,11 +99,11 @@ class GoogleAuthController extends BaseApiController
 
         // Shopper site only: staff and admins sign in through the admin dashboard.
         if ($user->is_admin || $user->hasAnyRole(['admin', 'manager', 'staff'])) {
-            return $this->error('This account cannot sign in here.', 403);
+            return $this->error('Staff accounts sign in through the admin dashboard, not the store.', 403, code: 'staff_account');
         }
 
         if (! $user->is_active || $user->is_banned) {
-            return $this->error('User account is restricted.', 403);
+            return $this->error('Your account has been restricted. Please contact customer support for help.', 403, code: 'account_restricted');
         }
 
         if ($user->google_id === null) {
@@ -164,11 +164,6 @@ class GoogleAuthController extends BaseApiController
      */
     private function errorWithCode(string $code, string $message, int $status): JsonResponse
     {
-        return response()->json([
-            'status' => 'error',
-            'message' => $message,
-            'code' => $code,
-            'errors' => [],
-        ], $status);
+        return $this->error($message, $status, [], $code);
     }
 }
