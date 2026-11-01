@@ -28,7 +28,6 @@ class ProductReviewResource extends JsonResource
         return [
             'id' => $review->id,
             'rating' => (int) $review->rating,
-            'title' => $review->title,
             'comment' => $review->comment,
             'images' => $review->images ?? [],
             'is_verified_purchase' => (bool) $review->is_verified_purchase,

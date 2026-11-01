@@ -15,7 +15,6 @@ class Review extends Model
         'product_id',
         'order_id',
         'rating',
-        'title',
         'comment',
         'status',
         'is_verified_purchase',
